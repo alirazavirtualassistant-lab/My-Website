@@ -1,0 +1,15 @@
+/about            /about.html        200
+/programs         /programs.html     200
+/books            /books.html        200
+/articles         /research.html     200
+/research         /research.html     200
+/videos           /videos.html       200
+/press            /press.html        200
+/book-online      /book-online.html  200
+/shop             /shop.html         200
+/contact          /contact.html      200
+/product-page/sugar-assessment       /programs/sugar-assessment.html        200
+/product-page/customized-food-plan   /programs/customized-food-plan.html    200
+/product-page/genogram-discovery     /programs/genogram-discovery.html      200
+/product-page/food-addiction-coaching /programs/food-addiction-coaching.html 200
+/*                /404.html          404
