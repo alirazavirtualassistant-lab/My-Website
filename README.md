@@ -14,6 +14,16 @@ https://alirazavirtualassistant-lab.github.io/my-website/
 
 The source lives in [`site/`](site/) and is served as-is (no build step).
 
+### 🧁 Cradle Your Cravings — separate client preview
+
+A second, independent site preview lives in its own subfolder and publishes to its **own URL**, leaving everything above untouched:
+
+```
+https://alirazavirtualassistant-lab.github.io/my-website/cradle-your-cravings/
+```
+
+Source: [`site/cradle-your-cravings/`](site/cradle-your-cravings/). Share this link with the client. It is fully self-contained (relative links/assets) and does not affect the myersmorrison.com preview.
+
 ## 💳 Payments policy — unchanged from the live site
 
 Per the owner's instruction, **all payment links match the existing live site** — there is **no Stripe/PayPal** added:
