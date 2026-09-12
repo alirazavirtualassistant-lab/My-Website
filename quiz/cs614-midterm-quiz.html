@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CS614 Midterm Quiz Prep</title>
+<meta name="description" content="Offline practice quiz: 201 solved CS614 (Data Warehousing) midterm MCQs with practice, exam and review modes.">
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1b1f24; --muted:#5f6771; --line:#e1e5ea;
+    --accent:#2f5fd0; --accent-ink:#ffffff; --accent-soft:#e8eefb;
+    --ok:#1d8a4a; --ok-soft:#e3f5ea; --bad:#c62f2f; --bad-soft:#fbe6e6;
+    --warn:#b7791f; --warn-soft:#fff4dc; --shadow:0 1px 2px rgba(0,0,0,.06),0 4px 14px rgba(0,0,0,.05);
+    --radius:12px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0f1216; --card:#181c22; --ink:#e8ebef; --muted:#9aa3ad; --line:#2a3039;
+      --accent:#6b93ff; --accent-ink:#0b1020; --accent-soft:#1c2740;
+      --ok:#4cc57e; --ok-soft:#14301f; --bad:#f07070; --bad-soft:#3a1717;
+      --warn:#e0a94a; --warn-soft:#3a2b10; --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f1216; --card:#181c22; --ink:#e8ebef; --muted:#9aa3ad; --line:#2a3039;
+    --accent:#6b93ff; --accent-ink:#0b1020; --accent-soft:#1c2740;
+    --ok:#4cc57e; --ok-soft:#14301f; --bad:#f07070; --bad-soft:#3a1717;
+    --warn:#e0a94a; --warn-soft:#3a2b10; --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  html{color-scheme:light dark}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;padding-inline:16px;padding-block:0 48px}
+  .wrap{max-width:860px;margin:0 auto}
+  header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-block:28px 16px}
+  h1{font-size:1.55rem;margin:0;letter-spacing:-.01em}
+  .sub{color:var(--muted);margin:2px 0 0;font-size:.95rem}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;margin-bottom:16px}
+  h2{font-size:1.05rem;margin:0 0 12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .field{display:flex;flex-direction:column;gap:6px;min-width:150px;flex:1}
+  label.lbl{font-size:.85rem;color:var(--muted);font-weight:600}
+  select,input[type=number],input[type=search]{font:inherit;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);width:100%}
+  input[type=search]{width:100%}
+  .btn{font:inherit;font-weight:600;padding:10px 18px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;transition:background .15s,transform .05s}
+  .btn:hover{background:var(--accent-soft)}
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.ghost{border-color:transparent;background:transparent;color:var(--accent)}
+  .btn.danger{color:var(--bad)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn.sm{padding:6px 12px;font-size:.88rem}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{font:inherit;font-size:.86rem;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;user-select:none}
+  .chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+  .stat{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .stat b{display:block;font-size:1.4rem;line-height:1.2}
+  .stat span{font-size:.82rem;color:var(--muted)}
+  .topicbar{display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;font-size:.9rem}
+  .bar{height:8px;background:var(--line);border-radius:99px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--ok);width:0}
+  .progress{height:6px;background:var(--line);border-radius:99px;overflow:hidden;margin:0 0 16px}
+  .progress i{display:block;height:100%;background:var(--accent);transition:width .25s}
+  .qmeta{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:.88rem;margin-bottom:8px}
+  .tag{display:inline-block;background:var(--accent-soft);color:var(--accent);padding:2px 9px;border-radius:999px;font-size:.78rem;font-weight:600}
+  .qtext{font-size:1.15rem;font-weight:600;line-height:1.45;margin:0 0 16px}
+  .opts{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+  .opt{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;font:inherit;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);cursor:pointer;transition:background .12s,border-color .12s}
+  .opt:hover:not(:disabled){border-color:var(--accent);background:var(--accent-soft)}
+  .opt .k{flex:none;width:26px;height:26px;border-radius:7px;border:1px solid var(--line);display:grid;place-items:center;font-size:.8rem;font-weight:700;color:var(--muted);background:var(--card)}
+  .opt.sel{border-color:var(--accent);background:var(--accent-soft)}
+  .opt.sel .k{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+  .opt.ok{border-color:var(--ok);background:var(--ok-soft)}
+  .opt.ok .k{background:var(--ok);color:#fff;border-color:var(--ok)}
+  .opt.bad{border-color:var(--bad);background:var(--bad-soft)}
+  .opt.bad .k{background:var(--bad);color:#fff;border-color:var(--bad)}
+  .opt:disabled{cursor:default}
+  .feedback{margin-top:14px;padding:12px 14px;border-radius:10px;font-size:.95rem;border:1px solid var(--line)}
+  .feedback.ok{background:var(--ok-soft);border-color:var(--ok)}
+  .feedback.bad{background:var(--bad-soft);border-color:var(--bad)}
+  .feedback .ref{color:var(--muted);font-size:.86rem;margin-top:4px}
+  .note{margin-top:8px;padding:10px 12px;background:var(--warn-soft);border-left:3px solid var(--warn);border-radius:6px;font-size:.9rem}
+  .nav{display:flex;justify-content:space-between;gap:10px;margin-top:18px;flex-wrap:wrap}
+  .kbd{font-size:.8rem;color:var(--muted)}
+  kbd{font-family:inherit;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 6px;font-size:.78rem;background:var(--bg)}
+  .star{background:none;border:none;cursor:pointer;font-size:1.25rem;line-height:1;color:var(--muted);padding:2px 6px}
+  .star.on{color:var(--warn)}
+  .score{font-size:2.6rem;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+  .rlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+  .ritem{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--bg)}
+  .ritem .q{font-weight:600;margin:0 0 6px}
+  .ritem .a{font-size:.92rem;margin:2px 0}
+  .ritem .a.good{color:var(--ok)}
+  .ritem .a.miss{color:var(--bad)}
+  .grid-nav{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:6px;margin-top:14px}
+  .gcell{font:inherit;font-size:.8rem;padding:6px 0;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+  .gcell.done{background:var(--accent-soft);border-color:var(--accent)}
+  .gcell.cur{outline:2px solid var(--accent)}
+  .review-item{border-bottom:1px solid var(--line);padding:14px 0}
+  .review-item:last-child{border-bottom:none}
+  .review-item .q{font-weight:600;margin:0 0 6px}
+  .review-item ol{margin:0;padding-left:22px}
+  .review-item li{padding:2px 0}
+  .review-item li.ans{color:var(--ok);font-weight:600}
+  .review-item .ref{font-size:.82rem;color:var(--muted);margin-top:4px}
+  .muted{color:var(--muted)}
+  .hidden{display:none!important}
+  footer{color:var(--muted);font-size:.82rem;margin-top:26px;line-height:1.5}
+  .theme-toggle{font-size:.85rem}
+  @media (max-width:520px){
+    .qtext{font-size:1.05rem}
+    header{padding-block:20px 12px}
+    .card{padding:16px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>CS614 Midterm Quiz Prep</h1>
+      <p class="sub">Data Warehousing · <span id="qcount"></span> solved MCQs · works fully offline</p>
+    </div>
+    <div class="row">
+      <button class="btn sm theme-toggle" id="themeBtn" type="button">Theme: auto</button>
+    </div>
+  </header>
+
+  <!-- ========== HOME / SETUP ========== -->
+  <section id="home">
+    <div class="card">
+      <h2>Your progress</h2>
+      <div class="stats" id="stats"></div>
+      <div id="topicStats" style="margin-top:14px"></div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn sm danger" id="resetBtn" type="button">Reset all progress</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Start a session</h2>
+      <div class="row" style="margin-bottom:14px">
+        <div class="field">
+          <label class="lbl" for="mode">Mode</label>
+          <select id="mode">
+            <option value="practice">Practice — instant feedback after each answer</option>
+            <option value="exam">Exam — answer all, score at the end</option>
+            <option value="review">Review — read questions with answers shown</option>
+          </select>
+        </div>
+      </div>
+      <div class="row" style="margin-bottom:14px">
+        <div class="field">
+          <label class="lbl" for="pool">Question pool</label>
+          <select id="pool">
+            <option value="all">All questions</option>
+            <option value="new">Never attempted</option>
+            <option value="wrong">Ones I got wrong last time</option>
+            <option value="weak">Ones I have ever missed</option>
+            <option value="book">Bookmarked</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="lbl" for="count">How many</label>
+          <select id="count">
+            <option value="10">10</option>
+            <option value="20" selected>20</option>
+            <option value="30">30</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="0">All in pool</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="lbl" for="order">Order</label>
+          <select id="order">
+            <option value="shuffle" selected>Shuffled</option>
+            <option value="orig">Original numbering</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="lbl" for="shufopts">Options</label>
+          <select id="shufopts">
+            <option value="1" selected>Shuffle options</option>
+            <option value="0">Keep original order</option>
+          </select>
+        </div>
+      </div>
+      <label class="lbl" style="display:block;margin-bottom:8px">Topics</label>
+      <div class="chips" id="topicChips"></div>
+      <p class="muted" id="poolInfo" style="font-size:.88rem;margin:12px 0 14px"></p>
+      <div class="row">
+        <button class="btn primary" id="startBtn" type="button">Start</button>
+        <span class="kbd">Keyboard: <kbd>1</kbd>–<kbd>4</kbd> pick an option · <kbd>Enter</kbd> / <kbd>→</kbd> next · <kbd>B</kbd> bookmark</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== QUIZ ========== -->
+  <section id="quiz" class="hidden">
+    <div class="card">
+      <div class="progress"><i id="pbar"></i></div>
+      <div class="qmeta">
+        <div><span id="qpos"></span> · <span class="tag" id="qtopic"></span> · <span class="muted">Q<span id="qnum"></span> in source</span></div>
+        <div class="row">
+          <button class="star" id="bookBtn" type="button" title="Bookmark (B)">☆</button>
+          <button class="btn sm ghost" id="quitBtn" type="button">End session</button>
+        </div>
+      </div>
+      <p class="qtext" id="qtext"></p>
+      <ul class="opts" id="opts"></ul>
+      <div id="feedback"></div>
+      <div class="nav">
+        <button class="btn" id="prevBtn" type="button">← Previous</button>
+        <div class="row">
+          <button class="btn primary" id="nextBtn" type="button">Next →</button>
+          <button class="btn primary hidden" id="finishBtn" type="button">Finish exam</button>
+        </div>
+      </div>
+      <div class="grid-nav hidden" id="gridNav"></div>
+    </div>
+  </section>
+
+  <!-- ========== RESULTS ========== -->
+  <section id="results" class="hidden">
+    <div class="card">
+      <h2>Session result</h2>
+      <div class="row" style="align-items:baseline;gap:16px">
+        <div class="score" id="scoreBig"></div>
+        <div class="muted" id="scoreSub"></div>
+      </div>
+      <div id="resultTopics" style="margin-top:14px"></div>
+      <div class="row" style="margin-top:18px">
+        <button class="btn primary" id="retryWrongBtn" type="button">Retry the ones I missed</button>
+        <button class="btn" id="againBtn" type="button">Same settings again</button>
+        <button class="btn" id="homeBtn" type="button">Back to start</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Answers</h2>
+      <ul class="rlist" id="resultList"></ul>
+    </div>
+  </section>
+
+  <!-- ========== REVIEW ========== -->
+  <section id="review" class="hidden">
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">Review mode</h2>
+        <button class="btn sm ghost" id="reviewHomeBtn" type="button">Back to start</button>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <input type="search" id="search" placeholder="Search question or answer text…" aria-label="Search">
+      </div>
+      <p class="muted" id="reviewCount" style="font-size:.88rem;margin:10px 0 0"></p>
+    </div>
+    <div class="card" id="reviewList"></div>
+  </section>
+
+  <footer>
+    Questions and marked answers are taken from the solved-MCQ compilation by AL-JUNAID TECH INSTITUTE for the VU CS614 midterm.
+    “Page” references point to the CS614 handouts. Where the source was blank or contradictory (questions 82, 160 and 196), a note explains the choice.
+    Your progress is saved in this browser only (localStorage); nothing is sent anywhere.
+  </footer>
+</div>
+
+<script>
+/* ---------- Topics ---------- */
+const TOPICS = {
+  intro: "DWH basics & history",
+  norm:  "Normalization & De-normalization",
+  olap:  "OLAP",
+  dm:    "Dimensional Modeling",
+  etl:   "Extraction & Transformation",
+  clean: "Data Cleansing",
+  dq:    "Data Quality"
+};
+
+/* ---------- Questions: [number, topic, question, options, correctIndex, page, note] ---------- */
+const Q = [
+[1,"etl","Online Extraction is a kind of ______ data extraction.",["Logical","Dimensional","Physical","Multi valued"],2,"132"],
+[2,"intro","The ______ saw the advent of disk storage, or DASD (Direct Access Storage Device).",["1960s","1970s","1950s","1990s"],1,"13"],
+[3,"etl","In the context of a data warehouse, it normally becomes difficult to extract data from different sources because these sources are normally ______.",["Heterogeneous","Homogeneous","Centralized","Baseline"],0,"140"],
+[4,"etl","Which of the following is not a task of Data Transformation?",["Conversion","Summarization","Enrichment","Full Data Refresh"],3,"135"],
+[5,"dq","Which of the following is not one of “Orr’s Laws of Data Quality”?",["“Data that is not used cannot be corrected!”","“Data quality is a function of its use, not its collection!”","“Data will be no better than its most stringent use!”","“Data duplication can be harmful for the organization!”"],3,"181"],
+[6,"etl","Flat files are one of the prevalent structures used in ______ data extraction.",["Online","Offline","Incremental","Full"],1,"134"],
+[7,"etl","Which of the following is NOT one of the advantages of the changed data capture (CDC) technique?",["Flat files are not required","Limited query interface is required for data extraction","No incremental on-line I/O required for log tape","Extraction of changed data occurs immediately"],1,"152"],
+[8,"norm","The most common range partitioning is on ______.",["Color","Date","PhoneNo","Name"],1,"66"],
+[9,"norm","A relation is said to be in first normal form (1NF) if it does not contain ______.",["Single value column","Multi-valued column","Derived column","Composite column"],1,"43"],
+[10,"norm","In a fully normalized database, too many ______ are required.",["Values","Joins","Queries","Conditions"],1,"49"],
+[11,"intro","In the data warehouse, data is collected from ______ sources.",["Homogeneous","Heterogeneous","External","Internal"],1,"21"],
+[12,"norm","De-normalization is more like a “controlled crash” with the aim to ______ performance without loss of information.",["Check","Balance","Decrease","Enhance"],3,"49"],
+[13,"dq","______ is making all efforts to increase effectiveness and efficiency in meeting accepted customer expectations.",["Quality assurance","Quality improvement","Quality maintenance","Quality establishment"],1,"183"],
+[14,"intro","______ is the application of intelligence and experience to get common goals.",["Wisdom","Education","Power","Information"],0,"11"],
+[15,"etl","In data transformation, ______ is the rearrangement and simplification of individual fields.",["Aggregation","Enrichment","Splitting / joining","Conversion"],1,"136"],
+[16,"dm","Grain of a fact table means:",["The meaning of one fact table row","The meaning of one dimension table row","Summary of aggregates in all fact tables","Summary of aggregates in all dimension tables"],0,"109"],
+[17,"norm","Normalization ______.",["Reduces redundancy","Increases redundancy","Reduces joins","Reduces tables"],0,"41"],
+[18,"dm","Which of the following is not an example of a typical grain?",["Individual transaction","Daily aggregates","Monthly aggregates","Normalized attributes"],3,"111"],
+[19,"olap","Multi-dimensional databases (MDDs) typically use ______ formats to store pre-summarized cube structures.",["SQL","Proprietary file","Object oriented","Non-proprietary file"],1,"79"],
+[20,"olap","______ provides a combination of “relational database access” and “cube” data structures within a single framework.",["HOLAP","DOLAP","MOLAP","ROLAP"],0,"78"],
+[21,"olap","Data Warehouse provides the best support for analysis while OLAP carries out the ______ task.",["Mandatory","Whole","Analysis","Prediction"],2,"69"],
+[22,"norm","______ involves splitting a table by columns so that a group of columns is placed into a new table and the remaining columns are placed in another new table.",["Vertical splitting","Horizontal splitting","Adding redundant column","None of the given options"],0,"56"],
+[23,"olap","OLAP implementations are highly/completely ______.",["Normalized","De-normalized","Predictive","Additive"],1,"69"],
+[24,"norm","If each cell of Relation R contains a single value (no repeating values) then it is confirmed that:",["Relation R is in 1st Normal Form","Relation R is in 2nd Normal Form","Relation R is in 3rd Normal Form","Relation R is in 3rd Normal Form but not in 2nd Normal Form"],0,"43"],
+[25,"dm","Which kind of relationship is captured by a Factless fact table?",["Many-to-many","One-to-many","One-to-one","None of the given options"],0,"121"],
+[26,"dm","Which of the following is not an example of a dimension?",["Product","Date","Region","Sales volume"],3,"78"],
+[27,"dm","Which people criticize Dimensional Modeling (DM) as being a data-mart-oriented approach?",["Those that consider ER models as data marts","Those that consider business processes as data marts","Those that consider data marts as data warehouses","Those that consider dimensional modeling as a de-normalization approach"],1,"110"],
+[28,"norm","In a fully normalized form:",["Too many joins are required","Relationships lose their significance","No joins are required","Data integrity becomes an issue"],0,"49"],
+[29,"dm","Which of the following is an example of Non-Additive Facts?",["Quantity sold","Total sale in Rs.","Discount in percentage","Count of orders in a store"],2,"119"],
+[30,"olap","Which of the following is not a CUBE operation?",["ANSI SQL","Roll Up","Drill Down","Pivoting"],0,"81"],
+[31,"olap","______ allows download of “cube” structures to a desktop platform without the need for a shared relational or cube server.",["MOLAP","ROLAP","DOLAP","HOLAP"],2,"78"],
+[32,"olap","ROLAP provides access to information via a relational database using:",["ANSI standard SQL","Proprietary file format","Comma Separated Values","All of the given options"],0,"78"],
+[33,"norm","______ is usually deployed when an expression can be used to group data together in such a way that access can be targeted to a small set of partitions.",["Expression elimination","Expression partitioning","Expression indexing","None of the given options"],1,"67"],
+[34,"intro","Taken jointly, the extract programs or naturally evolving systems formed a spider web, also known as:",["Distributed Systems Architecture","Legacy Systems Architecture","Online Systems Architecture","Intranet Systems Architecture"],1,"14"],
+[35,"intro","The data has to be checked, cleaned and transformed into a ______ format to allow easy and fast access.",["Unified","Predicated","Qualified","Proactive"],0,"20"],
+[36,"etl","Suppose in system A the values of the “PhoneNo” attribute were stored in “countrycode-phone-extension” format; after transformation into the data warehouse, separate columns were used for “countrycode”, “phone” and “extension”. This scenario is an example of:",["One-to-one scalar transformation","One-to-many element transformation","Many-to-one element transformation","Many-to-many element transformation"],1,"144 (conceptual)"],
+[37,"norm","In decision support systems, ease of use is achieved by:",["Normalization","Denormalization","Drill up","Drill down"],1,"49"],
+[38,"dm","Which of the following is one of the methods to simplify an ER model?",["Normalization","Denormalization","HOLAP","Hybrid schema"],1,"103"],
+[39,"etl","In the ETL process, data transformation includes ______.",["Data cleansing","Data aggregation","Behavior checking","Pattern recognition"],0,"129"],
+[40,"clean","Non-uniform use of abbreviations, units, and values refers to:",["Syntactically dirty data","Semantically dirty data","Coverage anomaly","Extraction issue"],0,"160"],
+[41,"etl","Suppose the size of the attribute “Computerized National Identity Card (CNIC) no.” is changed in the NADRA database. This transformation refers to:",["Format revision","Field splitting","Field decoding","Calculation of derived value"],0,"153"],
+[42,"olap","The divide-and-conquer cube partitioning approach helps alleviate the ______ limitations of MOLAP implementation.",["Flexibility","Maintainability","Security","Scalability"],3,"85"],
+[43,"dm","Identify the TRUE statement:",["DM is inherently dimensional in nature","DM comprises a single central fact table","DM comprises a set of dimension tables","All of the given options"],3,"103"],
+[44,"norm","______ can be used when some columns are rarely accessed compared to other columns, or when the table has wide rows, or both.",["Horizontal splitting","Pre-joining","Vertical splitting","Derived attributes"],2,"56"],
+[45,"norm","Which of the following is an example of a derived attribute?",["Age","Size","Color","Length"],0,"61"],
+[46,"intro","Online high-performance transaction processing evolved in ______.",["1980","1975","1977","1965"],1,"12"],
+[47,"olap","A cube is a logical entity containing values of a certain aggregation level at an intersection of a combination of ______.",["Facts","Dimensions","Summary tables","Primary and foreign keys"],1,"88"],
+[48,"dm","Which of the following is TRUE regarding Entity Relationship modeling?",["It does not really model business, but models the micro relationships among data elements","ER modeling does not have “business rules”, it has “data rules”","ER modeling helps retrieval of individual records having certain critical identifiers","All of the given options"],3,"102"],
+[49,"olap","______ facilitates a mobile computing paradigm.",["HOLAP","DOLAP","ROLAP","MOLAP"],1,"78"],
+[50,"olap","The main reason(s) for the increase in cube size may be:",["Increase in the number of dimensions","Increase in the cardinality of the dimensions","Increase in the amount of detail data","All of the given options"],3,"87"],
+[51,"intro","Suppose the amount of data recorded in an organization is doubled every year. This increase is ______.",["Linear","Quadratic","Exponential","Logarithmic"],2,"15"],
+[52,"olap","The data in the data warehouse is ______.",["Volatile","Non-volatile","Static","Non-structured"],1,"69"],
+[53,"dm","______ models the macro relationships among data elements with an overall deterministic strategy.",["Dimensional model","Entity relationship model","Object oriented model","Structured model"],0,"102"],
+[54,"etl","The ______ technique requires a separate column to specify the time and date when the last modification occurred.",["Checkmarks","Timestamps","Just-in-Time","Real Time extraction"],1,"150"],
+[55,"norm","Which de-normalization technique squeezes the master table into the detail table?",["Pre-joining","Horizontal splitting","Vertical splitting","Adding redundant column"],0,"58"],
+[56,"norm","De-normalization can help:",["Minimize joins","Minimize foreign keys","Resolve aggregates","All of the given options"],3,"51"],
+[57,"clean","The domain of the “gender” field in some database may be ('F','M') or (“Female”, “Male”) or even (1, 0). This is a:",["Primary key problem","Non-primary key problem","Normalization problem","All of the given options"],1,"163"],
+[58,"norm","Increasing the level of normalization ______ the number of tables.",["Increases","Decreases","Does not affect","None of the given options"],0,"51"],
+[59,"dq","Which of the following is not a Data Quality Validation technique?",["Referential integrity","Using data quality rules","Data histograming","Indexes"],3,"189"],
+[60,"norm","This technique can be used when a column from one table is frequently accessed in a large-scale join in conjunction with a column from another table:",["Horizontal splitting","Pre-joining","Adding redundant column","Derived attributes"],2,"58"],
+[61,"clean","Data cleansing requires involvement of a domain expert because:",["Domain expert has deep knowledge of data aggregation","Change Data Capture requires involvement of a domain expert","Domain knowledge is required to correct anomalies","Domain expert has deep knowledge of data summarization"],2,"158"],
+[62,"intro","Relational databases allow you to navigate the data in ______ that is appropriate using the primary/foreign key structure within the data model.",["Only one direction","Any direction","Two directions","None of these"],1,"19"],
+[63,"intro","History is an excellent predictor of the ______.",["Past","Present","Future","History"],2,"15"],
+[64,"norm","De-normalization is the process of selectively transforming normalized relations into un-normalized physical record specifications, with the aim to:",["Well structure the data","Well model the data","Reduce query processing time","None of the given options"],2,"50"],
+[65,"intro","______ gives a total view of an organization.",["OLAP","OLTP","Data Warehouse","Database"],2,"16"],
+[66,"etl","Suppose in system A the possible values of the “Gender” attribute were “Male” and “Female”; however in the data warehouse the values stored were “M” for male and “F” for female. This scenario is an example of:",["One-to-one scalar transformation","One-to-many element transformation","Many-to-one element transformation","Many-to-many element transformation"],0,"144"],
+[67,"etl","Enrichment is one of the basic tasks in data ______.",["Extraction","Transformation","Loading","Summarization"],1,"138"],
+[68,"norm","Which of the following is not a technique of de-normalization?",["Pre-joining","Splitting tables","Adding redundant columns","ER modeling"],3,"52"],
+[69,"dm","Which of the following is an example of Additive Facts?",["Sales amount","Average","Discount","Ratios"],0,"119"],
+[70,"etl","Robotic libraries are needed for ______.",["Cubes","Data marts","Data warehouse","Aggregates"],2,"131"],
+[71,"olap","Normally ROLAP is implemented using ______.",["Star schema","Hybrid schema","Pre-defined aggregates","All of the given options"],0,"87"],
+[72,"norm","The relation R will be in 2nd Normal Form if:",["It is in 1NF and each cell contains a single value","It is in 1NF and each non-key attribute is dependent upon the entire primary key","It is in 1NF and a non-key attribute is dependent upon a single column of the composite primary key","It is in 1NF and the primary key is composite"],1,"44"],
+[73,"intro","In ______, a nested-loop join of quadratic time complexity does not hurt the performance.",["Typical OLTP environments","Data warehouse","DSS","OLAP"],0,"22"],
+[74,"etl","In the Extract, Load, Transform (ELT) process, data transformation ______.",["Takes place on the data warehouse server","Takes place on a separate transformation server","Depends on the nature of the source database","Does not take place"],0,"147"],
+[75,"intro","A node of a B-Tree is stored in a memory block and traversing a B-Tree involves ______ page faults.",["O(n log n)","O(log n)","O(n)","O(n²)"],1,"22"],
+[76,"olap","As dimensions get less detailed (e.g., year vs. day) cubes get ______.",["Smaller","Larger","Partitioned","Merged"],0,"84"],
+[77,"etl","Which of the following is not a technique of “Changed Data Capture” in currently used modern source systems?",["Timestamps","Partitioning","Triggers","Dimensional Modeling"],3,"150"],
+[78,"norm","The trade-offs of de-normalization is/are:",["Storage","Performance","Ease-of-use","All of the given options"],3,"62"],
+[79,"clean","If the actual data structure does not conform to documented formats then it is called:",["Syntactically dirty data","Semantically dirty data","Coverage anomaly","Extraction issue"],0,"160"],
+[80,"norm","“Header size is reduced, allowing more rows per block, thus reducing I/O.” The above statement is TRUE with respect to:",["Vertical splitting","Horizontal splitting","Adding redundant column","None of the given options"],0,"56"],
+["80b","norm","______ breaks a table into multiple tables based upon common column values.",["Horizontal splitting","Vertical splitting","Adding redundant column","None of the given options"],0,"54"],
+[81,"norm","Which of the following is NOT an example of a derived attribute?",["Age","CGPA","Area of rectangle","Height"],3,"conceptual"],
+[82,"norm","Which of the following is NOT an example of a derived attribute?",["Age","CGPA","Annual Salary"],2,"conceptual","The source file does not mark an answer for this one. Age and CGPA are the textbook examples of derived attributes, so Annual Salary is the most likely intended answer."],
+[83,"clean","If a table is expected to have six columns but some or all of the records do not have six columns, then it is an example of:",["Syntactically dirty data","Semantically dirty data","Coverage anomaly","Extraction issue"],0,"160"],
+[84,"olap","MDX by Microsoft is an example of ______.",["HOLAP","DOLAP","ROLAP","None of the given options"],3,"79"],
+[85,"intro","The growth of master files and magnetic tapes exploded around the mid-______.",["1950s","1960s","1970s","1980s"],1,"12"],
+[86,"clean","If one or more records in a relational table do not satisfy one or more integrity constraints, then the data:",["Is syntactically dirty","Is semantically dirty","Has a coverage anomaly","Has an extraction issue"],1,"160"],
+[87,"olap","OLAP is:",["Analytical processing","Transaction processing","Additive processing","Active processing"],0,"69"],
+[88,"etl","One of the possible issues faced by web scraping is that:",["Web pages may contain junk data","Web pages do not contain multiple facts","Web pages do not contain multiple dimensions","Web pages do not support transformation"],0,"141"],
+[89,"olap","Which of the following is/are an example of a dimension?",["Product","Region","Data","None of the given"],0,"79"],
+[90,"dm","An OLTP system is always good at ______.",["Evolving data","Keeping static data","Tracking past data","Maintaining historic data"],0,"122"],
+[91,"etl","In case of multiple sources for the same data element, we need to prioritize the source systems on a per-element basis. The process is called:",["Ranking","Prioritization","Element selection","Measurement selection"],0,"143"],
+[92,"etl","One feature of Change Data Capture (CDC) is that:",["It pre-calculates changed aggregates","It loads the transformed data in real time","It only processes the data that has been changed","It can automate the transformation of extracted data"],3,"149"],
+[93,"dm","In ______, SQL generation is vastly simplified for front-end tools when the data is highly structured.",["MOLAP","Star Schema","Hybrid schema","Object oriented schema"],1,"107"],
+[94,"clean","Dirty data means:",["Data cannot be aggregated","Data contains non-additive facts","Data does not fulfill dimensional modeling rules","Data does not conform to proper domain definitions"],3,"158"],
+[95,"etl","In the context of Change Data Capture (CDC), sometimes a ______ object can be used to store recently modified data.",["Buffer table","Change table","Checkmark table","Change control table"],1,"149"],
+[96,"clean","“Sometimes during data collection complete entities are missed.” This statement is an example of:",["Missing tuple","Missing attribute","Missing aggregates","Semantically dirty data"],0,"161"],
+[97,"norm","The table collapsing technique is applied in case of:",["One-to-one relation or many-to-many relation","One-to-many relation","Many-to-many relation","None of the given options"],0,"52"],
+[98,"olap","Which of the following is an example of a dimension?",["Product","Region","Date","All of the given options"],3,"78"],
+[99,"intro","Data warehouse stores ______.",["Operational data","Historical data","Meta data","Log files data"],1,"24"],
+[100,"dm","The business processes covered by ER diagrams:",["Do not co-exist in time and space","Co-exist in time and space","Do not physically exist in real time context","None of the given options"],0,"109"],
+[101,"norm","The main goal of normalization is to eliminate ______.",["Data redundancy","Data sharing","Data security","Data consistency"],0,"41"],
+[102,"clean","Serious ______ involves decomposing and reassembling the data.",["Data cleansing","Data transformation","Data loading","Data extraction"],0,"168"],
+[103,"olap","In the data warehouse environment the data is ______.",["Subject-oriented","Time-oriented","Both subject and time oriented","Neither time-oriented nor subject-oriented"],0,"69"],
+[104,"clean","For large record spaces and a large number of records, the run time of the clustering algorithms is:",["Prohibitive","Static","Exponential","Numerical"],0,"164"],
+[105,"clean","______ can result in costly errors, such as false frequency distributions and incorrect aggregates due to double counting.",["Data duplication","Data reduction","Data anomaly","Data transformation"],0,"165"],
+[106,"dq","The degree to which values are present in the attributes that require them is known as ______.",["Completeness","Uniqueness","Accessibility","Consistency"],0,"185"],
+[107,"clean","Time complexity of the Key Creation process in the Basic Sorted Neighborhood (BSN) method is ______.",["O(n log n)","O(log n)","O(n)","O(2n)"],2,"171"],
+[108,"dm","Which of the following is an example of slowly changing dimensions?",["Inheritance","Aggregation","Association","Asset disposal"],0,"124"],
+[109,"dq","The ______ operator proves useful in more complex metrics applicable to the dimensions and accessibility.",["Max","Min","Max and Min","None of the given"],0,"188"],
+[110,"olap","In OLAP, the typical write operation is ______.",["Bulk insertion","Single insertion","Sequential insertion","No insertion"],0,"75"],
+[111,"norm","The issue(s) of “Adding redundant column” include(s):",["Increase in table size","Maintenance","Loss of information","All of the given options"],3,"65"],
+[112,"intro","______ is applicable in profitability analysis.",["OLTP","Data warehouse","Information System (IS)","Management Information System (MIS)"],1,"36–37"],
+[113,"intro","The hardware (CPU) utilization in a data warehouse environment is full or ______.",["Fixed","Partial","Not at all","Slow"],2,"24"],
+[114,"intro","Time-variant is a characteristic of the data warehouse which means:",["Data loaded in the data warehouse will be time stamped","Data can be loaded in the data warehouse anytime","Data can be loaded in the data warehouse only at a particular time","Data cannot be loaded in the data warehouse with respect to time"],0,"20"],
+[115,"dm","In which class of aggregates can the AVERAGE function be placed?",["Algebraic","Distributive","Associative","Holistic"],0,"120"],
+[116,"norm","Consider the following Employee table and identify the column which causes the table to not be in first normal form (1NF): Employee(Emp_ID, Emp_Name, Emp_Skills, Emp_Designation)",["Emp_ID","Emp_Name","Emp_Skills","Emp_Designation"],2,"43 (conceptual)"],
+[117,"intro","The application of data and information leads to ______.",["Intelligence","Experience","Knowledge","Power"],2,"11"],
+[118,"norm","______ segregates data into separate partitions so that queries do not need to examine all data in a table when WHERE clause filters specify only a subset of the partitions.",["Pre-joining technique","Collapsing table technique","Horizontal splitting technique","Vertical splitting technique"],2,"56"],
+[119,"norm","______ should not be present in a relation for it to be in second normal form (2NF).",["Partial dependency","Full functional dependency","Multivalued dependency","Transitive dependency"],0,"44 (conceptual)"],
+[120,"clean","Records referring to the same entity are represented in different formats in different data sets, or are represented erroneously; thus duplicate records will appear in the merged database. This problem is known as ______.",["Merge/purge problem","Duplication problem","Redundant duplication problem","Redundant problem"],0,"168"],
+[121,"intro","The data perspective in an OLTP system is operational, while that in a data warehouse is:",["Fully normalized","Fully de-normalized","Fully summarized","Historical and detailed"],3,"30"],
+[122,"etl","Simple scalar transformation is a ______ mapping from one set of values to another set of values using straightforward rules.",["One-to-one","One-to-many","Many-to-many","Many-to-one"],0,"144"],
+[123,"etl","______ can be created in operational systems to keep track of recently updated records.",["Triggers","Timestamps","Partitioning","ELT"],0,"150"],
+[124,"intro","Development of a data warehouse is hard because data sources are usually ______.",["Structured and homogeneous","Unstructured and heterogeneous","Structured and heterogeneous","Unstructured and homogeneous"],1,"31"],
+[125,"intro","In a decision support environment, the decision maker is interested in ______.",["Only limited organizational data","The big picture of organizational data","Only sales related data","Only customer related data"],1,"21"],
+[126,"intro","Information can answer questions like “what”, “who” and “when”, while knowledge can answer questions like ______.",["Why","Where","Which","How"],3,"11"],
+[127,"olap","OLTP implementations are fully ______.",["Normalized","Denormalized","Predictive","Additive"],0,"69"],
+[128,"etl","Which logical data extraction has significant performance impacts on the data warehouse server?",["Incremental extraction","Online extraction","Offline extraction","Legacy vs OLTP"],0,"133"],
+[129,"norm","Consider the following Student table and identify the column which causes the table to not be in first normal form (1NF): Student(Std_ID, Std_Name, Std_CGPA, Std_Hobbies)",["Std_ID","Std_Name","Std_CGPA","Std_Hobbies"],3,"43 (conceptual)"],
+[130,"olap","Analytical processing uses ______.",["Multi-level aggregates","Record level aggregates","Table level aggregates","All of the given options"],0,"74"],
+[131,"clean","Which of the following is not a class of anomalies?",["Dirty anomalies","Syntactically dirty data","Semantically dirty data","Coverage anomalies"],0,"160"],
+[132,"dq","______ is a system of activities that assures conformance of a product to pre-established requirements.",["Quality assurance","Quality improvement","Quality maintenance","Quality establishment"],0,"183"],
+[133,"dq","Two interesting examples of quality dimensions that can make use of the min operator are ______.",["Believability and appropriate amount of data","Believability and consistency","Believability and redundancy","Reliability and appropriate amount of data"],0,"188"],
+[134,"dq","______ in a database or data warehouse has no actual value; it only has potential value.",["Data","Entity","Flat tables","Data marts"],0,"181"],
+[135,"intro","In an OLTP environment the selectivity is ______ and ______ in a data warehouse environment.",["High, Low","Low, High","High, Fixed","Fixed, Low"],0,"22"],
+[136,"dq","Which of the following is not a characteristic of data quality?",["Reliability","Uniqueness","Accessibility","Consistency"],0,"186"],
+[137,"dq","If a product meets formally defined “requirement specifications”, yet fails to be a quality product from the customer’s perspective, this means the requirements were ______.",["Defective","Unclear","Unrefined","Undefined"],0,"180"],
+[138,"norm","The relation R will be in 3rd Normal Form if:",["It is in 2NF and each cell contains a single value","It is in 2NF and every non-key column is non-transitively dependent upon its primary key","It is in 1NF and each non-key attribute is dependent upon a single column of the composite primary key","It is in 2NF and each non-key attribute is dependent upon another non-key attribute"],1,"46"],
+[139,"intro","Decision support system queries deal with a number of columns ______.",["Having numeric values","In a single table","In a single view","Spanning across multiple tables"],3,"21"],
+[140,"norm","Normalization is used to:",["Reduce redundancy","Increase redundancy","Reduce joins","Reduce tables"],0,"41"],
+[141,"intro","The end users of a data warehouse are ______.",["Programmers","Database developers","Data entry operators","Business executives"],3,"18–19"],
+[142,"intro","Which one is a characteristic of data warehouse queries?",["Use primary key","High selectivity","Use multiple tables","Very low performance"],2,"30"],
+[143,"clean","Referential Integrity (RI) checking using a naive approach would take ______ time.",["O(n)","O(1)","O(log n)","None of the given"],0,"160"],
+[144,"etl","Web scraping is the process of applying ______ techniques to the web.",["Screen scraping","Data scraping","Text scraping","Meta scraping"],0,"146"],
+[145,"olap","Which of the following is not an issue of ROLAP?",["Standard hierarchy of dimensions","Non-standard conventions","Maintenance","Aggregation"],0,"92"],
+[146,"norm","One of the fundamental purposes of de-normalization is to ______ the number of physical tables, which ultimately reduces the number of joins needed to answer a query.",["Delete","Reduce","Increase","Decrease"],1,"50"],
+[147,"olap","______ is not a characteristic of a data warehouse.",["Time variant","Subject-oriented","Integrated","Volatile"],3,"69"],
+[148,"clean","Which of the following is not a step of the data cleansing procedure?",["Aggregation","Elementizing","Standardizing","Verifying"],0,"168"],
+[149,"clean","Instance matching between different sources is then achieved by a standard ______ on identifying attribute(s), if you are very, very, very lucky.",["Equi-join","Inner join","Outer join","Full join"],0,"169"],
+[150,"intro","Ad-hoc access of a data warehouse means access:",["That has a predefined database access pattern","That does not have a predefined database access pattern","That could be done by any user","That could not be done by any user"],1,"18"],
+[151,"intro","In an OLTP environment, the size of tables is relatively ______.",["Large","Fixed","Moderate","Small"],3,"22"],
+[152,"dq","______ is a measure of how current or up-to-date the data is.",["Timeliness","Completeness","Accessibility","Consistency"],0,"185"],
+[153,"dm","The process of converting an entity relationship model into a dimensional model consists of ______ steps.",["Two","Three","Four","Five"],2,"109"],
+[154,"clean","A ______ is defined by a group of records that have similar characteristics (“behavior”) for p% of the fields in the data set, where p is a user-defined value (usually above 90).",["Pattern","Cluster","Entity","Attribute"],0,"164"],
+[155,"dq","______ is known as the state of being only one of its kind, or being without an equal or parallel.",["Completeness","Uniqueness","Accessibility","Consistency"],1,"185"],
+[156,"dm","Which of the following is not an example of a fact?",["Account no","Sales quantity","Per unit sales amount","Sales amount"],0,"74"],
+[157,"dq","______ is the degree to which data accurately reflects the real-world object that the data represents.",["Intrinsic data quality","Realistic data quality","Strong data quality","Weak data quality"],0,"181"],
+[158,"intro","Which one among the following data warehouses stores data covering a long period?",["Telecommunication data warehouse","Financial data warehouse","Human resource data warehouse","Insurance data warehouse"],3,"36"],
+[159,"dm","A ______ dimension is a collection of random transactional codes, flags and/or text attributes that are unrelated to any particular dimension. It is simply a structure that provides a convenient place to store these attributes.",["Junk","Time","Parallel","None of these"],0,""],
+[160,"intro","Data Warehouse is about taking / collecting data from different ______ sources.",["Harmonized","Identical","Homogeneous","Heterogeneous"],3,"","The source file marks “Homogeneous” but flags it as NOT CONFIRMED. The handouts (and questions 3, 11 and 124 in this set) say data warehouse sources are heterogeneous, so Heterogeneous is treated as correct here."],
+[161,"intro","Taken jointly, the extract programs or naturally evolving systems formed a spider web, also known as:",["Distributed Systems Architecture","Legacy Systems Architecture","Online Systems Architecture","Intranet Systems Architecture"],1,"14"],
+[162,"intro","It is observed that every year the amount of data recorded in an organization ______.",["Doubles","Triples","Quadruples"],0,"15"],
+[163,"intro","The users of a data warehouse are knowledge workers; in other words they are ______ in the organization.",["DWH Analyst","Decision maker","Database Administrator","Manager"],1,""],
+[164,"intro","A node of a B-Tree is stored in a memory block and traversing a B-Tree involves ______ page faults.",["O(n lg n)","O(log n)","O(n)","O(n²)"],1,"22"],
+[165,"intro","In a(n) ______ system, the contents change with time.",["OLTP","ATM","DSS","OLAP"],0,""],
+[166,"intro","The growth of master files and magnetic tapes exploded around the mid-______.",["1950s","1960s","1970s","1980s"],1,"12"],
+[167,"intro","Relational databases allow you to navigate the data in ______ that is appropriate using the primary/foreign key structure within the data model.",["Only one direction","Any direction","Two directions","None of these"],1,"19"],
+[168,"intro","Naturally evolving architecture occurred when an organization had a ______ approach to handling the whole process of hardware and software architecture.",["Relaxed","Good","Not relaxed","None"],0,""],
+[169,"intro","______ gives a total view of an organization.",["OLAP","OLTP","Data Warehouse","Database"],2,"16"],
+[170,"intro","Suppose the amount of data recorded in an organization is doubled every year. This increase is ______.",["Linear","Quadratic","Exponential","Logarithmic"],2,"15"],
+[171,"intro","______ is the application of intelligence and experience to get common goals.",["Wisdom","Power","Information","Education"],0,"11"],
+[172,"olap","Normally ROLAP is implemented using ______.",["Star schema","Pre-defined aggregates","Hybrid schema","All of the given options"],0,"87"],
+[173,"intro","Identify the data warehouse query from the following:",["Number of students studying the CS614 course","Factors which can affect students’ performance","List of students belonging to Lahore city","Total number of students that have 3.5 CGPA"],1,""],
+[174,"dm","In ______, SQL generation is vastly simplified for front-end tools when the data is highly structured.",["Hybrid schema","Star schema","MOLAP","Object oriented schema"],1,"107"],
+[175,"dm","______ models the macro relationships among data elements with an overall deterministic strategy.",["Dimensional model","Structured model","Object oriented model","Entity relationship model"],0,"102"],
+[176,"clean","The ______ task is typically performed after most other transformation and cleaning steps have taken place.",["Data extraction","Data duplicate elimination","Data transformation","Data loading"],1,""],
+[177,"dq","______ is known as the state of being only one of its kind, or being without an equal or parallel.",["Completeness","Consistency","Accessibility","Uniqueness"],3,"185"],
+[178,"intro","Relational modeling techniques are used to develop ______ systems.",["OLTP","MOLAP","OLAP","ROLAP"],0,""],
+[179,"olap","Which of the following is not a CUBE operation?",["ANSI SQL","Drill Down","Pivoting","Roll Up"],0,"81"],
+[180,"olap","The hybrid OLAP (HOLAP) solution is a mix of ______ architectures that supports queries against summary and transaction data in an integrated fashion.",["ROLAP","OLTP","MOLAP and ROLAP","MOLAP"],2,"78"],
+[181,"intro","The response time of OLTP queries is in milliseconds to seconds, while that of data warehouse queries is in:",["Days to weeks","Hours to days","Milliseconds to microseconds","Minutes to hours"],3,""],
+[182,"olap","______ allows download of “cube” structures to a desktop platform without the need for a shared relational or cube server.",["ROLAP","HOLAP","DOLAP","MOLAP"],2,"78"],
+[183,"etl","In case of multiple sources for the same data element, we need to prioritize the source systems on a per-element basis. The process is called:",["Ranking","Measurement selection","Element selection","Prioritization"],0,"143"],
+[184,"olap","OLAP is:",["Implementation technique","Framework","None of the given options","Physical database design"],1,""],
+[185,"etl","Which of the following is not a task of Data Transformation?",["Summarization","Enrichment","Conversion","Full data refresh"],3,"135"],
+[186,"etl","Simple scalar transformation is a ______ mapping from one set of values to another set of values using straightforward rules.",["Many-to-one","Many-to-many","One-to-one","One-to-many"],2,"144"],
+[187,"dq","Which of the following is not a data quality validation technique?",["Indexes","Using data quality rules","Referential integrity","Data histograming"],0,"189"],
+[188,"intro","______ are created out of the data warehouse to serve the different needs of departments in the organization.",["Databases","Data marts","MIS","Tables"],1,""],
+[189,"dm","An OLTP system is always good at ______.",["Maintaining historical data","Keeping static data","Tracking past data","Evolving data"],3,"122"],
+[190,"dq","______ incorporates the concepts of product quality, process control and quality improvement.",["Intrinsic data quality management","Realistic data quality management","Total Quality Management","Strong data quality management"],2,""],
+[191,"clean","“Sometimes during data collection complete entities are missed.” This statement is an example of:",["Missing aggregate","Missing tuple","Semantically dirty data","Missing attribute"],1,"161"],
+[192,"intro","The last step of the Software Development Life Cycle (SDLC) is implementation, while that of the data warehouse (CLDS) is:",["Integration","Understanding requirements","Testing","Analysis"],1,""],
+[193,"dm","In which class of aggregates can the MAX function be placed?",["Algebraic","Associative","Holistic","Distributive"],3,"120"],
+[194,"intro","A telecommunication data warehouse is dominated by the ______ volume of data generated at the call level.",["Incomplete","Semi-incomplete","Sheer","Partial"],2,""],
+[195,"clean","If a table is expected to have six columns but some or all of the records do not have six columns, then it is an example of:",["Semantically dirty data","Syntactically dirty data","Extraction issue","Coverage anomaly"],1,"160"],
+[196,"olap","In the data warehouse environment the data is ______.",["Both subject and time oriented","Neither time-oriented nor subject-oriented","Subject-oriented","Time-oriented"],0,"","The source marks “Both” here, while question 103 (same wording, page 69) is marked “Subject-oriented”. A data warehouse is subject-oriented, integrated, time-variant and non-volatile, so both answers are defensible; on the exam, pick the option that matches the choices offered."],
+[197,"clean","Dirty data means that:",["Data cannot be aggregated","Data contains non-additive facts","Data does not fulfill dimensional modeling rules","Data does not conform to proper domain definitions"],3,"158"],
+[198,"intro","One of the main reasons for the failure of DWH deployments is ______.",["Data anomaly","Data integrity","Data quality","Data duplication"],2,""],
+[199,"olap","The data in the data warehouse is ______.",["Non-structured","Volatile","Static","Non-volatile"],3,"69"],
+[200,"dm","Which of the following is NOT an example of a typical grain?",["Daily aggregates","Monthly aggregates","Individual transaction","Normalized attribute"],3,"111"]
+].map(r => ({ id: String(r[0]), t: r[1], q: r[2], o: r[3], a: r[4], p: r[5] || "", note: r[6] || "" }));
+
+/* ---------- Persistence ---------- */
+const KEY = "cs614-quiz-v1";
+let store = { stats: {}, books: [], settings: {} };
+try { const raw = localStorage.getItem(KEY); if (raw) store = Object.assign(store, JSON.parse(raw)); } catch (e) {}
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} }
+function stat(id){ return store.stats[id] || { n: 0, c: 0, last: null }; }
+function record(id, correct){
+  const s = stat(id); s.n++; if (correct) s.c++; s.last = correct; store.stats[id] = s; save();
+}
+const isBook = id => store.books.includes(id);
+function toggleBook(id){ if (isBook(id)) store.books = store.books.filter(x => x !== id); else store.books.push(id); save(); }
+
+/* ---------- Helpers ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+function shuffle(a){ const b = a.slice(); for (let i = b.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; }
+function show(id){ ["home","quiz","results","review"].forEach(s => $("#" + s).classList.toggle("hidden", s !== id)); window.scrollTo({ top: 0 }); }
+const LETTERS = "ABCD";
+
+/* ---------- Theme ---------- */
+const root = document.documentElement;
+let theme = store.settings.theme || "auto";
+function applyTheme(){ if (theme === "auto") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", theme); $("#themeBtn").textContent = "Theme: " + theme; }
+$("#themeBtn").onclick = () => { theme = theme === "auto" ? "light" : theme === "light" ? "dark" : "auto"; store.settings.theme = theme; save(); applyTheme(); };
+applyTheme();
+
+/* ---------- Home ---------- */
+$("#qcount").textContent = Q.length;
+let selectedTopics = new Set(store.settings.topics || Object.keys(TOPICS));
+function renderChips(){
+  $("#topicChips").innerHTML = Object.entries(TOPICS).map(([k, v]) => {
+    const n = Q.filter(q => q.t === k).length;
+    return `<button type="button" class="chip ${selectedTopics.has(k) ? "on" : ""}" data-t="${k}">${esc(v)} <span class="muted">(${n})</span></button>`;
+  }).join("") + `<button type="button" class="chip" data-t="__all">All</button><button type="button" class="chip" data-t="__none">None</button>`;
+}
+$("#topicChips").addEventListener("click", e => {
+  const b = e.target.closest(".chip"); if (!b) return;
+  const t = b.dataset.t;
+  if (t === "__all") selectedTopics = new Set(Object.keys(TOPICS));
+  else if (t === "__none") selectedTopics = new Set();
+  else selectedTopics.has(t) ? selectedTopics.delete(t) : selectedTopics.add(t);
+  store.settings.topics = [...selectedTopics]; save(); renderChips(); updatePoolInfo();
+});
+function poolQuestions(){
+  const pool = $("#pool").value;
+  return Q.filter(q => selectedTopics.has(q.t)).filter(q => {
+    const s = stat(q.id);
+    if (pool === "new") return s.n === 0;
+    if (pool === "wrong") return s.last === false;
+    if (pool === "weak") return s.n > s.c;
+    if (pool === "book") return isBook(q.id);
+    return true;
+  });
+}
+function updatePoolInfo(){
+  const n = poolQuestions().length, want = +$("#count").value;
+  $("#poolInfo").textContent = n === 0 ? "No questions match this pool and topic selection." : `${n} question${n === 1 ? "" : "s"} in this pool${want && want < n ? ` — you will get ${want} of them` : ""}.`;
+  $("#startBtn").disabled = n === 0;
+}
+["pool","count","mode","order","shufopts"].forEach(id => {
+  const el = $("#" + id);
+  if (store.settings[id]) el.value = store.settings[id];
+  el.addEventListener("change", () => { store.settings[id] = el.value; save(); updatePoolInfo(); });
+});
+function renderStats(){
+  const attempted = Q.filter(q => stat(q.id).n > 0);
+  const totalN = attempted.reduce((a, q) => a + stat(q.id).n, 0);
+  const totalC = attempted.reduce((a, q) => a + stat(q.id).c, 0);
+  const mastered = Q.filter(q => { const s = stat(q.id); return s.n > 0 && s.last === true && s.c === s.n; }).length;
+  const weak = Q.filter(q => { const s = stat(q.id); return s.n > s.c; }).length;
+  $("#stats").innerHTML = [
+    [attempted.length + " / " + Q.length, "questions attempted"],
+    [totalN ? Math.round(100 * totalC / totalN) + "%" : "—", "overall accuracy"],
+    [mastered, "always answered right"],
+    [weak, "missed at least once"],
+    [store.books.length, "bookmarked"]
+  ].map(([b, s]) => `<div class="stat"><b>${b}</b><span>${s}</span></div>`).join("");
+  $("#topicStats").innerHTML = `<div class="topicbar">` + Object.entries(TOPICS).map(([k, v]) => {
+    const qs = Q.filter(q => q.t === k); const n = qs.reduce((a, q) => a + stat(q.id).n, 0); const c = qs.reduce((a, q) => a + stat(q.id).c, 0);
+    const pct = n ? Math.round(100 * c / n) : 0;
+    return `<div>${esc(v)}<div class="bar"><i style="width:${pct}%"></i></div></div><div class="muted">${n ? pct + "% of " + n : "not started"}</div>`;
+  }).join("") + `</div>`;
+}
+$("#resetBtn").onclick = () => { if (confirm("Delete all saved progress and bookmarks in this browser?")) { store.stats = {}; store.books = []; save(); renderStats(); updatePoolInfo(); } };
+
+/* ---------- Session ---------- */
+let S = null; // {mode, items:[{q, opts:[{text, orig}], picked, correct}], i}
+function buildSession(list){
+  const mode = $("#mode").value, order = $("#order").value, shuf = $("#shufopts").value === "1", want = +$("#count").value;
+  let qs = order === "shuffle" ? shuffle(list) : list.slice();
+  if (want && want < qs.length) qs = qs.slice(0, want);
+  S = { mode, i: 0, items: qs.map(q => {
+    let opts = q.o.map((text, orig) => ({ text, orig }));
+    if (shuf) opts = shuffle(opts);
+    return { q, opts, picked: null, correct: null };
+  }) };
+}
+$("#startBtn").onclick = () => {
+  const list = poolQuestions(); if (!list.length) return;
+  if ($("#mode").value === "review") { renderReview(list); show("review"); return; }
+  buildSession(list); renderQ(); show("quiz");
+};
+function renderQ(){
+  const it = S.items[S.i], q = it.q, exam = S.mode === "exam";
+  $("#pbar").style.width = (100 * (S.i + (exam ? 0 : 0)) / S.items.length) + "%";
+  $("#qpos").textContent = `Question ${S.i + 1} of ${S.items.length}`;
+  $("#qtopic").textContent = TOPICS[q.t];
+  $("#qnum").textContent = q.id;
+  $("#qtext").textContent = q.q;
+  $("#bookBtn").textContent = isBook(q.id) ? "★" : "☆";
+  $("#bookBtn").classList.toggle("on", isBook(q.id));
+  const answered = it.picked !== null;
+  $("#opts").innerHTML = it.opts.map((o, i) => {
+    let cls = "opt";
+    if (exam) { if (it.picked === i) cls += " sel"; }
+    else if (answered) { if (o.orig === q.a) cls += " ok"; else if (it.picked === i) cls += " bad"; }
+    return `<li><button type="button" class="${cls}" data-i="${i}" ${(!exam && answered) ? "disabled" : ""}><span class="k">${LETTERS[i]}</span><span>${esc(o.text)}</span></button></li>`;
+  }).join("");
+  const fb = $("#feedback");
+  if (!exam && answered) {
+    const right = it.opts[it.picked].orig === q.a;
+    fb.innerHTML = `<div class="feedback ${right ? "ok" : "bad"}"><strong>${right ? "Correct." : "Not quite."}</strong> The answer is <strong>${esc(q.o[q.a])}</strong>.` +
+      (q.p ? `<div class="ref">Reference: handouts page ${esc(q.p)}</div>` : "") + `</div>` +
+      (q.note ? `<div class="note">${esc(q.note)}</div>` : "");
+  } else fb.innerHTML = "";
+  $("#prevBtn").disabled = S.i === 0;
+  const last = S.i === S.items.length - 1;
+  $("#nextBtn").classList.toggle("hidden", exam && last);
+  $("#finishBtn").classList.toggle("hidden", !(exam && last));
+  $("#nextBtn").textContent = last ? "See results" : "Next →";
+  $("#nextBtn").disabled = !exam && !answered;
+  const grid = $("#gridNav"); grid.classList.toggle("hidden", !exam);
+  if (exam) grid.innerHTML = S.items.map((x, i) => `<button type="button" class="gcell ${x.picked !== null ? "done" : ""} ${i === S.i ? "cur" : ""}" data-g="${i}">${i + 1}</button>`).join("");
+}
+$("#opts").addEventListener("click", e => {
+  const b = e.target.closest(".opt"); if (!b || b.disabled) return; pick(+b.dataset.i);
+});
+function pick(i){
+  const it = S.items[S.i]; if (!it || i >= it.opts.length) return;
+  if (S.mode === "practice" && it.picked !== null) return;
+  it.picked = i; it.correct = it.opts[i].orig === it.q.a;
+  if (S.mode === "practice") record(it.q.id, it.correct);
+  renderQ();
+}
+function next(){
+  if (S.i < S.items.length - 1) { S.i++; renderQ(); }
+  else if (S.mode === "exam") finishExam(); else finishSession();
+}
+$("#nextBtn").onclick = () => { if (!$("#nextBtn").disabled) next(); };
+$("#prevBtn").onclick = () => { if (S.i > 0) { S.i--; renderQ(); } };
+$("#finishBtn").onclick = () => {
+  const left = S.items.filter(x => x.picked === null).length;
+  if (left && !confirm(`${left} question${left === 1 ? "" : "s"} unanswered. Finish anyway? Unanswered ones count as wrong.`)) return;
+  finishExam();
+};
+$("#gridNav").addEventListener("click", e => { const b = e.target.closest(".gcell"); if (b) { S.i = +b.dataset.g; renderQ(); } });
+$("#bookBtn").onclick = () => { toggleBook(S.items[S.i].q.id); renderQ(); };
+$("#quitBtn").onclick = () => {
+  const done = S.items.filter(x => x.picked !== null).length;
+  if (S.mode === "exam") { if (confirm("End the exam now and score what you have answered so far?")) finishExam(); return; }
+  if (done === 0) { renderStats(); updatePoolInfo(); show("home"); return; }
+  S.items = S.items.filter(x => x.picked !== null); finishSession();
+};
+function finishExam(){
+  S.items.forEach(it => { if (it.picked === null) it.correct = false; record(it.q.id, !!it.correct); });
+  finishSession();
+}
+function finishSession(){
+  const n = S.items.length, c = S.items.filter(x => x.correct).length;
+  $("#scoreBig").textContent = n ? Math.round(100 * c / n) + "%" : "—";
+  $("#scoreSub").textContent = `${c} correct out of ${n} · ${S.mode === "exam" ? "exam" : "practice"} mode`;
+  const byT = {};
+  S.items.forEach(it => { const b = byT[it.q.t] || (byT[it.q.t] = { n: 0, c: 0 }); b.n++; if (it.correct) b.c++; });
+  $("#resultTopics").innerHTML = `<div class="topicbar">` + Object.entries(byT).map(([k, v]) => `<div>${esc(TOPICS[k])}<div class="bar"><i style="width:${Math.round(100 * v.c / v.n)}%"></i></div></div><div class="muted">${v.c} / ${v.n}</div>`).join("") + `</div>`;
+  $("#resultList").innerHTML = S.items.map((it, i) => {
+    const q = it.q, pickedText = it.picked === null ? "(not answered)" : it.opts[it.picked].text;
+    return `<li class="ritem"><p class="q">${i + 1}. ${esc(q.q)} <span class="muted" style="font-weight:400">· Q${q.id}</span></p>` +
+      (it.correct ? `<p class="a good">✓ ${esc(q.o[q.a])}</p>` : `<p class="a miss">✗ Your answer: ${esc(pickedText)}</p><p class="a good">✓ Correct: ${esc(q.o[q.a])}</p>`) +
+      (q.p ? `<p class="a muted">Page ${esc(q.p)}</p>` : "") + (q.note ? `<div class="note">${esc(q.note)}</div>` : "") + `</li>`;
+  }).join("");
+  const wrong = S.items.filter(x => !x.correct);
+  $("#retryWrongBtn").disabled = wrong.length === 0;
+  $("#retryWrongBtn").textContent = wrong.length ? `Retry the ${wrong.length} I missed` : "Nothing missed — well done";
+  S.lastList = S.items.map(x => x.q); S.wrongList = wrong.map(x => x.q);
+  renderStats(); updatePoolInfo(); show("results");
+}
+$("#retryWrongBtn").onclick = () => { const l = S.wrongList; const m = $("#mode").value; buildSession(l); S.mode = m === "review" ? "practice" : m; S.items = shuffle(S.items); renderQ(); show("quiz"); };
+$("#againBtn").onclick = () => { const list = poolQuestions(); if (!list.length) { show("home"); return; } buildSession(list); renderQ(); show("quiz"); };
+$("#homeBtn").onclick = () => show("home");
+$("#reviewHomeBtn").onclick = () => show("home");
+
+/* ---------- Review mode ---------- */
+let reviewBase = [];
+function renderReview(list){
+  reviewBase = list; $("#search").value = ""; drawReview();
+}
+function drawReview(){
+  const term = $("#search").value.trim().toLowerCase();
+  const items = reviewBase.filter(q => !term || q.q.toLowerCase().includes(term) || q.o.some(o => o.toLowerCase().includes(term)));
+  $("#reviewCount").textContent = `${items.length} question${items.length === 1 ? "" : "s"}${term ? " matching “" + term + "”" : ""}`;
+  $("#reviewList").innerHTML = items.map(q => `<div class="review-item"><p class="q">${esc(q.id)}. ${esc(q.q)} <span class="tag">${esc(TOPICS[q.t])}</span></p><ol type="A">` +
+    q.o.map((o, i) => `<li class="${i === q.a ? "ans" : ""}">${esc(o)}${i === q.a ? " ✓" : ""}</li>`).join("") + `</ol>` +
+    (q.p ? `<div class="ref">Page ${esc(q.p)}</div>` : "") + (q.note ? `<div class="note">${esc(q.note)}</div>` : "") + `</div>`).join("") || `<p class="muted">Nothing matches.</p>`;
+}
+$("#search").addEventListener("input", drawReview);
+
+/* ---------- Keyboard ---------- */
+document.addEventListener("keydown", e => {
+  if ($("#quiz").classList.contains("hidden") || e.target.matches("input,select,textarea")) return;
+  if (e.key >= "1" && e.key <= "4") { pick(+e.key - 1); e.preventDefault(); }
+  else if (e.key === "Enter" || e.key === "ArrowRight") { if (S.mode === "exam" && S.i === S.items.length - 1) $("#finishBtn").click(); else if (!$("#nextBtn").disabled) next(); e.preventDefault(); }
+  else if (e.key === "ArrowLeft") { $("#prevBtn").click(); }
+  else if (e.key.toLowerCase() === "b") { $("#bookBtn").click(); }
+});
+
+renderChips(); renderStats(); updatePoolInfo();
+</script>
+</body>
+</html>
