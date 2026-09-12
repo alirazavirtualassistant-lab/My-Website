@@ -180,6 +180,13 @@
           </select>
         </div>
         <div class="field">
+          <label class="lbl" for="repeat">Missed questions (practice)</label>
+          <select id="repeat">
+            <option value="1" selected>Ask again a few questions later</option>
+            <option value="0">Don't repeat in this session</option>
+          </select>
+        </div>
+        <div class="field">
           <label class="lbl" for="shufopts">Options</label>
           <select id="shufopts">
             <option value="1" selected>Shuffle options</option>
@@ -192,7 +199,7 @@
       <p class="muted" id="poolInfo" style="font-size:.88rem;margin:12px 0 14px"></p>
       <div class="row">
         <button class="btn primary" id="startBtn" type="button">Start</button>
-        <span class="kbd">Keyboard: <kbd>1</kbd>–<kbd>4</kbd> pick an option · <kbd>Enter</kbd> / <kbd>→</kbd> next · <kbd>B</kbd> bookmark</span>
+        <span class="kbd">Keyboard: <kbd>1</kbd>–<kbd>4</kbd> pick · <kbd>Enter</kbd> / <kbd>→</kbd> next · <kbd>T</kbd> try again · <kbd>S</kbd> show answer · <kbd>B</kbd> bookmark</span>
       </div>
     </div>
   </section>
@@ -541,7 +548,7 @@ function updatePoolInfo(){
   $("#poolInfo").textContent = n === 0 ? "No questions match this pool and topic selection." : `${n} question${n === 1 ? "" : "s"} in this pool${want && want < n ? ` — you will get ${want} of them` : ""}.`;
   $("#startBtn").disabled = n === 0;
 }
-["pool","count","mode","order","shufopts"].forEach(id => {
+["pool","count","mode","order","shufopts","repeat"].forEach(id => {
   const el = $("#" + id);
   if (store.settings[id]) el.value = store.settings[id];
   el.addEventListener("change", () => { store.settings[id] = el.value; save(); updatePoolInfo(); });
@@ -576,8 +583,16 @@ function buildSession(list){
   S = { mode, i: 0, items: qs.map(q => {
     let opts = q.o.map((text, orig) => ({ text, orig }));
     if (shuf) opts = shuffle(opts);
-    return { q, opts, picked: null, correct: null };
+    return { q, opts, picked: null, correct: null, tries: 0, revealed: false, repeat: false };
   }) };
+}
+function freshOpts(q){ let o = q.o.map((text, orig) => ({ text, orig })); return $("#shufopts").value === "1" ? shuffle(o) : o; }
+/* Re-ask a missed question a few positions later in the same practice session. */
+function requeue(it){
+  if (S.mode !== "practice" || $("#repeat").value !== "1") return;
+  if (S.items.slice(S.i + 1).some(x => x.q.id === it.q.id)) return; // already queued
+  const at = Math.min(S.i + 4, S.items.length);
+  S.items.splice(at, 0, { q: it.q, opts: freshOpts(it.q), picked: null, correct: null, tries: 0, revealed: false, repeat: true });
 }
 $("#startBtn").onclick = () => {
   const list = poolQuestions(); if (!list.length) return;
@@ -587,13 +602,13 @@ $("#startBtn").onclick = () => {
 function renderQ(){
   const it = S.items[S.i], q = it.q, exam = S.mode === "exam";
   $("#pbar").style.width = (100 * (S.i + (exam ? 0 : 0)) / S.items.length) + "%";
-  $("#qpos").textContent = `Question ${S.i + 1} of ${S.items.length}`;
+  $("#qpos").textContent = `Question ${S.i + 1} of ${S.items.length}` + (it.repeat ? " · asked again" : "") + (it.tries ? ` · attempt ${it.tries + 1}` : "");
   $("#qtopic").textContent = TOPICS[q.t];
   $("#qnum").textContent = q.id;
   $("#qtext").textContent = q.q;
   $("#bookBtn").textContent = isBook(q.id) ? "★" : "☆";
   $("#bookBtn").classList.toggle("on", isBook(q.id));
-  const answered = it.picked !== null;
+  const answered = it.picked !== null || it.revealed;
   $("#opts").innerHTML = it.opts.map((o, i) => {
     let cls = "opt";
     if (exam) { if (it.picked === i) cls += " sel"; }
@@ -602,10 +617,14 @@ function renderQ(){
   }).join("");
   const fb = $("#feedback");
   if (!exam && answered) {
-    const right = it.opts[it.picked].orig === q.a;
-    fb.innerHTML = `<div class="feedback ${right ? "ok" : "bad"}"><strong>${right ? "Correct." : "Not quite."}</strong> The answer is <strong>${esc(q.o[q.a])}</strong>.` +
-      (q.p ? `<div class="ref">Reference: handouts page ${esc(q.p)}</div>` : "") + `</div>` +
-      (q.note ? `<div class="note">${esc(q.note)}</div>` : "");
+    const right = it.picked !== null && it.opts[it.picked].orig === q.a;
+    const head = right ? "Correct." : it.picked === null ? "Answer shown." : "Not quite.";
+    fb.innerHTML = `<div class="feedback ${right ? "ok" : "bad"}"><strong>${head}</strong> The answer is <strong>${esc(q.o[q.a])}</strong>.` +
+      (q.p ? `<div class="ref">Reference: handouts page ${esc(q.p)}</div>` : "") +
+      (right ? "" : `<div class="row" style="margin-top:10px"><button type="button" class="btn sm" id="retryBtn">Try this one again (T)</button><span class="kbd">${$("#repeat").value === "1" ? "It will also come back a few questions later." : ""}</span></div>`) +
+      `</div>` + (q.note ? `<div class="note">${esc(q.note)}</div>` : "");
+  } else if (!exam) {
+    fb.innerHTML = `<div class="row" style="margin-top:12px"><button type="button" class="btn sm ghost" id="revealBtn">Show answer (S)</button><span class="kbd">Counts as a miss, then you can try it again.</span></div>`;
   } else fb.innerHTML = "";
   $("#prevBtn").disabled = S.i === 0;
   const last = S.i === S.items.length - 1;
@@ -621,11 +640,21 @@ $("#opts").addEventListener("click", e => {
 });
 function pick(i){
   const it = S.items[S.i]; if (!it || i >= it.opts.length) return;
-  if (S.mode === "practice" && it.picked !== null) return;
+  if (S.mode === "practice" && (it.picked !== null || it.revealed)) return;
   it.picked = i; it.correct = it.opts[i].orig === it.q.a;
-  if (S.mode === "practice") record(it.q.id, it.correct);
+  if (S.mode === "practice") { if (it.tries === 0) record(it.q.id, it.correct); if (!it.correct) requeue(it); }
   renderQ();
 }
+function retry(){
+  const it = S.items[S.i]; if (S.mode !== "practice" || !it || it.correct || (it.picked === null && !it.revealed)) return;
+  it.tries++; it.picked = null; it.correct = null; it.revealed = false; it.opts = freshOpts(it.q); renderQ();
+}
+function reveal(){
+  const it = S.items[S.i]; if (S.mode !== "practice" || !it || it.picked !== null || it.revealed) return;
+  it.revealed = true; it.correct = false;
+  if (it.tries === 0) record(it.q.id, false); requeue(it); renderQ();
+}
+$("#feedback").addEventListener("click", e => { if (e.target.id === "retryBtn") retry(); else if (e.target.id === "revealBtn") reveal(); });
 function next(){
   if (S.i < S.items.length - 1) { S.i++; renderQ(); }
   else if (S.mode === "exam") finishExam(); else finishSession();
@@ -640,10 +669,10 @@ $("#finishBtn").onclick = () => {
 $("#gridNav").addEventListener("click", e => { const b = e.target.closest(".gcell"); if (b) { S.i = +b.dataset.g; renderQ(); } });
 $("#bookBtn").onclick = () => { toggleBook(S.items[S.i].q.id); renderQ(); };
 $("#quitBtn").onclick = () => {
-  const done = S.items.filter(x => x.picked !== null).length;
+  const done = S.items.filter(x => x.picked !== null || x.revealed).length;
   if (S.mode === "exam") { if (confirm("End the exam now and score what you have answered so far?")) finishExam(); return; }
   if (done === 0) { renderStats(); updatePoolInfo(); show("home"); return; }
-  S.items = S.items.filter(x => x.picked !== null); finishSession();
+  S.items = S.items.filter(x => x.picked !== null || x.revealed); finishSession();
 };
 function finishExam(){
   S.items.forEach(it => { if (it.picked === null) it.correct = false; record(it.q.id, !!it.correct); });
@@ -651,21 +680,23 @@ function finishExam(){
 }
 function finishSession(){
   const n = S.items.length, c = S.items.filter(x => x.correct).length;
+  const firstTry = S.items.filter(x => x.correct && x.tries === 0).length;
   $("#scoreBig").textContent = n ? Math.round(100 * c / n) + "%" : "—";
-  $("#scoreSub").textContent = `${c} correct out of ${n} · ${S.mode === "exam" ? "exam" : "practice"} mode`;
+  $("#scoreSub").textContent = `${c} correct out of ${n} · ${S.mode === "exam" ? "exam" : "practice"} mode` + (S.mode === "practice" && firstTry !== c ? ` · ${firstTry} on the first try` : "");
   const byT = {};
   S.items.forEach(it => { const b = byT[it.q.t] || (byT[it.q.t] = { n: 0, c: 0 }); b.n++; if (it.correct) b.c++; });
   $("#resultTopics").innerHTML = `<div class="topicbar">` + Object.entries(byT).map(([k, v]) => `<div>${esc(TOPICS[k])}<div class="bar"><i style="width:${Math.round(100 * v.c / v.n)}%"></i></div></div><div class="muted">${v.c} / ${v.n}</div>`).join("") + `</div>`;
   $("#resultList").innerHTML = S.items.map((it, i) => {
-    const q = it.q, pickedText = it.picked === null ? "(not answered)" : it.opts[it.picked].text;
-    return `<li class="ritem"><p class="q">${i + 1}. ${esc(q.q)} <span class="muted" style="font-weight:400">· Q${q.id}</span></p>` +
+    const q = it.q, pickedText = it.picked === null ? (it.revealed ? "(answer shown)" : "(not answered)") : it.opts[it.picked].text;
+    const extra = (it.repeat ? " · asked again" : "") + (it.tries ? ` · got it on attempt ${it.tries + 1}` : "");
+    return `<li class="ritem"><p class="q">${i + 1}. ${esc(q.q)} <span class="muted" style="font-weight:400">· Q${q.id}${extra}</span></p>` +
       (it.correct ? `<p class="a good">✓ ${esc(q.o[q.a])}</p>` : `<p class="a miss">✗ Your answer: ${esc(pickedText)}</p><p class="a good">✓ Correct: ${esc(q.o[q.a])}</p>`) +
       (q.p ? `<p class="a muted">Page ${esc(q.p)}</p>` : "") + (q.note ? `<div class="note">${esc(q.note)}</div>` : "") + `</li>`;
   }).join("");
   const wrong = S.items.filter(x => !x.correct);
   $("#retryWrongBtn").disabled = wrong.length === 0;
   $("#retryWrongBtn").textContent = wrong.length ? `Retry the ${wrong.length} I missed` : "Nothing missed — well done";
-  S.lastList = S.items.map(x => x.q); S.wrongList = wrong.map(x => x.q);
+  S.lastList = S.items.map(x => x.q); S.wrongList = [...new Map(wrong.map(x => [x.q.id, x.q])).values()];
   renderStats(); updatePoolInfo(); show("results");
 }
 $("#retryWrongBtn").onclick = () => { const l = S.wrongList; const m = $("#mode").value; buildSession(l); S.mode = m === "review" ? "practice" : m; S.items = shuffle(S.items); renderQ(); show("quiz"); };
@@ -695,6 +726,8 @@ document.addEventListener("keydown", e => {
   else if (e.key === "Enter" || e.key === "ArrowRight") { if (S.mode === "exam" && S.i === S.items.length - 1) $("#finishBtn").click(); else if (!$("#nextBtn").disabled) next(); e.preventDefault(); }
   else if (e.key === "ArrowLeft") { $("#prevBtn").click(); }
   else if (e.key.toLowerCase() === "b") { $("#bookBtn").click(); }
+  else if (e.key.toLowerCase() === "t") { retry(); }
+  else if (e.key.toLowerCase() === "s") { reveal(); }
 });
 
 renderChips(); renderStats(); updatePoolInfo();
