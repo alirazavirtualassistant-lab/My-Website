@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CS614 Predicted Final Paper</title>
+<meta name="description" content="Offline practice: 40 predicted CS614 (Data Warehousing) final-term MCQs plus the most likely short and long questions, built from student paper reviews.">
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1b1f24; --muted:#5f6771; --line:#e1e5ea;
+    --accent:#2f5fd0; --accent-ink:#ffffff; --accent-soft:#e8eefb;
+    --ok:#1d8a4a; --ok-soft:#e3f5ea; --bad:#c62f2f; --bad-soft:#fbe6e6;
+    --warn:#b7791f; --warn-soft:#fff4dc; --shadow:0 1px 2px rgba(0,0,0,.06),0 4px 14px rgba(0,0,0,.05);
+    --radius:12px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0f1216; --card:#181c22; --ink:#e8ebef; --muted:#9aa3ad; --line:#2a3039;
+      --accent:#6b93ff; --accent-ink:#0b1020; --accent-soft:#1c2740;
+      --ok:#4cc57e; --ok-soft:#14301f; --bad:#f07070; --bad-soft:#3a1717;
+      --warn:#e0a94a; --warn-soft:#3a2b10; --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f1216; --card:#181c22; --ink:#e8ebef; --muted:#9aa3ad; --line:#2a3039;
+    --accent:#6b93ff; --accent-ink:#0b1020; --accent-soft:#1c2740;
+    --ok:#4cc57e; --ok-soft:#14301f; --bad:#f07070; --bad-soft:#3a1717;
+    --warn:#e0a94a; --warn-soft:#3a2b10; --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  html{color-scheme:light dark}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;padding-inline:16px;padding-block:0 48px}
+  .wrap{max-width:860px;margin:0 auto}
+  header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-block:28px 16px}
+  h1{font-size:1.55rem;margin:0;letter-spacing:-.01em}
+  .sub{color:var(--muted);margin:2px 0 0;font-size:.95rem}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;margin-bottom:16px}
+  h2{font-size:1.05rem;margin:0 0 12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .field{display:flex;flex-direction:column;gap:6px;min-width:150px;flex:1}
+  label.lbl{font-size:.85rem;color:var(--muted);font-weight:600}
+  select,input[type=number],input[type=search]{font:inherit;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);width:100%}
+  input[type=search]{width:100%}
+  .btn{font:inherit;font-weight:600;padding:10px 18px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;transition:background .15s,transform .05s}
+  .btn:hover{background:var(--accent-soft)}
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.ghost{border-color:transparent;background:transparent;color:var(--accent)}
+  .btn.danger{color:var(--bad)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn.sm{padding:6px 12px;font-size:.88rem}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{font:inherit;font-size:.86rem;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;user-select:none}
+  .chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+  .stat{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .stat b{display:block;font-size:1.4rem;line-height:1.2}
+  .stat span{font-size:.82rem;color:var(--muted)}
+  .topicbar{display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;font-size:.9rem}
+  .bar{height:8px;background:var(--line);border-radius:99px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--ok);width:0}
+  .progress{height:6px;background:var(--line);border-radius:99px;overflow:hidden;margin:0 0 16px}
+  .progress i{display:block;height:100%;background:var(--accent);transition:width .25s}
+  .qmeta{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:.88rem;margin-bottom:8px}
+  .tag{display:inline-block;background:var(--accent-soft);color:var(--accent);padding:2px 9px;border-radius:999px;font-size:.78rem;font-weight:600}
+  .qtext{font-size:1.15rem;font-weight:600;line-height:1.45;margin:0 0 16px}
+  .opts{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+  .opt{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;font:inherit;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);cursor:pointer;transition:background .12s,border-color .12s}
+  .opt:hover:not(:disabled){border-color:var(--accent);background:var(--accent-soft)}
+  .opt .k{flex:none;width:26px;height:26px;border-radius:7px;border:1px solid var(--line);display:grid;place-items:center;font-size:.8rem;font-weight:700;color:var(--muted);background:var(--card)}
+  .opt.sel{border-color:var(--accent);background:var(--accent-soft)}
+  .opt.sel .k{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+  .opt.ok{border-color:var(--ok);background:var(--ok-soft)}
+  .opt.ok .k{background:var(--ok);color:#fff;border-color:var(--ok)}
+  .opt.bad{border-color:var(--bad);background:var(--bad-soft)}
+  .opt.bad .k{background:var(--bad);color:#fff;border-color:var(--bad)}
+  .opt:disabled{cursor:default}
+  .feedback{margin-top:14px;padding:12px 14px;border-radius:10px;font-size:.95rem;border:1px solid var(--line)}
+  .feedback.ok{background:var(--ok-soft);border-color:var(--ok)}
+  .feedback.bad{background:var(--bad-soft);border-color:var(--bad)}
+  .feedback .ref{color:var(--muted);font-size:.86rem;margin-top:4px}
+  .note{margin-top:8px;padding:10px 12px;background:var(--warn-soft);border-left:3px solid var(--warn);border-radius:6px;font-size:.9rem}
+  .nav{display:flex;justify-content:space-between;gap:10px;margin-top:18px;flex-wrap:wrap}
+  .kbd{font-size:.8rem;color:var(--muted)}
+  kbd{font-family:inherit;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 6px;font-size:.78rem;background:var(--bg)}
+  .star{background:none;border:none;cursor:pointer;font-size:1.25rem;line-height:1;color:var(--muted);padding:2px 6px}
+  .star.on{color:var(--warn)}
+  .score{font-size:2.6rem;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+  .rlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+  .ritem{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--bg)}
+  .ritem .q{font-weight:600;margin:0 0 6px}
+  .ritem .a{font-size:.92rem;margin:2px 0}
+  .ritem .a.good{color:var(--ok)}
+  .ritem .a.miss{color:var(--bad)}
+  .grid-nav{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:6px;margin-top:14px}
+  .gcell{font:inherit;font-size:.8rem;padding:6px 0;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+  .gcell.done{background:var(--accent-soft);border-color:var(--accent)}
+  .gcell.cur{outline:2px solid var(--accent)}
+  .review-item{border-bottom:1px solid var(--line);padding:14px 0}
+  .review-item:last-child{border-bottom:none}
+  .review-item .q{font-weight:600;margin:0 0 6px}
+  .review-item ol{margin:0;padding-left:22px}
+  .review-item li{padding:2px 0}
+  .review-item li.ans{color:var(--ok);font-weight:600}
+  .review-item .ref{font-size:.82rem;color:var(--muted);margin-top:4px}
+  .muted{color:var(--muted)}
+  .hidden{display:none!important}
+  footer{color:var(--muted);font-size:.82rem;margin-top:26px;line-height:1.5}
+  .theme-toggle{font-size:.85rem}
+  @media (max-width:520px){
+    .qtext{font-size:1.05rem}
+    header{padding-block:20px 12px}
+    .card{padding:16px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>CS614 Predicted Final Paper</h1>
+      <p class="sub">Data Warehousing · <span id="qcount"></span> predicted MCQs + likely subjective questions · works fully offline</p>
+    </div>
+    <div class="row">
+      <button class="btn sm theme-toggle" id="themeBtn" type="button">Theme: auto</button>
+    </div>
+  </header>
+
+  <!-- ========== HOME / SETUP ========== -->
+  <section id="home">
+    <div class="card">
+      <h2>Your progress</h2>
+      <div class="stats" id="stats"></div>
+      <div id="topicStats" style="margin-top:14px"></div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn sm danger" id="resetBtn" type="button">Reset all progress</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Likely subjective questions</h2>
+      <p class="muted" style="margin:0 0 10px;font-size:.92rem">Ranked by how many of the 15 reviews mention the topic. Tap a topic to see a model answer.</p>
+      <style>
+        details.sq{border:1px solid var(--line);border-radius:10px;padding:0;margin-bottom:8px;background:var(--bg)}
+        details.sq summary{cursor:pointer;padding:10px 14px;font-weight:600;display:flex;justify-content:space-between;gap:10px;align-items:center}
+        details.sq summary .freq{font-size:.78rem;font-weight:600;color:var(--accent);background:var(--accent-soft);padding:2px 8px;border-radius:999px;white-space:nowrap}
+        details.sq .body{padding:0 14px 12px;font-size:.93rem}
+        details.sq ul,details.sq ol{margin:4px 0 6px;padding-left:20px}
+        details.sq li{margin:2px 0}
+      </style>
+      <details class="sq"><summary>Classes of anomalies: lexical error, missing records, irregularities <span class="freq">short · 6 reviews</span></summary><div class="body">
+        <ul><li><b>Syntactically dirty data:</b> lexical errors (structure of the data does not match the documented format, e.g. a row with 5 columns instead of 6), domain format errors, and irregularities (non-uniform use of values, units or abbreviations).</li>
+        <li><b>Semantically dirty data:</b> integrity constraint violations, business rule contradictions, duplicates, invalid tuples.</li>
+        <li><b>Coverage anomalies:</b> missing attributes (values) and missing tuples (whole records never captured).</li></ul>
+        Typical wording: two statements are given and you name the class. “Lexical error” → syntactic. “Missing records” → coverage.</div></details>
+      <details class="sq"><summary>Quality Management Maturity Grid: name the stage for each statement <span class="freq">long · 5 reviews</span></summary><div class="body">
+        Crosby's five stages, in order:
+        <ol><li><b>Uncertainty</b>: management has no comprehension of quality as a management tool; problems are blamed on others; “we don't know why we have problems”.</li>
+        <li><b>Awakening</b>: quality management is recognised as possibly valuable but nobody will fund it; “is it absolutely necessary to always have problems?”</li>
+        <li><b>Enlightenment</b>: management learns and commits; a formal quality programme starts; problems are resolved openly.</li>
+        <li><b>Wisdom</b>: defect prevention is routine; management participates personally; “we identify and resolve problems”.</li>
+        <li><b>Certainty</b>: quality is an integral part of the organisation; “we know why we do not have problems”.</li></ol>
+        Memory hook: <b>U-A-E-W-C</b>. In the paper a table of 4 statements is given and you write the matching stage next to each.</div></details>
+      <details class="sq"><summary>Kimball's lifecycle: phases and the three parallel tracks <span class="freq">short · 5 reviews</span></summary><div class="body">
+        <ol><li><b>Project planning</b></li><li><b>Business requirements definition</b></li>
+        <li>Three parallel tracks:<ul>
+          <li><b>Technology track</b>: technical architecture design → product selection and installation.</li>
+          <li><b>Data track</b>: dimensional modelling → physical design → data staging (ETL) design and development.</li>
+          <li><b>Application track</b>: end-user application specification → end-user application development.</li></ul></li>
+        <li><b>Deployment</b></li><li><b>Maintenance and growth</b></li></ol>
+        Project management runs across all phases. When asked for “five phases”, give planning, requirements, the three tracks (design/development), deployment, maintenance and growth.</div></details>
+      <details class="sq"><summary>ERD: relationship between Farmer and Field (Agri-DWH case study) <span class="freq">short · 5 reviews</span></summary><div class="body">
+        A diagram is given and you identify the relationship type. Farmer–Field is <b>one-to-many</b>: one farmer owns many fields, each field belongs to one farmer.
+        Be ready to read crow's-foot notation: a single bar = one, a crow's foot = many, a circle = optional. Also expect “identify the entities” (Farmer, Field, Crop, Pest, Scouting visit).</div></details>
+      <details class="sq"><summary>Clustering: two types, and K-means steps <span class="freq">short · 4 reviews</span></summary><div class="body">
+        <b>Two types:</b> <b>hierarchical</b> (agglomerative: start with every point as its own cluster and merge; divisive: start with one cluster and split) and <b>partitional</b> (K-means: a fixed number K of flat clusters).<br>
+        <b>K-means:</b> (1) choose K and pick K initial centroids, (2) assign each record to the nearest centroid, (3) recompute each centroid as the mean of its members, (4) repeat 2–3 until assignments stop changing. Weakness: you must pick K, and the result depends on the starting centroids and on outliers.</div></details>
+      <details class="sq"><summary>DTS: tools and package items <span class="freq">short/long · 4 reviews</span></summary><div class="body">
+        <b>DTS (Data Transformation Services)</b> in SQL Server 2000.<br>
+        <b>Tools:</b> DTS Import/Export Wizard (quick copy of tables, query results or objects between sources), DTS Designer (graphical building of complex packages), and the DTS run utilities (dtsrun / dtsrunui) for executing saved packages.<br>
+        <b>Package items:</b> connections (data sources and destinations), tasks (units of work such as Execute SQL, Transform Data, Bulk Insert, Send Mail), transformations (column-level changes applied while copying), and workflow (precedence constraints: on success, on failure, on completion).<br>
+        Import/Export Wizard load tasks: copy whole tables, copy the result of a query, copy objects and data between SQL Server databases.</div></details>
+      <details class="sq"><summary>Barriers to linear speedup, Amdahl's law, speedup numerical <span class="freq">short/long · 4 reviews</span></summary><div class="body">
+        <b>Barriers:</b> <b>startup</b> (time to start many parallel processes), <b>interference</b> (processes competing for shared resources such as memory, bus or disk), <b>skew</b> (uneven work, so the slowest partition sets the finish time).<br>
+        <b>Speedup</b> = time on the small system ÷ time on the large system. Linear when doubling hardware halves the time. <b>Scale-up</b> = bigger job on bigger hardware in the same time.<br>
+        <b>Amdahl's law:</b> speedup = 1 / ((1 − f) + f / N), where f is the parallelisable fraction and N the processors. Max speedup = 1 / (1 − f). Example: f = 0.8, N = 4 → 1 / (0.2 + 0.2) = 2.5; with unlimited processors → 5.</div></details>
+      <details class="sq"><summary>Parallel hardware architectures <span class="freq">short · 2 reviews</span></summary><div class="body">
+        <ul><li><b>Symmetric multiprocessing (SMP)</b>: shared memory, shared disk, one OS image; easy to program, limited by the shared bus.</li>
+        <li><b>Distributed memory / MPP (shared nothing)</b>: each node has private memory and disk, nodes talk over an interconnect; scales the furthest.</li>
+        <li><b>NUMA</b>: shared address space but memory access time depends on where the memory sits.</li>
+        <li><b>Clusters (shared disk)</b>: independent machines sharing storage.</li></ul></div></details>
+      <details class="sq"><summary>Indexes: dense vs sparse, clustered index on Age, hash join cost <span class="freq">short/long · 5 reviews</span></summary><div class="body">
+        <b>Dense</b> index: an entry for every record. <b>Sparse</b>: one entry per block, pointing at the first record of the block; smaller, but the block must be scanned. A sparse index is only possible when the file is sorted on the key.<br>
+        <b>Clustered index on Age:</b> physically sort the table by Age, then build the index with one entry per distinct Age (or per block) pointing at the first row with that value. Only one clustered index per table.<br>
+        <b>Nested-loop join variants:</b> naive, index-based, temporary-index. <b>Hash join:</b> partition (build) phase hashes the smaller table into buckets; probe (matching) phase hashes each row of the larger table and compares only within the matching bucket. Practise the handout's cost example so you can plug in numbers.</div></details>
+      <details class="sq"><summary>Statistics vs data mining <span class="freq">long · 2 reviews</span></summary><div class="body">
+        <ul><li>Statistics: confirmatory, tests a hypothesis stated in advance, usually on a sample, needs a trained analyst to formulate the model.</li>
+        <li>Data mining: exploratory, generates hypotheses by discovering patterns in the full (large) data set, largely automated, aimed at business users.</li>
+        <li>Both use overlapping techniques (regression, clustering); the difference is the goal and the scale of data.</li></ul></div></details>
+      <details class="sq"><summary>Web warehousing: page dimension attributes, web scraping, search methods <span class="freq">short/long · 5 reviews</span></summary><div class="body">
+        <b>Page dimension attributes:</b> page key, page source, page function (home, product, checkout…), page template, item type, graphics type, animation type, sound type, page file size.<br>
+        <b>Why scrape the web:</b> the web is the largest data source about customers, competitors and markets, but it is unstructured and changes constantly. <b>Sources:</b> competitor sites, price listings, news, product catalogues, social/forum pages. <b>Issues:</b> junk data, layouts change, no fixed schema, legal/ethical limits.<br>
+        <b>Search methods:</b> crawler-based search engines (spiders index pages), human-edited directories, and meta-search engines that query several engines at once.</div></details>
+      <details class="sq"><summary>Data quality: validation techniques, Orr's laws, TQM, data quality life cycle <span class="freq">short/long · 5 reviews</span></summary><div class="body">
+        <b>Validation techniques:</b> referential integrity checks, attribute domain checks, data quality rules, data histograms (frequency distributions). Not indexes.<br>
+        <b>Orr's laws:</b> data that is not used cannot be corrected; data quality is a function of its use, not its collection; data will be no better than its most stringent use.<br>
+        <b>TQM</b> brings product quality, process control and continuous quality improvement together; quality means conformance to requirements, and the requirements can themselves be defective.<br>
+        <b>Data quality project / life cycle:</b> establish the quality goals and metrics → assess (profile) the current data → analyse the root causes → clean and correct → prevent at the source → monitor continuously. Check the exact step names against the handout lecture on data quality management.</div></details>
+      <details class="sq"><summary>Five types of partitioning, DWH implementation strategies, development methodologies <span class="freq">long · 3 reviews</span></summary><div class="body">
+        <b>Partitioning (horizontal splitting, handouts pages 66–67):</b> range, expression, round-robin, hash and list partitioning. Range and expression are the most common in warehouses; round-robin balances load but cannot prune partitions.<br>
+        <b>Implementation strategies:</b> top-down (Inmon: enterprise warehouse first, marts fed from it), bottom-up (Kimball: marts first, integrated through conformed dimensions), and the hybrid approach.<br>
+        <b>Development methodologies:</b> waterfall (poor fit, requirements are not known up front), spiral / iterative (recommended: deliver in increments), RAD and prototyping. Planning and design phase points: define scope and sponsor, identify business processes, choose grain, dimensions and facts, size the data, plan ETL, plan for growth.</div></details>
+    </div>
+
+    <div class="card">
+      <h2>Start a session</h2>
+      <div class="row" style="margin-bottom:14px">
+        <div class="field">
+          <label class="lbl" for="mode">Mode</label>
+          <select id="mode">
+            <option value="practice">Practice — instant feedback after each answer</option>
+            <option value="exam">Exam — answer all, score at the end</option>
+            <option value="review">Review — read questions with answers shown</option>
+          </select>
+        </div>
+      </div>
+      <div class="row" style="margin-bottom:14px">
+        <div class="field">
+          <label class="lbl" for="pool">Question pool</label>
+          <select id="pool">
+            <option value="all">All questions</option>
+            <option value="new">Never attempted</option>
+            <option value="wrong">Ones I got wrong last time</option>
+            <option value="weak">Ones I have ever missed</option>
+            <option value="book">Bookmarked</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="lbl" for="count">How many</label>
+          <select id="count">
+            <option value="10">10</option>
+            <option value="20" selected>20</option>
+            <option value="30">30</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="0">All in pool</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="lbl" for="order">Order</label>
+          <select id="order">
+            <option value="shuffle" selected>Shuffled</option>
+            <option value="orig">Original numbering</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="lbl" for="repeat">Missed questions (practice)</label>
+          <select id="repeat">
+            <option value="1" selected>Ask again a few questions later</option>
+            <option value="0">Don't repeat in this session</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="lbl" for="shufopts">Options</label>
+          <select id="shufopts">
+            <option value="1" selected>Shuffle options</option>
+            <option value="0">Keep original order</option>
+          </select>
+        </div>
+      </div>
+      <label class="lbl" style="display:block;margin-bottom:8px">Topics</label>
+      <div class="chips" id="topicChips"></div>
+      <p class="muted" id="poolInfo" style="font-size:.88rem;margin:12px 0 14px"></p>
+      <div class="row">
+        <button class="btn primary" id="startBtn" type="button">Start</button>
+        <span class="kbd">Keyboard: <kbd>1</kbd>–<kbd>4</kbd> pick · <kbd>Enter</kbd> / <kbd>→</kbd> next · <kbd>T</kbd> try again · <kbd>S</kbd> show answer · <kbd>B</kbd> bookmark</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== QUIZ ========== -->
+  <section id="quiz" class="hidden">
+    <div class="card">
+      <div class="progress"><i id="pbar"></i></div>
+      <div class="qmeta">
+        <div><span id="qpos"></span> · <span class="tag" id="qtopic"></span> · <span class="muted">Q<span id="qnum"></span> in source</span></div>
+        <div class="row">
+          <button class="star" id="bookBtn" type="button" title="Bookmark (B)">☆</button>
+          <button class="btn sm ghost" id="quitBtn" type="button">End session</button>
+        </div>
+      </div>
+      <p class="qtext" id="qtext"></p>
+      <ul class="opts" id="opts"></ul>
+      <div id="feedback"></div>
+      <div class="nav">
+        <button class="btn" id="prevBtn" type="button">← Previous</button>
+        <div class="row">
+          <button class="btn primary" id="nextBtn" type="button">Next →</button>
+          <button class="btn primary hidden" id="finishBtn" type="button">Finish exam</button>
+        </div>
+      </div>
+      <div class="grid-nav hidden" id="gridNav"></div>
+    </div>
+  </section>
+
+  <!-- ========== RESULTS ========== -->
+  <section id="results" class="hidden">
+    <div class="card">
+      <h2>Session result</h2>
+      <div class="row" style="align-items:baseline;gap:16px">
+        <div class="score" id="scoreBig"></div>
+        <div class="muted" id="scoreSub"></div>
+      </div>
+      <div id="resultTopics" style="margin-top:14px"></div>
+      <div class="row" style="margin-top:18px">
+        <button class="btn primary" id="retryWrongBtn" type="button">Retry the ones I missed</button>
+        <button class="btn" id="againBtn" type="button">Same settings again</button>
+        <button class="btn" id="homeBtn" type="button">Back to start</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Answers</h2>
+      <ul class="rlist" id="resultList"></ul>
+    </div>
+  </section>
+
+  <!-- ========== REVIEW ========== -->
+  <section id="review" class="hidden">
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">Review mode</h2>
+        <button class="btn sm ghost" id="reviewHomeBtn" type="button">Back to start</button>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <input type="search" id="search" placeholder="Search question or answer text…" aria-label="Search">
+      </div>
+      <p class="muted" id="reviewCount" style="font-size:.88rem;margin:10px 0 0"></p>
+    </div>
+    <div class="card" id="reviewList"></div>
+  </section>
+
+  <footer>
+    This is a <strong>prediction</strong>, not a leaked paper. The MCQs and subjective topics were written from the CS614 handouts, weighted by how often each topic appears in
+    15 student paper reviews on VUBuddy (final terms of July–Aug 2025 and July 2026). Reviewers consistently report that most MCQs come from the “Junaid” and “Master” files,
+    so keep practising those alongside this set. Progress is saved in this browser only (localStorage); nothing is sent anywhere.
+  </footer>
+</div>
+
+<script>
+/* ---------- Topics ---------- */
+const TOPICS = {
+  idx: "Indexing & Joins",
+  par: "Parallelism & Speedup",
+  dev: "DWH Development (Kimball)",
+  dq:  "Data Quality & Anomalies",
+  dts: "DTS / SQL Server",
+  dm:  "Data Mining",
+  web: "Web Warehouse & Case Study"
+};
+
+/* ---------- Questions: [number, topic, question, options, correctIndex, page, note] ---------- */
+const Q = [
+[1,"idx","In a dense index, ______.",["Records are stored in hash buckets","An index entry appears for every search-key value (every record) in the file","An index entry appears for only some search-key values","Index entries are stored as bitmaps"],1,"Lecture on indexing","Dense: one entry per record. Sparse: one entry per block, so it is smaller but you must scan inside the block."],
+[2,"idx","A sparse index typically keeps one entry per ______.",["Record","Column","Data block (page)","Table"],2,"Lecture on indexing","Reviewers report statements about dense vs sparse indexes that you must mark true or false."],
+[3,"idx","How many clustered indexes can a single table have?",["Unlimited","One per column","Two","Exactly one"],3,"Lecture on indexing","A clustered index fixes the physical order of the rows, and rows can be physically ordered only one way. A long question about building a clustered index on Age appears in several reviews."],
+[4,"idx","A bitmap index is most effective for a column with ______.",["Low cardinality (few distinct values, e.g. gender)","High cardinality (e.g. CNIC number)","Only numeric values","Only date values"],0,"Lecture on indexing","One bit-vector per distinct value; cheap when there are few values, hopeless when there are millions."],
+[5,"idx","Which index type is fast for equality lookups but does not support range queries?",["B-tree index","Clustered index","Hash index","Sparse index"],2,"Lecture on indexing","Hashing scatters nearby keys to unrelated buckets, so “WHERE age BETWEEN 20 AND 30” cannot use it."],
+[6,"idx","Which of the following is NOT a variant of the nested-loop join described in the handouts?",["Naive nested-loop join","Index-based nested-loop join","Temporary-index nested-loop join","Sorted nested-loop join"],3,"Lecture on join techniques","The three variants are naive, index-based and temporary-index nested loop. “Variant of nested loop join” was a short question in the 2026 paper."],
+[7,"idx","The two phases of a hash join are ______.",["Partition (build) phase and probe (matching) phase","Sort phase and merge phase","Scan phase and filter phase","Index phase and lookup phase"],0,"Lecture on join techniques","A “find the cost of hashing in the matching phase” numerical appears in three reviews: work through the handout example once."],
+[8,"idx","Two tables have 1,000 and 2,000 rows. A naive nested-loop join performs ______ row comparisons.",["3,000","1,000","2,000,000","2,000"],2,"Lecture on join techniques","Every outer row is compared with every inner row: 1,000 × 2,000. Reviews mention a “case A 1000, case B 2000” cost question."],
+[9,"par","According to the handouts, the barriers to linear speedup are ______.",["Startup, interference and skew","Startup, indexing and sorting","Hashing, joining and sorting","Latency, bandwidth and skew"],0,"Lecture on parallelism","Asked as a short question in at least three reviews: “three barriers to linear speedup”."],
+[10,"par","A query took 120 seconds on one processor and 30 seconds on four processors. The speedup is ______.",["2","0.25","90","4 (linear)"],3,"Lecture on parallelism","Speedup = old time / new time = 120 / 30 = 4, which equals the number of processors, so it is linear. A speedup calculation was a long question in July 2026."],
+[11,"par","By Amdahl's law, if 20% of a task is inherently sequential, the maximum possible speedup, however many processors are used, is ______.",["20","5","80","Unlimited"],1,"Lecture on parallelism (Amdahl's law)","Maximum speedup = 1 / sequential fraction = 1 / 0.2 = 5. A true/false statement about Amdahl's law was a long question in July 2026."],
+[12,"par","Scale-up means ______.",["Solving the same problem faster by adding resources","Reducing the size of the database","Handling a proportionally larger problem in the same time by adding proportionally more resources","Adding more indexes"],2,"Lecture on parallelism","Speedup: same problem, more hardware, less time. Scale-up: bigger problem, more hardware, same time."],
+[13,"par","In a shared-nothing architecture, ______.",["All processors share one memory","Each processor has its own private memory and disk","All processors share the disks but not memory","There is only one processor"],1,"Lecture on parallel hardware architectures","“Enlist the parallel hardware architectures” was a short question in July 2026: SMP (shared memory), distributed memory / MPP (shared nothing), NUMA and clusters."],
+[14,"par","In symmetric multiprocessing (SMP), the processors ______.",["Each have a private memory and disk","Communicate only through a network","Cannot run in parallel","Share a common memory and run a single copy of the operating system"],3,"Lecture on parallel hardware architectures"],
+[15,"par","Which partitioning technique spreads rows evenly across partitions without looking at their values?",["Range partitioning","Round-robin partitioning","Hash partitioning","List partitioning"],1,"Lecture on data partitioning","Round-robin gives perfect balance but cannot help a query that filters on a value. “Five types of partitioning” was a long question in July 2026."],
+[16,"dev","Kimball's Business Dimensional Lifecycle starts with ______.",["Dimensional modeling","Deployment","Project planning","Maintenance and growth"],2,"Lecture on Kimball's lifecycle","Order: project planning → business requirements definition → three parallel tracks → deployment → maintenance and growth."],
+[17,"dev","The three parallel tracks in Kimball's lifecycle are the ______.",["Technology, data and application tracks","Planning, design and testing tracks","Extraction, transformation and loading tracks","Hardware, software and network tracks"],0,"Lecture on Kimball's lifecycle","“Kimball parallel tracks” / “three tracks of Kimball approach” appears in four reviews."],
+[18,"dev","Which task belongs to the data track of Kimball's lifecycle?",["Product selection and installation","Dimensional modeling","End-user application specification","Deployment"],1,"Lecture on Kimball's lifecycle","Data track = dimensional modeling, physical design, data staging (ETL) design and development."],
+[19,"dev","Building individual data marts first and integrating them through conformed dimensions is the ______ approach.",["Top-down (Inmon)","Waterfall","Bottom-up (Kimball)","Big-bang"],2,"Lecture on DWH implementation strategies","“Implementation strategies” was a short question in July 2026: top-down builds the enterprise warehouse first, bottom-up builds marts first."],
+[20,"dev","Data warehouse development is best carried out ______.",["In a single big-bang release","Iteratively, in increments","Only after all requirements are frozen","Without user involvement"],1,"Lecture on DWH development methodology","Requirements evolve as users see data, so a rigid waterfall plan is a poor fit. “Development methodologies” was a long question in Aug 2025."],
+[21,"dq","The five stages of Crosby's Quality Management Maturity Grid, in order, are ______.",["Planning, analysis, design, implementation, testing","Uncertainty, awakening, enlightenment, wisdom, certainty","Awareness, adoption, adaptation, integration, certainty","Extraction, transformation, loading, validation, audit"],1,"Lecture on data quality management","The single most repeated long question: a table of statements is given and you must name the stage for each."],
+[22,"dq","“Management has no comprehension of quality as a management tool” describes the ______ stage of the maturity grid.",["Uncertainty","Awakening","Wisdom","Certainty"],0,"Lecture on data quality management","Uncertainty: problems are blamed on others. Certainty: “we know why we do not have quality problems”."],
+[23,"dq","Lexical errors and irregularities are examples of ______.",["Coverage anomalies","Semantically dirty data","Syntactically dirty data","Duplication"],2,"Handouts page 160","“Lexical error and missing records: which anomaly classes?” appears in five reviews."],
+[24,"dq","Missing records (missing tuples) belong to the class of ______.",["Syntactically dirty data","Coverage anomalies","Semantically dirty data","Integrity constraint violations"],1,"Handouts page 161","Coverage anomalies = missing attributes (values) and missing tuples (whole records)."],
+[25,"dq","Which of the following is NOT a step of the Basic Sorted Neighborhood (BSN) method?",["Create key","Sort data","Merge using a sliding window","Indexing"],3,"Handouts page 171","Key creation is O(n), sorting O(n log n), then a window of size w slides over the sorted list."],
+[26,"dq","Which of the following is NOT a data quality validation technique?",["Referential integrity","Indexes","Data quality rules","Data histograming"],1,"Handouts page 189","“Quality validation technique” was a short question in July 2026."],
+[27,"dq","Complete Orr's law: “Data that is not used ______.”",["Is always accurate","Should be deleted","Cannot be corrected","Must be duplicated"],2,"Handouts page 181","Orr's laws with a true/false twist appear in the July 2026 reviews."],
+[28,"dq","To count only the student rows where the “grade” column is filled in (not NULL), which SQL is correct?",["SELECT COUNT(*) FROM student","SELECT COUNT(grade) FROM student","SELECT SUM(grade) FROM student","SELECT COUNT(NULL) FROM student"],1,"Lecture on data quality checks with SQL","COUNT(*) counts every row; COUNT(column) skips NULLs. The difference gives the number of incomplete records, which was a long question in July 2026."],
+[29,"dq","For checking the quality of millions of records, the handouts favour ______ over manual inspection.",["Printing the data","Sampling five rows","Asking the data entry operator","Automated SQL queries and data quality rules"],3,"Lecture on data quality checks with SQL","“Values given: which is better, SQL query or manual checking?” was a short question."],
+[30,"dts","In Microsoft SQL Server 2000, DTS stands for ______.",["Data Transfer System","Distributed Table Storage","Data Transformation Services","Database Tuning Suite"],2,"Lab lectures on DTS"],
+[31,"dts","Which DTS tool gives a graphical interface for building packages with several tasks and workflow?",["DTS Designer","DTS Import/Export Wizard","SQL Query Analyzer","Enterprise Manager"],0,"Lab lectures on DTS","“DTS tools & DTS items” and “statement given: which DTS tool?” appear in three reviews. Tools: Import/Export Wizard, DTS Designer, dtsrun utilities."],
+[32,"dts","Which of the following is NOT an item of a DTS package?",["Connections","Tasks","Cubes","Transformations"],2,"Lab lectures on DTS","A package is made of connections, tasks, transformations and workflow (precedence constraints)."],
+[33,"dm","Compared with classical statistics, data mining is mainly concerned with ______.",["Testing a pre-stated hypothesis on a small sample","Discovering previously unknown patterns in large data sets","Designing surveys","Computing averages"],1,"Lecture on data mining","“Difference between statistics and data mining” was a long question in July 2026."],
+[34,"dm","The two broad types of clustering are ______.",["Supervised and semi-supervised","Dense and sparse","Hierarchical and partitional (e.g. K-means)","Additive and non-additive"],2,"Lecture on clustering","“Two types of clustering in data mining” appears in four reviews."],
+[35,"dm","In K-means clustering, K is ______.",["The number of records","The number of clusters chosen by the user","The number of attributes","The number of iterations"],1,"Lecture on clustering","K-means: pick K centroids, assign each record to the nearest centroid, recompute centroids as the mean, repeat until stable."],
+[36,"dm","Classification is a ______ learning task, while clustering is ______.",["Unsupervised; supervised","Both supervised","Supervised; unsupervised","Both unsupervised"],2,"Lecture on data mining","Classification learns from labelled examples; clustering finds groups with no labels."],
+[37,"web","In a web (clickstream) warehouse, attributes such as page function, page template and page source belong to the ______ dimension.",["Customer","Page","Time","Product"],1,"Lecture on web warehousing","“Page dimension attributes” / “web warehouse attributes” was a long question in both 2025 and 2026."],
+[38,"web","A program that automatically visits web pages and collects them for a search engine is called a ______.",["Cube","Cursor","Crawler (spider)","Trigger"],2,"Lecture on web warehousing","“Web searching methods” was a short question in July 2026."],
+[39,"web","In the CS614 Agri-DWH case study, a farmer and the fields the farmer owns have a ______ relationship.",["One-to-one","Many-to-many","No relationship","One-to-many"],3,"Case study lectures","“Identify the relationship in the farmer / field ERD” appears in five reviews. One farmer owns many fields; each field belongs to one farmer."],
+[40,"web","The Agri-DWH case study in the handouts is built primarily from ______ data.",["Bank transaction","Pest scouting","Telecom call detail","Hospital patient"],1,"Case study lectures","Pest scouting sheets from the Punjab agriculture department, with all their data quality problems (missing values, wrong codes, inconsistent names)."]
+].map(r => ({ id: String(r[0]), t: r[1], q: r[2], o: r[3], a: r[4], p: r[5] || "", x: r[6] || "", note: r[7] || "" }));
+
+/* ---------- Persistence ---------- */
+const KEY = "cs614-predicted-final-v1";
+let store = { stats: {}, books: [], settings: {} };
+try { const raw = localStorage.getItem(KEY); if (raw) store = Object.assign(store, JSON.parse(raw)); } catch (e) {}
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} }
+function stat(id){ return store.stats[id] || { n: 0, c: 0, last: null }; }
+function record(id, correct){
+  const s = stat(id); s.n++; if (correct) s.c++; s.last = correct; store.stats[id] = s; save();
+}
+const isBook = id => store.books.includes(id);
+function toggleBook(id){ if (isBook(id)) store.books = store.books.filter(x => x !== id); else store.books.push(id); save(); }
+
+/* ---------- Helpers ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+function shuffle(a){ const b = a.slice(); for (let i = b.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; }
+function show(id){ ["home","quiz","results","review"].forEach(s => $("#" + s).classList.toggle("hidden", s !== id)); window.scrollTo({ top: 0 }); }
+const LETTERS = "ABCD";
+
+/* ---------- Theme ---------- */
+const root = document.documentElement;
+let theme = store.settings.theme || "auto";
+function applyTheme(){ if (theme === "auto") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", theme); $("#themeBtn").textContent = "Theme: " + theme; }
+$("#themeBtn").onclick = () => { theme = theme === "auto" ? "light" : theme === "light" ? "dark" : "auto"; store.settings.theme = theme; save(); applyTheme(); };
+applyTheme();
+
+/* ---------- Home ---------- */
+$("#qcount").textContent = Q.length;
+let selectedTopics = new Set(store.settings.topics || Object.keys(TOPICS));
+function renderChips(){
+  $("#topicChips").innerHTML = Object.entries(TOPICS).map(([k, v]) => {
+    const n = Q.filter(q => q.t === k).length;
+    return `<button type="button" class="chip ${selectedTopics.has(k) ? "on" : ""}" data-t="${k}">${esc(v)} <span class="muted">(${n})</span></button>`;
+  }).join("") + `<button type="button" class="chip" data-t="__all">All</button><button type="button" class="chip" data-t="__none">None</button>`;
+}
+$("#topicChips").addEventListener("click", e => {
+  const b = e.target.closest(".chip"); if (!b) return;
+  const t = b.dataset.t;
+  if (t === "__all") selectedTopics = new Set(Object.keys(TOPICS));
+  else if (t === "__none") selectedTopics = new Set();
+  else selectedTopics.has(t) ? selectedTopics.delete(t) : selectedTopics.add(t);
+  store.settings.topics = [...selectedTopics]; save(); renderChips(); updatePoolInfo();
+});
+function poolQuestions(){
+  const pool = $("#pool").value;
+  return Q.filter(q => selectedTopics.has(q.t)).filter(q => {
+    const s = stat(q.id);
+    if (pool === "new") return s.n === 0;
+    if (pool === "wrong") return s.last === false;
+    if (pool === "weak") return s.n > s.c;
+    if (pool === "book") return isBook(q.id);
+    return true;
+  });
+}
+function updatePoolInfo(){
+  const n = poolQuestions().length, want = +$("#count").value;
+  $("#poolInfo").textContent = n === 0 ? "No questions match this pool and topic selection." : `${n} question${n === 1 ? "" : "s"} in this pool${want && want < n ? ` — you will get ${want} of them` : ""}.`;
+  $("#startBtn").disabled = n === 0;
+}
+["pool","count","mode","order","shufopts","repeat"].forEach(id => {
+  const el = $("#" + id);
+  if (store.settings[id]) el.value = store.settings[id];
+  el.addEventListener("change", () => { store.settings[id] = el.value; save(); updatePoolInfo(); });
+});
+function renderStats(){
+  const attempted = Q.filter(q => stat(q.id).n > 0);
+  const totalN = attempted.reduce((a, q) => a + stat(q.id).n, 0);
+  const totalC = attempted.reduce((a, q) => a + stat(q.id).c, 0);
+  const mastered = Q.filter(q => { const s = stat(q.id); return s.n > 0 && s.last === true && s.c === s.n; }).length;
+  const weak = Q.filter(q => { const s = stat(q.id); return s.n > s.c; }).length;
+  $("#stats").innerHTML = [
+    [attempted.length + " / " + Q.length, "questions attempted"],
+    [totalN ? Math.round(100 * totalC / totalN) + "%" : "—", "overall accuracy"],
+    [mastered, "always answered right"],
+    [weak, "missed at least once"],
+    [store.books.length, "bookmarked"]
+  ].map(([b, s]) => `<div class="stat"><b>${b}</b><span>${s}</span></div>`).join("");
+  $("#topicStats").innerHTML = `<div class="topicbar">` + Object.entries(TOPICS).map(([k, v]) => {
+    const qs = Q.filter(q => q.t === k); const n = qs.reduce((a, q) => a + stat(q.id).n, 0); const c = qs.reduce((a, q) => a + stat(q.id).c, 0);
+    const pct = n ? Math.round(100 * c / n) : 0;
+    return `<div>${esc(v)}<div class="bar"><i style="width:${pct}%"></i></div></div><div class="muted">${n ? pct + "% of " + n : "not started"}</div>`;
+  }).join("") + `</div>`;
+}
+$("#resetBtn").onclick = () => { if (confirm("Delete all saved progress and bookmarks in this browser?")) { store.stats = {}; store.books = []; save(); renderStats(); updatePoolInfo(); } };
+
+/* ---------- Session ---------- */
+let S = null; // {mode, items:[{q, opts:[{text, orig}], picked, correct}], i}
+function buildSession(list){
+  const mode = $("#mode").value, order = $("#order").value, shuf = $("#shufopts").value === "1", want = +$("#count").value;
+  let qs = order === "shuffle" ? shuffle(list) : list.slice();
+  if (want && want < qs.length) qs = qs.slice(0, want);
+  S = { mode, i: 0, items: qs.map(q => {
+    let opts = q.o.map((text, orig) => ({ text, orig }));
+    if (shuf) opts = shuffle(opts);
+    return { q, opts, picked: null, correct: null, tries: 0, revealed: false, repeat: false };
+  }) };
+}
+function freshOpts(q){ let o = q.o.map((text, orig) => ({ text, orig })); return $("#shufopts").value === "1" ? shuffle(o) : o; }
+/* Re-ask a missed question a few positions later in the same practice session. */
+function requeue(it){
+  if (S.mode !== "practice" || $("#repeat").value !== "1") return;
+  if (S.items.slice(S.i + 1).some(x => x.q.id === it.q.id)) return; // already queued
+  const at = Math.min(S.i + 4, S.items.length);
+  S.items.splice(at, 0, { q: it.q, opts: freshOpts(it.q), picked: null, correct: null, tries: 0, revealed: false, repeat: true });
+}
+$("#startBtn").onclick = () => {
+  const list = poolQuestions(); if (!list.length) return;
+  if ($("#mode").value === "review") { renderReview(list); show("review"); return; }
+  buildSession(list); renderQ(); show("quiz");
+};
+function renderQ(){
+  const it = S.items[S.i], q = it.q, exam = S.mode === "exam";
+  $("#pbar").style.width = (100 * (S.i + (exam ? 0 : 0)) / S.items.length) + "%";
+  $("#qpos").textContent = `Question ${S.i + 1} of ${S.items.length}` + (it.repeat ? " · asked again" : "") + (it.tries ? ` · attempt ${it.tries + 1}` : "");
+  $("#qtopic").textContent = TOPICS[q.t];
+  $("#qnum").textContent = q.id;
+  $("#qtext").textContent = q.q;
+  $("#bookBtn").textContent = isBook(q.id) ? "★" : "☆";
+  $("#bookBtn").classList.toggle("on", isBook(q.id));
+  const answered = it.picked !== null || it.revealed;
+  $("#opts").innerHTML = it.opts.map((o, i) => {
+    let cls = "opt";
+    if (exam) { if (it.picked === i) cls += " sel"; }
+    else if (answered) { if (o.orig === q.a) cls += " ok"; else if (it.picked === i) cls += " bad"; }
+    return `<li><button type="button" class="${cls}" data-i="${i}" ${(!exam && answered) ? "disabled" : ""}><span class="k">${LETTERS[i]}</span><span>${esc(o.text)}</span></button></li>`;
+  }).join("");
+  const fb = $("#feedback");
+  if (!exam && answered) {
+    const right = it.picked !== null && it.opts[it.picked].orig === q.a;
+    const head = right ? "Correct." : it.picked === null ? "Answer shown." : "Not quite.";
+    fb.innerHTML = `<div class="feedback ${right ? "ok" : "bad"}"><strong>${head}</strong> The answer is <strong>${esc(q.o[q.a])}</strong>.` +
+      (q.x ? `<div style="margin-top:6px">${esc(q.x)}</div>` : "") +
+      (q.p ? `<div class="ref">Reference: ${esc(q.p)}</div>` : "") +
+      (right ? "" : `<div class="row" style="margin-top:10px"><button type="button" class="btn sm" id="retryBtn">Try this one again (T)</button><span class="kbd">${$("#repeat").value === "1" ? "It will also come back a few questions later." : ""}</span></div>`) +
+      `</div>` + (q.note ? `<div class="note">${esc(q.note)}</div>` : "");
+  } else if (!exam) {
+    fb.innerHTML = `<div class="row" style="margin-top:12px"><button type="button" class="btn sm ghost" id="revealBtn">Show answer (S)</button><span class="kbd">Counts as a miss, then you can try it again.</span></div>`;
+  } else fb.innerHTML = "";
+  $("#prevBtn").disabled = S.i === 0;
+  const last = S.i === S.items.length - 1;
+  $("#nextBtn").classList.toggle("hidden", exam && last);
+  $("#finishBtn").classList.toggle("hidden", !(exam && last));
+  $("#nextBtn").textContent = last ? "See results" : "Next →";
+  $("#nextBtn").disabled = !exam && !answered;
+  const grid = $("#gridNav"); grid.classList.toggle("hidden", !exam);
+  if (exam) grid.innerHTML = S.items.map((x, i) => `<button type="button" class="gcell ${x.picked !== null ? "done" : ""} ${i === S.i ? "cur" : ""}" data-g="${i}">${i + 1}</button>`).join("");
+}
+$("#opts").addEventListener("click", e => {
+  const b = e.target.closest(".opt"); if (!b || b.disabled) return; pick(+b.dataset.i);
+});
+function pick(i){
+  const it = S.items[S.i]; if (!it || i >= it.opts.length) return;
+  if (S.mode === "practice" && (it.picked !== null || it.revealed)) return;
+  it.picked = i; it.correct = it.opts[i].orig === it.q.a;
+  if (S.mode === "practice") { if (it.tries === 0) record(it.q.id, it.correct); if (!it.correct) requeue(it); }
+  renderQ();
+}
+function retry(){
+  const it = S.items[S.i]; if (S.mode !== "practice" || !it || it.correct || (it.picked === null && !it.revealed)) return;
+  it.tries++; it.picked = null; it.correct = null; it.revealed = false; it.opts = freshOpts(it.q); renderQ();
+}
+function reveal(){
+  const it = S.items[S.i]; if (S.mode !== "practice" || !it || it.picked !== null || it.revealed) return;
+  it.revealed = true; it.correct = false;
+  if (it.tries === 0) record(it.q.id, false); requeue(it); renderQ();
+}
+$("#feedback").addEventListener("click", e => { if (e.target.id === "retryBtn") retry(); else if (e.target.id === "revealBtn") reveal(); });
+function next(){
+  if (S.i < S.items.length - 1) { S.i++; renderQ(); }
+  else if (S.mode === "exam") finishExam(); else finishSession();
+}
+$("#nextBtn").onclick = () => { if (!$("#nextBtn").disabled) next(); };
+$("#prevBtn").onclick = () => { if (S.i > 0) { S.i--; renderQ(); } };
+$("#finishBtn").onclick = () => {
+  const left = S.items.filter(x => x.picked === null).length;
+  if (left && !confirm(`${left} question${left === 1 ? "" : "s"} unanswered. Finish anyway? Unanswered ones count as wrong.`)) return;
+  finishExam();
+};
+$("#gridNav").addEventListener("click", e => { const b = e.target.closest(".gcell"); if (b) { S.i = +b.dataset.g; renderQ(); } });
+$("#bookBtn").onclick = () => { toggleBook(S.items[S.i].q.id); renderQ(); };
+$("#quitBtn").onclick = () => {
+  const done = S.items.filter(x => x.picked !== null || x.revealed).length;
+  if (S.mode === "exam") { if (confirm("End the exam now and score what you have answered so far?")) finishExam(); return; }
+  if (done === 0) { renderStats(); updatePoolInfo(); show("home"); return; }
+  S.items = S.items.filter(x => x.picked !== null || x.revealed); finishSession();
+};
+function finishExam(){
+  S.items.forEach(it => { if (it.picked === null) it.correct = false; record(it.q.id, !!it.correct); });
+  finishSession();
+}
+function finishSession(){
+  const n = S.items.length, c = S.items.filter(x => x.correct).length;
+  const firstTry = S.items.filter(x => x.correct && x.tries === 0).length;
+  $("#scoreBig").textContent = n ? Math.round(100 * c / n) + "%" : "—";
+  $("#scoreSub").textContent = `${c} correct out of ${n} · ${S.mode === "exam" ? "exam" : "practice"} mode` + (S.mode === "practice" && firstTry !== c ? ` · ${firstTry} on the first try` : "");
+  const byT = {};
+  S.items.forEach(it => { const b = byT[it.q.t] || (byT[it.q.t] = { n: 0, c: 0 }); b.n++; if (it.correct) b.c++; });
+  $("#resultTopics").innerHTML = `<div class="topicbar">` + Object.entries(byT).map(([k, v]) => `<div>${esc(TOPICS[k])}<div class="bar"><i style="width:${Math.round(100 * v.c / v.n)}%"></i></div></div><div class="muted">${v.c} / ${v.n}</div>`).join("") + `</div>`;
+  $("#resultList").innerHTML = S.items.map((it, i) => {
+    const q = it.q, pickedText = it.picked === null ? (it.revealed ? "(answer shown)" : "(not answered)") : it.opts[it.picked].text;
+    const extra = (it.repeat ? " · asked again" : "") + (it.tries ? ` · got it on attempt ${it.tries + 1}` : "");
+    return `<li class="ritem"><p class="q">${i + 1}. ${esc(q.q)} <span class="muted" style="font-weight:400">· Q${q.id}${extra}</span></p>` +
+      (it.correct ? `<p class="a good">✓ ${esc(q.o[q.a])}</p>` : `<p class="a miss">✗ Your answer: ${esc(pickedText)}</p><p class="a good">✓ Correct: ${esc(q.o[q.a])}</p>`) +
+      (q.x ? `<p class="a muted">${esc(q.x)}</p>` : "") + (q.p ? `<p class="a muted">${esc(q.p)}</p>` : "") + (q.note ? `<div class="note">${esc(q.note)}</div>` : "") + `</li>`;
+  }).join("");
+  const wrong = S.items.filter(x => !x.correct);
+  $("#retryWrongBtn").disabled = wrong.length === 0;
+  $("#retryWrongBtn").textContent = wrong.length ? `Retry the ${wrong.length} I missed` : "Nothing missed — well done";
+  S.lastList = S.items.map(x => x.q); S.wrongList = [...new Map(wrong.map(x => [x.q.id, x.q])).values()];
+  renderStats(); updatePoolInfo(); show("results");
+}
+$("#retryWrongBtn").onclick = () => { const l = S.wrongList; const m = $("#mode").value; buildSession(l); S.mode = m === "review" ? "practice" : m; S.items = shuffle(S.items); renderQ(); show("quiz"); };
+$("#againBtn").onclick = () => { const list = poolQuestions(); if (!list.length) { show("home"); return; } buildSession(list); renderQ(); show("quiz"); };
+$("#homeBtn").onclick = () => show("home");
+$("#reviewHomeBtn").onclick = () => show("home");
+
+/* ---------- Review mode ---------- */
+let reviewBase = [];
+function renderReview(list){
+  reviewBase = list; $("#search").value = ""; drawReview();
+}
+function drawReview(){
+  const term = $("#search").value.trim().toLowerCase();
+  const items = reviewBase.filter(q => !term || q.q.toLowerCase().includes(term) || q.o.some(o => o.toLowerCase().includes(term)));
+  $("#reviewCount").textContent = `${items.length} question${items.length === 1 ? "" : "s"}${term ? " matching “" + term + "”" : ""}`;
+  $("#reviewList").innerHTML = items.map(q => `<div class="review-item"><p class="q">${esc(q.id)}. ${esc(q.q)} <span class="tag">${esc(TOPICS[q.t])}</span></p><ol type="A">` +
+    q.o.map((o, i) => `<li class="${i === q.a ? "ans" : ""}">${esc(o)}${i === q.a ? " ✓" : ""}</li>`).join("") + `</ol>` +
+    (q.x ? `<div class="ref">${esc(q.x)}</div>` : "") + (q.p ? `<div class="ref">${esc(q.p)}</div>` : "") + (q.note ? `<div class="note">${esc(q.note)}</div>` : "") + `</div>`).join("") || `<p class="muted">Nothing matches.</p>`;
+}
+$("#search").addEventListener("input", drawReview);
+
+/* ---------- Keyboard ---------- */
+document.addEventListener("keydown", e => {
+  if ($("#quiz").classList.contains("hidden") || e.target.matches("input,select,textarea")) return;
+  if (e.key >= "1" && e.key <= "4") { pick(+e.key - 1); e.preventDefault(); }
+  else if (e.key === "Enter" || e.key === "ArrowRight") { if (S.mode === "exam" && S.i === S.items.length - 1) $("#finishBtn").click(); else if (!$("#nextBtn").disabled) next(); e.preventDefault(); }
+  else if (e.key === "ArrowLeft") { $("#prevBtn").click(); }
+  else if (e.key.toLowerCase() === "b") { $("#bookBtn").click(); }
+  else if (e.key.toLowerCase() === "t") { retry(); }
+  else if (e.key.toLowerCase() === "s") { reveal(); }
+});
+
+renderChips(); renderStats(); updatePoolInfo();
+</script>
+</body>
+</html>
