@@ -2604,3 +2604,845 @@ Page and column breaks are run-level `w:br` elements with `w:type="page"` or `"c
 
 **Q: A client reports blank headers on the landscape pages. What happened?**
 Headers and footers are section properties. When the generator created a new section for the landscape appendix it did not pass `headers` and `footers`, so Word treated it as a section with no header references. Because docx does not implement "Link to Previous" as an automatic default in every case, the fix is to pass the same `Header`/`Footer` instances to every section, ideally through the section factory so it cannot be forgotten.
+
+# LEVEL: Expert
+
+## Data-driven generation: JSON to a 21-template branded suite
+
+Once a single document generator works, the next step is a **suite**: one code base that produces every document a client needs (letterhead, memo, invoice, SOP, policy, report cover, meeting minutes and so on) from one brand definition and one JSON payload per document. This is exactly the shape of Ali's Fiverr "branded template suite" deliverables, where a client wants 15 to 21 matching documents and later wants the accent colour changed in all of them at once.
+
+### Separate three things
+
+| Layer | What it holds | Changes when… |
+|---|---|---|
+| Brand tokens | colours, fonts, logo bytes, margins, footer text | the client rebrands |
+| Template functions | how a memo, invoice or SOP is laid out | the layout is redesigned |
+| Payload (JSON) | the words, numbers and table rows of one document | every single run |
+
+A template must never contain a colour literal, and a payload must never contain layout. Keeping this discipline is what makes 21 templates maintainable by one person.
+
+### Brand tokens
+
+```js
+const brand = {
+  name: "Stewart Title Lahore Ops",
+  font: "Calibri",
+  accent: "1E5AA8",
+  muted: "6B7280",
+  margins: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
+  footer: "Confidential – internal use only",
+};
+```
+
+### A style factory driven by tokens
+
+```js
+function makeStyles(b) {
+  return {
+    default: { document: { run: { font: b.font, size: 22 } } },
+    paragraphStyles: [
+      { id: "Heading1", name: "Heading 1", basedOn: "Normal", next: "Normal", quickFormat: true,
+        run: { size: 32, bold: true, color: b.accent }, paragraph: { spacing: { before: 360, after: 120 }, outlineLevel: 0 } },
+      { id: "Heading2", name: "Heading 2", basedOn: "Normal", next: "Normal", quickFormat: true,
+        run: { size: 26, bold: true, color: b.accent }, paragraph: { spacing: { before: 240, after: 80 }, outlineLevel: 1 } },
+      { id: "Meta", name: "Meta", basedOn: "Normal", run: { size: 18, color: b.muted, italics: true } },
+    ],
+  };
+}
+```
+
+Every template calls `makeStyles(brand)` so all 21 documents share identical style ids. That matters later: a client can copy a paragraph from the memo into the SOP and the formatting stays consistent because `Heading1` means the same thing in both files.
+
+### Block renderers
+
+Payloads are lists of typed blocks. A single `renderBlocks` maps each block to docx objects and every template reuses it:
+
+```js
+const { Paragraph, TextRun, Table, TableRow, TableCell, HeadingLevel, WidthType } = docx;
+
+const renderers = {
+  h1: (b) => new Paragraph({ text: b.text, heading: HeadingLevel.HEADING_1 }),
+  h2: (b) => new Paragraph({ text: b.text, heading: HeadingLevel.HEADING_2 }),
+  p:  (b) => new Paragraph({ children: [new TextRun(b.text)] }),
+  bullets: (b) => b.items.map((t) => new Paragraph({ text: t, bullet: { level: 0 } })),
+  table: (b) => new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [b.header, ...b.rows].map((cells, i) => new TableRow({
+      tableHeader: i === 0,
+      children: cells.map((c) => new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: String(c), bold: i === 0 })] })] })),
+    })),
+  }),
+};
+
+function renderBlocks(blocks) {
+  return blocks.flatMap((b) => {
+    const fn = renderers[b.type];
+    if (!fn) throw new Error(`Unknown block type "${b.type}"`);
+    return fn(b);
+  });
+}
+```
+
+`flatMap` lets a renderer return one object or an array (bullets return several paragraphs). Throwing on unknown types is deliberate: silently skipping a block is how a policy manual ships without its penalties section.
+
+### The template registry
+
+```js
+const templates = {
+  memo:    (payload, b) => [memoHeader(payload, b), ...renderBlocks(payload.blocks)],
+  sop:     (payload, b) => [sopBanner(payload, b), ...renderBlocks(payload.blocks), revisionTable(payload)],
+  invoice: (payload, b) => [invoiceHead(payload, b), lineItems(payload.items), totals(payload.items)],
+  // ...18 more
+};
+
+function buildDocument(kind, payload, b) {
+  const template = templates[kind];
+  if (!template) throw new Error(`No template "${kind}"`);
+  return new docx.Document({
+    creator: b.name,
+    title: payload.title,
+    styles: makeStyles(b),
+    sections: [{ properties: { page: { margin: b.margins } }, headers: { default: brandHeader(b) }, footers: { default: brandFooter(b) }, children: template(payload, b) }],
+  });
+}
+```
+
+Producing every document in a batch is now a loop over a manifest: `for (const job of manifest) await Packer.toBuffer(buildDocument(job.kind, job.payload, brand))`. Adding template 22 means adding one function to the registry; changing the accent means editing one token.
+
+### Validate the payload first
+
+Check the payload shape (a hand-written function, or Zod or Ajv in Node) before building anything. A missing `header` array in a table block otherwise produces a cryptic `Cannot read properties of undefined` from deep inside docx, long after the real mistake.
+
+> **Interview note:** When asked "how would you design a document generator", describe these three layers explicitly and mention that the brand layer includes the logo bytes and footer text, not only colours. Interviewers are checking whether you separate content from presentation.
+
+### Try It Yourself
+
+```js
+const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, HeadingLevel, WidthType, Header, Footer, AlignmentType } = docx;
+
+const brand = { name: "Stewart Title Lahore Ops", font: "Calibri", accent: "1E5AA8", muted: "6B7280", footer: "Confidential – internal use only" };
+const makeStyles = (b) => ({
+  default: { document: { run: { font: b.font, size: 22 } } },
+  paragraphStyles: [
+    { id: "Heading1", name: "Heading 1", basedOn: "Normal", next: "Normal", run: { size: 32, bold: true, color: b.accent }, paragraph: { spacing: { before: 360, after: 120 }, outlineLevel: 0 } },
+    { id: "Meta", name: "Meta", basedOn: "Normal", run: { size: 18, color: b.muted, italics: true } },
+  ],
+});
+const renderers = {
+  h1: (b) => new Paragraph({ text: b.text, heading: HeadingLevel.HEADING_1 }),
+  p: (b) => new Paragraph({ children: [new TextRun(b.text)] }),
+  bullets: (b) => b.items.map((t) => new Paragraph({ text: t, bullet: { level: 0 } })),
+  table: (b) => new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [b.header, ...b.rows].map((cells, i) => new TableRow({ tableHeader: i === 0, children: cells.map((c) => new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: String(c), bold: i === 0 })] })] })) })) }),
+};
+const renderBlocks = (blocks) => blocks.flatMap((b) => { const fn = renderers[b.type]; if (!fn) throw new Error("Unknown block " + b.type); return fn(b); });
+
+const templates = {
+  memo: (p) => [new Paragraph({ text: `MEMO: ${p.title}`, heading: HeadingLevel.HEADING_1 }), new Paragraph({ text: `To: ${p.to}   From: ${p.from}   Date: ${p.date}`, style: "Meta" }), ...renderBlocks(p.blocks)],
+  sop: (p) => [new Paragraph({ text: `SOP ${p.code}: ${p.title}`, heading: HeadingLevel.HEADING_1 }), new Paragraph({ text: `Owner: ${p.owner}  Rev: ${p.rev}`, style: "Meta" }), ...renderBlocks(p.blocks)],
+};
+
+function buildDocument(kind, payload, b) {
+  return new Document({ creator: b.name, title: payload.title, styles: makeStyles(b), sections: [{
+    headers: { default: new Header({ children: [new Paragraph({ children: [new TextRun({ text: b.name, bold: true, color: b.accent })] })] }) },
+    footers: { default: new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: b.footer, size: 16, color: b.muted })] })] }) },
+    children: templates[kind](payload, b),
+  }] });
+}
+
+const payload = { title: "Weekly QA sampling", code: "QA-07", owner: "Ali Raza", rev: "3", blocks: [
+  { type: "p", text: "Sample 5% of processed title orders every Friday." },
+  { type: "bullets", items: ["Pick orders at random", "Score against the 12-point checklist", "Log results in the QA tracker"] },
+  { type: "table", header: ["Score", "Action"], rows: [[">= 95%", "None"], ["85-94%", "Coaching"], ["< 85%", "Re-training"]] },
+]};
+
+const doc = buildDocument("sop", payload, brand);
+download(await docx.Packer.toBlob(doc), "QA-07-sop.docx");
+console.log("Built SOP from JSON with", payload.blocks.length, "blocks");
+```
+
+### Quiz
+
+1. Where should the accent colour `1E5AA8` live in a template suite?
+- [ ] Inside each template function
+- [x] In the brand token object passed to a style factory
+- [ ] In the JSON payload of each document
+> One token, one change, 21 documents updated.
+
+2. Why does `renderBlocks` use `flatMap` rather than `map`?
+- [x] Some renderers return several paragraphs (bullets)
+- [ ] `map` cannot be used with objects
+- [ ] `flatMap` is faster
+> A bullet list becomes one `Paragraph` per item, so the renderer returns an array that must be flattened.
+
+3. What should happen when a payload contains an unknown block type?
+- [ ] Skip it silently
+- [x] Throw so the batch fails loudly
+- [ ] Render it as plain text
+> Silent skipping ships incomplete documents; an exception surfaces the bad data before delivery.
+
+### Exercises
+
+1. **Add a `quote` block** — Extend the renderer map with a `quote` block that renders indented italic text and prove it works with a one-block payload.
+<details><summary>Solution</summary>
+
+```js
+const { Document, Packer, Paragraph, TextRun } = docx;
+const renderers = {
+  quote: (b) => new Paragraph({ indent: { left: 720, right: 720 }, children: [new TextRun({ text: b.text, italics: true })] }),
+};
+const blocks = [{ type: "quote", text: "Quality is remembered long after the deadline is forgotten." }];
+const doc = new Document({ sections: [{ children: blocks.map((b) => renderers[b.type](b)) }] });
+download(await Packer.toBlob(doc), "quote.docx");
+```
+
+</details>
+
+2. **Payload validator** — Write `validate(payload)` that throws if `title` is missing, `blocks` is not an array, or any table block lacks `header`.
+<details><summary>Solution</summary>
+
+```js
+function validate(p) {
+  if (typeof p.title !== "string" || !p.title.trim()) throw new Error("title is required");
+  if (!Array.isArray(p.blocks)) throw new Error("blocks must be an array");
+  p.blocks.forEach((b, i) => {
+    if (b.type === "table" && !Array.isArray(b.header)) throw new Error(`block ${i}: table needs a header array`);
+  });
+  return true;
+}
+console.log(validate({ title: "Memo", blocks: [{ type: "table", header: ["A"], rows: [] }] }));
+```
+
+</details>
+
+### Interview Questions
+
+**Q: How do you keep 21 branded templates consistent when the client changes the brand?**
+By never letting a template know a colour, font or margin. All of those live in one brand object that a style factory turns into `styles.default` and `paragraphStyles`, and that header/footer factories turn into the letterhead. Templates only reference style ids such as `Heading1` and `Meta`. A rebrand is a change to the token object followed by a batch regeneration, which I verify by opening two or three outputs and by a script that unzips each file and greps `styles.xml` for the old colour hex. In one Fiverr suite the client changed accent colour twice and the font once, and each change was a five-minute job.
+
+**Q: What does a JSON payload for a document look like, and why blocks instead of free text?**
+A payload has document-level metadata (`title`, `owner`, `date`) and an ordered array of typed blocks: `h1`, `p`, `bullets`, `table`, `image`, `pageBreak`. Blocks are the smallest units that map one-to-one onto docx objects, so rendering is a lookup table rather than a parser. Free text would force me to write a Markdown parser and guess at structure, whereas blocks can be produced by a form, a database query or an LLM and validated with a schema before any document is built. It also makes diffs meaningful: a changed table row is one line in the JSON.
+
+**Q: How would you test a generator that produces dozens of document types?**
+Three layers. Unit tests on renderers assert that a `table` block with 3 rows produces a `Table` with 4 `TableRow`s including the header. Snapshot tests unzip the generated `.docx` and compare `word/document.xml` after normalising ids, so a layout regression shows up as a diff. Finally a smoke test opens each output with LibreOffice headless (`soffice --headless --convert-to pdf`) to catch anything Word would flag as corrupt. Visual review of the PDF is still done by a human before delivery, but the automated layers catch most regressions.
+
+## Patching existing documents with patchDocument
+
+Not every job starts from a blank page. A client sends a beautifully formatted Word letterhead built by a designer and asks for 300 personalised letters. Rebuilding that design in code is slow and never pixel-perfect. `patchDocument` (added in docx 8.1, signature changed in 9.0) takes an existing `.docx`, finds placeholders such as `{{client_name}}` and replaces them with docx content while leaving everything else untouched.
+
+### The v9 call
+
+```js
+import { patchDocument, PatchType, TextRun, Paragraph } from "docx";
+import * as fs from "fs";
+
+const out = await patchDocument({
+  outputType: "nodebuffer",                    // "nodebuffer" | "blob" | "uint8array" | "base64" | "arraybuffer"
+  data: fs.readFileSync("letterhead.docx"),
+  patches: {
+    client_name: { type: PatchType.PARAGRAPH, children: [new TextRun("Meridian Escrow LLC")] },
+    date:        { type: PatchType.PARAGRAPH, children: [new TextRun({ text: "16 September 2026", bold: true })] },
+    body: {
+      type: PatchType.DOCUMENT,
+      children: [
+        new Paragraph("Thank you for choosing us for your closing package."),
+        new Paragraph("Please find the settlement statement attached."),
+      ],
+    },
+  },
+});
+fs.writeFileSync("letter.docx", out);
+```
+
+In v8 the signature was `patchDocument(data, { patches })` and it always returned a `Uint8Array`/Buffer; v9 moved everything into one options object and made `outputType` required. If you see `TypeError: Cannot read properties of undefined (reading 'patches')`, you are calling the v8 form against v9.
+
+### The two patch types
+
+| Type | Replaces | Use for |
+|---|---|---|
+| `PatchType.PARAGRAPH` | the `{{token}}` text only, inside its paragraph, keeping the paragraph and surrounding runs | names, dates, amounts, single lines |
+| `PatchType.DOCUMENT` | the whole paragraph containing `{{token}}` with a list of block elements | multi-paragraph bodies, tables, images |
+
+A `DOCUMENT` patch can contain `Paragraph`, `Table` and paragraphs with `ImageRun`, so a `{{signature}}` placeholder can become a picture. A `PARAGRAPH` patch may only contain runs (`TextRun`, `ImageRun`, hyperlinks).
+
+### Placeholders in the template
+
+Type `{{token}}` in Word with the exact formatting you want the replacement to inherit. Word often splits typed text into several runs (spell check, autocorrect and editing history do this), and docx reassembles the runs before matching, so the split is handled for you. Two rules avoid pain:
+
+- Do not put spaces inside the braces: `{{ client_name }}` will not match `client_name`.
+- Keep tokens in body text, headers, footers and table cells; docx patches all of them.
+
+### Keeping formatting
+
+By default the replacement inherits the run formatting of the placeholder. `keepOriginalStyles: true` (v8.5+) preserves the original run properties even when your `TextRun` sets its own, which is what you want when the designer's font choices must win.
+
+```js
+await patchDocument({ outputType: "blob", data, patches, keepOriginalStyles: true });
+```
+
+Newer 9.x releases add `placeholderDelimiters: { start: "[[", end: "]]" }` for templates that already use curly braces in their text.
+
+### Patching in the browser
+
+The same function is exported in the browser bundle, and `outputType: "blob"` gives you something to download directly. The template can come from an `<input type="file">` or a `fetch`:
+
+```js
+const data = await (await fetch("/templates/letterhead.docx")).arrayBuffer();
+const blob = await docx.patchDocument({ outputType: "blob", data, patches });
+download(blob, "letter.docx");
+```
+
+### When patching is the wrong tool
+
+Patching cannot add sections, change page setup, restyle headings or repeat a table row per data item. If the client's template is a rate matrix that needs a variable number of rows, generate the table with a `DOCUMENT` patch rather than trying to fill a fixed table. If the change is structural (new landscape appendix, different numbering), build the document from scratch with the suite approach from the previous chapter and copy the design tokens out of the client's file.
+
+> **Warning:** Word's "Track Changes" leaves `w:ins`/`w:del` wrappers around text. A placeholder inside a tracked insertion is not matched. Accept all changes in the template before shipping it to the pipeline.
+
+### Try It Yourself
+
+```js
+// The browser runner has no template file, so we build one with docx first, then patch it.
+const { Document, Packer, Paragraph, TextRun, HeadingLevel, patchDocument, PatchType, Table, TableRow, TableCell, WidthType } = docx;
+
+const template = new Document({ sections: [{ children: [
+  new Paragraph({ text: "Stewart Title – Client Letter", heading: HeadingLevel.HEADING_1 }),
+  new Paragraph({ children: [new TextRun({ text: "Dear {{client_name}},", size: 24 })] }),
+  new Paragraph("{{body}}"),
+  new Paragraph({ children: [new TextRun({ text: "Order reference: {{order}}", italics: true })] }),
+]}]});
+const data = await Packer.toArrayBuffer(template);
+
+const rows = [["Owner's policy", "$1,250.00"], ["Lender's policy", "$425.00"], ["Endorsements", "$75.00"]];
+const blob = await patchDocument({
+  outputType: "blob",
+  data,
+  patches: {
+    client_name: { type: PatchType.PARAGRAPH, children: [new TextRun({ text: "Meridian Escrow LLC", bold: true })] },
+    order: { type: PatchType.PARAGRAPH, children: [new TextRun("ST-2026-04471")] },
+    body: { type: PatchType.DOCUMENT, children: [
+      new Paragraph("Your premium breakdown is below."),
+      new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: rows.map((r) => new TableRow({ children: r.map((c) => new TableCell({ children: [new Paragraph(c)] })) })) }),
+      new Paragraph("Please contact us with any questions."),
+    ]},
+  },
+});
+download(blob, "patched-letter.docx");
+console.log("Patched", 3, "placeholders; table rows:", rows.length);
+```
+
+### Quiz
+
+1. Which patch type replaces the whole paragraph containing the placeholder with several blocks?
+- [ ] `PatchType.PARAGRAPH`
+- [x] `PatchType.DOCUMENT`
+- [ ] `PatchType.SECTION`
+> `DOCUMENT` patches accept paragraphs and tables; `PARAGRAPH` patches accept only runs.
+
+2. What changed in `patchDocument` between docx 8 and 9?
+- [x] It now takes one options object and requires `outputType`
+- [ ] It was removed
+- [ ] It now requires a file path
+> v8: `patchDocument(data, { patches })`; v9: `patchDocument({ outputType, data, patches })`.
+
+3. A `{{token}}` inside a tracked change in the template is…
+- [ ] matched and replaced
+- [x] not matched until changes are accepted
+- [ ] matched twice
+> `w:ins`/`w:del` wrappers break run reassembly; accept all changes in the template first.
+
+### Exercises
+
+1. **Header patch** — Build a template whose header contains `{{doc_id}}`, patch it, and download the result.
+<details><summary>Solution</summary>
+
+```js
+const { Document, Packer, Paragraph, TextRun, Header, patchDocument, PatchType } = docx;
+const template = new Document({ sections: [{ headers: { default: new Header({ children: [new Paragraph("Doc ID: {{doc_id}}")] }) }, children: [new Paragraph("Body text.")] }] });
+const data = await Packer.toArrayBuffer(template);
+const blob = await patchDocument({ outputType: "blob", data, patches: { doc_id: { type: PatchType.PARAGRAPH, children: [new TextRun("SOP-2026-011")] } } });
+download(blob, "header-patched.docx");
+```
+
+</details>
+
+2. **Batch letters** — Given an array of three clients, generate three patched blobs and report their sizes (download only the first).
+<details><summary>Solution</summary>
+
+```js
+const { Document, Packer, Paragraph, TextRun, patchDocument, PatchType } = docx;
+const template = new Document({ sections: [{ children: [new Paragraph("Dear {{name}},"), new Paragraph("Your file is ready.")] }] });
+const data = await Packer.toArrayBuffer(template);
+const clients = ["Ayesha Khan", "Meridian Escrow LLC", "R. Patel"];
+const blobs = [];
+for (const name of clients) {
+  blobs.push(await patchDocument({ outputType: "blob", data, patches: { name: { type: PatchType.PARAGRAPH, children: [new TextRun(name)] } } }));
+}
+console.log(blobs.map((b) => b.size));
+download(blobs[0], "letter-1.docx");
+```
+
+</details>
+
+### Interview Questions
+
+**Q: When do you patch an existing document instead of generating from scratch?**
+When the client's design is the deliverable and only the data changes: letterheads from a designer, contracts approved by legal, certificates with artwork. Patching keeps their fonts, spacing and drawing objects byte-for-byte, which I could not reproduce reliably in code. I generate from scratch when structure varies per run, such as a handbook whose chapter count changes, or when the same brand must drive many document types. In practice I combine them: the letterhead is patched, and a `DOCUMENT` patch inserts a generated table or bullet list into the body.
+
+**Q: How does docx find `{{token}}` when Word has split it across several runs?**
+`patchDocument` walks each paragraph, concatenates the text of its runs, searches for the delimiters, and then rewrites the runs so the placeholder occupies a single run before replacing it. That means run splitting from spell check or editing history does not matter, but anything that breaks the paragraph text flow does: a tracked change, a content control boundary or a field code between the braces prevents a match. My template checklist is therefore: accept all changes, remove content controls around tokens, and use plain text with no spaces inside the braces.
+
+**Q: A patched document opens fine in Word but the replaced text has the wrong font. Why?**
+Because the `TextRun` in the patch carried its own run properties, which override the placeholder's formatting, or because the placeholder's formatting came from a character style that the patch dropped. Passing `keepOriginalStyles: true` keeps the template's run properties, and supplying a bare `new TextRun("text")` with no formatting lets the inherited properties show through. I check by unzipping the output and comparing the `w:rPr` of the patched run with the template's original run.
+
+## Performance with big documents
+
+A 40-page memo builds in a blink. A 767-page handbook with 900 tables, 200 images and a TOC is where docx starts to cost real seconds and hundreds of megabytes of memory. This chapter is about where the time goes and the handful of changes that make the difference between a 90-second build and a 6-second one.
+
+### Where the time goes
+
+`Packer` does three things: it serialises your object tree into XML strings (`document.xml`, `styles.xml`, `numbering.xml`, one part per header and footer), it copies image buffers into `word/media`, and it zips the lot with JSZip. Measured on a 700-page handbook in Node 20:
+
+| Phase | Typical share | Dominated by |
+|---|---|---|
+| Building the object tree | 20% | number of `TextRun`/`Paragraph` objects |
+| XML serialisation | 50% | size of `document.xml` (inline formatting multiplies it) |
+| Zipping | 30% | image bytes and compression level |
+
+The lever that matters most is the **size of `document.xml`**. Every inline `run: { font, size, color }` writes a `w:rPr` block on every run; a document with 50,000 runs each carrying five properties is tens of megabytes of XML before compression.
+
+### Use styles, not inline formatting
+
+```js
+// slow and big: 4 properties on every run
+new TextRun({ text: cell, font: "Calibri", size: 18, color: "333333" })
+
+// fast and small: the properties live once in styles.xml
+new Paragraph({ style: "CellText", children: [new TextRun(cell)] })
+```
+
+Moving the rate-matrix cell formatting into a `CellText` paragraph style reduced one of Ali's generated appendices from 38 MB of XML to 9 MB, and build time fell proportionally.
+
+### Batch tables sensibly
+
+A `Table` with 5,000 rows is legal, but Word itself becomes sluggish beyond roughly a thousand rows, and reviewers complain before docx does. Split large matrices into one table per state or per section heading, and set `tableHeader: true` on the header row of each so the column labels repeat.
+
+### Images
+
+Each `ImageRun` writes its own media part, even when you pass the same bytes twice. For a logo that appears on every page, put a single `ImageRun` in the **header**: one part, referenced by every page. For photos, resize before embedding (`sharp` in Node, a canvas in the browser); docx stores the bytes you give it, so a 4 MB photo scaled to 2 inches wide is still 4 MB in the ZIP. Prefer JPEG for photographs and PNG only for logos and screenshots.
+
+### Node: buffers and streams
+
+```js
+import { Packer } from "docx";
+import { createWriteStream } from "fs";
+
+// One buffer in memory, then write (fine up to a few hundred MB)
+const buf = await Packer.toBuffer(doc);
+await fs.promises.writeFile("handbook.docx", buf);
+
+// Stream: the ZIP is piped to disk chunk by chunk
+const stream = await Packer.toStream(doc);
+stream.pipe(createWriteStream("handbook.docx"));
+```
+
+Streaming does not avoid building the object tree or the XML string, but it does avoid holding the finished ZIP in memory next to them, which is the difference between a build that finishes and one that dies with `JavaScript heap out of memory` on a 2 GB CI runner. If you must raise the heap, `node --max-old-space-size=4096 build.js` is the flag.
+
+### Avoid re-work inside loops
+
+Creating style objects, brand headers or numbering configs inside a per-chapter loop is a common mistake that multiplies allocations. Build them once and pass references:
+
+```js
+const header = brandHeader(brand);          // once
+const sections = chapters.map((ch) => ({ headers: { default: header }, children: renderChapter(ch) }));
+```
+
+### Measure before optimising
+
+```js
+console.time("build");
+const doc = buildHandbook(data);
+console.timeEnd("build");
+console.time("pack");
+const buf = await Packer.toBuffer(doc);
+console.timeEnd("pack");
+console.log((buf.length / 1024 / 1024).toFixed(1), "MB");
+```
+
+If "pack" dominates, look at XML size and images. If "build" dominates, look at your own loops (a `find` inside a `map` over 30,000 rows is quadratic).
+
+### Browser specifics
+
+The browser has one thread and a smaller heap. Generating a 500-page file in the page thread freezes the UI for the duration; move the build into a **Web Worker** and post the `Blob` back. `Packer.toBlob` works inside workers because it uses no DOM.
+
+> **Tip:** Compression is not the bottleneck you think. JSZip's default DEFLATE level is fast; the XML text is what takes time to produce. Reduce the XML first.
+
+### Try It Yourself
+
+```js
+const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType } = docx;
+
+// Compare inline formatting vs a style on a 600-row table and measure size.
+const rows = Array.from({ length: 600 }, (_, i) => [`WY-${String(i + 1).padStart(4, "0")}`, `$${(100000 + i * 2500).toLocaleString()}`, `$${(450 + i * 1.75).toFixed(2)}`]);
+
+function build(inline) {
+  const cell = (t) => new TableCell({ children: [new Paragraph(inline
+    ? { children: [new TextRun({ text: t, font: "Calibri", size: 18, color: "333333" })] }
+    : { style: "CellText", children: [new TextRun(t)] })] });
+  return new Document({
+    styles: { paragraphStyles: [{ id: "CellText", name: "Cell Text", basedOn: "Normal", run: { font: "Calibri", size: 18, color: "333333" } }] },
+    sections: [{ children: [new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: rows.map((r) => new TableRow({ children: r.map(cell) })) })] }],
+  });
+}
+
+console.time("inline");
+const inlineBlob = await Packer.toBlob(build(true));
+console.timeEnd("inline");
+console.time("styled");
+const styledBlob = await Packer.toBlob(build(false));
+console.timeEnd("styled");
+console.log("inline bytes:", inlineBlob.size, " styled bytes:", styledBlob.size);
+download(styledBlob, "rate-matrix-styled.docx");
+```
+
+### Quiz
+
+1. Which single factor most affects docx build time on large documents?
+- [ ] The number of sections
+- [x] The size of `document.xml`, driven by inline run formatting
+- [ ] The ZIP compression level
+> Every inline property is repeated on every run; styles write it once.
+
+2. How do you place a logo on every page without duplicating the image bytes?
+- [x] One `ImageRun` in the section header
+- [ ] An `ImageRun` at the top of every page's first paragraph
+- [ ] Pass the same buffer, docx deduplicates
+> Each `ImageRun` creates its own media part; the header is emitted once per section.
+
+3. What does `Packer.toStream` save compared with `toBuffer`?
+- [ ] XML serialisation time
+- [x] Holding the entire finished ZIP in memory
+- [ ] Object tree construction
+> The tree and XML are still built; only the output buffer is avoided.
+
+### Exercises
+
+1. **Timing harness** — Write a function that builds a document with `n` paragraphs and logs the pack time for n = 1000 and 5000.
+<details><summary>Solution</summary>
+
+```js
+const { Document, Packer, Paragraph } = docx;
+async function bench(n) {
+  const doc = new Document({ sections: [{ children: Array.from({ length: n }, (_, i) => new Paragraph(`Line ${i + 1}`)) }] });
+  const t0 = performance.now();
+  const blob = await Packer.toBlob(doc);
+  console.log(n, "paragraphs:", (performance.now() - t0).toFixed(0), "ms,", blob.size, "bytes");
+  return blob;
+}
+await bench(1000);
+download(await bench(5000), "bench.docx");
+```
+
+</details>
+
+2. **Split a big table** — Given 300 rows tagged with a `state` field, emit one table per state with a heading paragraph before each.
+<details><summary>Solution</summary>
+
+```js
+const { Document, Packer, Paragraph, Table, TableRow, TableCell, HeadingLevel } = docx;
+const data = Array.from({ length: 300 }, (_, i) => ({ state: ["WY", "CO", "UT"][i % 3], order: `ORD-${i}` }));
+const groups = data.reduce((m, r) => ((m[r.state] ||= []).push(r), m), {});
+const children = Object.entries(groups).flatMap(([state, rows]) => [
+  new Paragraph({ text: state, heading: HeadingLevel.HEADING_2 }),
+  new Table({ rows: rows.map((r) => new TableRow({ children: [new TableCell({ children: [new Paragraph(r.order)] })] })) }),
+]);
+download(await Packer.toBlob(new Document({ sections: [{ children }] })), "by-state.docx");
+```
+
+</details>
+
+### Interview Questions
+
+**Q: A handbook build takes 90 seconds and sometimes crashes with heap out of memory. Walk me through your diagnosis.**
+First I time the two phases separately with `console.time` around tree construction and around `Packer.toBuffer`. If packing dominates, I unzip a previous output and check `document.xml` size; a huge file usually means inline formatting on every run, which I move into paragraph and character styles, cutting XML by three to four times. I check `word/media` for duplicated or oversized images and move repeated logos into headers and resize photos. If construction dominates, I profile my own loops, since a nested `find` over rows is the usual quadratic culprit. Finally I switch to `Packer.toStream` piped to disk so the ZIP is not held in memory, and only then consider `--max-old-space-size`.
+
+**Q: Why does moving formatting into styles reduce size so dramatically?**
+Because OOXML has no cascading shorthand for runs: each `w:r` carries a complete `w:rPr` with every property you set, so five properties on 50,000 runs is 250,000 property elements. A style writes those five properties once in `styles.xml` and each paragraph references it with a single `w:pStyle` element. The ZIP compresses repeated text well, so the file on disk shrinks less than the XML, but serialisation time and Word's open time both scale with the uncompressed XML, which is why the user-visible effect is large.
+
+**Q: How would you generate a very large document in the browser without freezing the page?**
+Run the build inside a Web Worker: the worker imports the docx bundle, receives the JSON payload via `postMessage`, builds the `Document`, calls `Packer.toBlob`, and posts the `Blob` back for the main thread to download. The UI stays responsive and the worker can be terminated if the user cancels. For very large outputs I also chunk the data into sections and report progress from the worker after each section is built, which is not faster but tells the user the build is alive.
+
+## Common pitfalls & version differences (v7 → v8 → v9)
+
+docx has been through several breaking releases, and most of the "it worked in the tutorial" complaints on Stack Overflow are version mismatches. This chapter is the checklist to read before upgrading and the map of the traps that catch even experienced users.
+
+### Version timeline
+
+| Version | Year | Headline changes |
+|---|---|---|
+| 7.x | 2022 | `sections` must be passed to the `Document` constructor; `doc.addSection()` removed; `ImageRun` replaces `Media.addImage` |
+| 8.x | 2023 | `patchDocument` (8.1) and `keepOriginalStyles` (8.5); TypeScript types tightened so invalid options fail at compile time; `Packer.toBuffer(doc, prettify)` |
+| 9.x | 2024–2025 | `ImageRun` requires `type` (`"png"`, `"jpg"`, `"gif"`, `"bmp"`, `"svg"`) and `fallback` for SVG; `patchDocument` takes one options object with `outputType`; `Packer.toArrayBuffer`; browser build published as `build/index.umd.js` |
+
+The runner on this site loads a 9.x browser bundle, so the examples in this course are v9 code. Old snippets that call `new Document()` then `doc.addSection(...)` or `Media.addImage(doc, buffer)` are v5/v6 code and will throw.
+
+### Pitfall: `ImageRun` without `type`
+
+```js
+// v9 throws "type is required" or silently writes a broken image
+new ImageRun({ data: bytes, transformation: { width: 120, height: 40 } });
+// correct in v9
+new ImageRun({ type: "png", data: bytes, transformation: { width: 120, height: 40 } });
+```
+
+For SVG you must also pass `fallback: { type: "png", data: pngBytes }` because Word renders SVG only in recent builds and needs a raster twin.
+
+### Pitfall: colours with `#`
+
+`color: "#1E5AA8"` writes `w:color w:val="#1E5AA8"`, which Word treats as invalid and shows as black. docx expects six hex digits with no hash. Fill colours in `shading` follow the same rule.
+
+### Pitfall: units
+
+Almost everything is in **twips** (1/20 pt, 1440 per inch) except font `size`, which is **half-points** (`size: 24` is 12 pt), image `transformation` in **pixels at 96 dpi**, and `w:spacing line` where `240` means single spacing. Mixing these produces 12-inch margins and 1 pt text. Use the helpers: `convertInchesToTwip(1)`, `convertMillimetersToTwip(25)`.
+
+### Pitfall: `text` and `children` together
+
+```js
+new Paragraph({ text: "Hello", children: [new TextRun(" world")] }) // "text" wins, " world" is dropped
+```
+
+Pick one. `text` is a shortcut for a single unformatted run.
+
+### Pitfall: numbering references that do not exist
+
+`numbering: { reference: "steps", level: 0 }` on a paragraph whose `reference` was never declared in `numbering.config` produces a document Word opens with no numbers and no error. docx does not validate the reference at build time in all versions, so misspellings are silent.
+
+### Pitfall: a `Header` object shared between different `Document`s
+
+Sharing `Header`/`Footer` instances across sections of the same document is correct and recommended. Sharing them across two different `Document` instances in one process can produce duplicate relationship ids in older 8.x builds; create the header via a factory per document.
+
+### Pitfall: TOC that never fills
+
+`TableOfContents` writes a field; Word fills it when it updates fields. Without `features: { updateFields: true }` on the `Document`, the reader sees "No table of contents entries found" until they press F9. LibreOffice ignores the flag, so PDF conversion with `soffice --headless` needs a macro or a post-step to refresh the TOC.
+
+### Pitfall: browser bundle import
+
+```html
+<!-- v9 -->
+<script src="https://unpkg.com/docx@9/build/index.umd.js"></script>
+<!-- pre-9 -->
+<script src="https://unpkg.com/docx@8/build/index.js"></script>
+```
+
+In ESM projects, `import { Document } from "docx"` works for both Node and bundlers; the deep path only matters for plain `<script>` tags.
+
+### Pitfall: Node `Buffer` in the browser
+
+`Packer.toBuffer` relies on Node's `Buffer`. In the browser call `toBlob`, `toBase64String` or `toArrayBuffer`; a bundler polyfill can hide the error until production.
+
+### Upgrade procedure that works
+
+1. Read the release notes for every major between your version and the target.
+2. Search the code for `addSection`, `Media.addImage`, `new ImageRun({` without `type`, and `patchDocument(` with two arguments.
+3. Regenerate a known document and diff `word/document.xml` against the last good output.
+4. Open the result in Word and in LibreOffice, not only one of them.
+
+> **Warning:** Locking the version in `package.json` (`"docx": "9.5.1"` rather than `"^9"`) is cheap insurance for production generators. A patch release once changed default table borders and a client's 21 templates all shipped with visible grid lines.
+
+### Try It Yourself
+
+```js
+const { Document, Packer, Paragraph, TextRun, ImageRun, convertInchesToTwip } = docx;
+
+// A tiny 2x2 PNG so the example has real image bytes without a network call
+const pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVQIW2P8z8Dwn4GBgYGJgYEBAB8UAgO1qiXFAAAAAElFTkSuQmCC";
+const png = Uint8Array.from(atob(pngBase64), (c) => c.charCodeAt(0));
+
+const doc = new Document({
+  sections: [{
+    properties: { page: { margin: { top: convertInchesToTwip(1), bottom: convertInchesToTwip(1), left: convertInchesToTwip(1), right: convertInchesToTwip(1) } } },
+    children: [
+      new Paragraph({ children: [new TextRun({ text: "Correct colour (no #), 12pt (size 24):", color: "1E5AA8", size: 24 })] }),
+      new Paragraph({ children: [new TextRun({ text: "Wrong colour with # renders black in Word:", color: "#1E5AA8", size: 24 })] }),
+      new Paragraph({ children: [new ImageRun({ type: "png", data: png, transformation: { width: 48, height: 48 } })] }),
+    ],
+  }],
+});
+download(await docx.Packer.toBlob(doc), "pitfalls.docx");
+console.log("Open in Word: line 2 is black, the image is a 48px square");
+```
+
+### Quiz
+
+1. Which docx version made `type` mandatory on `ImageRun`?
+- [ ] 7.0
+- [ ] 8.0
+- [x] 9.0
+> 9.0 also requires an SVG `fallback` and moved `patchDocument` to an options object.
+
+2. `size: 24` on a `TextRun` renders as…
+- [ ] 24 pt
+- [x] 12 pt
+- [ ] 24 px
+> `size` is in half-points.
+
+3. What happens when `color: "#FF0000"` is written?
+- [ ] Bright red text
+- [x] Word treats the value as invalid and shows black
+- [ ] docx strips the hash automatically
+> The XML value must be six hex digits with no prefix.
+
+### Exercises
+
+1. **Version sniffer** — Write a snippet that tells you whether the loaded docx bundle is v9+ by checking for `Packer.toArrayBuffer`.
+<details><summary>Solution</summary>
+
+```js
+const isV9 = typeof docx.Packer.toArrayBuffer === "function" && typeof docx.patchDocument === "function";
+console.log(isV9 ? "v9 or later" : "pre-9 bundle");
+const { Document, Packer, Paragraph } = docx;
+download(await Packer.toBlob(new Document({ sections: [{ children: [new Paragraph(isV9 ? "v9+" : "older")] }] })), "version.docx");
+```
+
+</details>
+
+2. **Unit helper** — Write `pt(n)` and `inch(n)` helpers and use them to set 11 pt text and a 0.75-inch margin.
+<details><summary>Solution</summary>
+
+```js
+const { Document, Packer, Paragraph, TextRun, convertInchesToTwip } = docx;
+const pt = (n) => n * 2;
+const inch = (n) => convertInchesToTwip(n);
+const doc = new Document({ sections: [{ properties: { page: { margin: { top: inch(0.75), bottom: inch(0.75), left: inch(0.75), right: inch(0.75) } } },
+  children: [new Paragraph({ children: [new TextRun({ text: "11 pt body text", size: pt(11) })] })] }] });
+download(await Packer.toBlob(doc), "units.docx");
+```
+
+</details>
+
+### Interview Questions
+
+**Q: What broke when you upgraded docx across a major version, and how did you handle it?**
+Going from 8 to 9 the two things that broke were every `ImageRun`, because `type` became mandatory, and the `patchDocument` call, which changed from `(data, options)` to a single options object with a required `outputType`. I handled it by grepping the generator for those two call sites, wrapping image creation in one `image(bytes, type, w, h)` helper so future changes touch a single function, and regenerating the regression set of documents to diff `document.xml` against the previous outputs. Pinning the exact version in `package.json` afterwards means upgrades are deliberate rather than a surprise from `npm install`.
+
+**Q: Name three silent failures in docx, ones that do not throw but produce a wrong document.**
+A colour with a leading `#`, which Word renders as black; a numbering `reference` that was never declared in `numbering.config`, which produces a list with no numbers; and a `TableOfContents` without `features.updateFields`, which shows a placeholder message until the user presses F9. A fourth is passing both `text` and `children` to a `Paragraph`, where `children` is discarded. Each of these is caught by a regression diff of the XML or by opening the file, never by the build succeeding.
+
+**Q: How do you keep a generator working in both Node and the browser?**
+By keeping the document-building code free of platform APIs and isolating the two edges: input bytes and output bytes. Images arrive as `Uint8Array`, which both `fs.readFileSync` and `fetch().arrayBuffer()` can produce; output uses `Packer.toBuffer` in Node and `Packer.toBlob` in the browser behind one `save(doc, name)` function. Fonts are referenced by name, never embedded from disk paths, and the bundle is imported with `import { ... } from "docx"` so the bundler picks the right entry. The shared code is tested once in Node with a snapshot of `document.xml`, and a small browser smoke test downloads one document.
+
+## docx-js interview questions
+
+This closing chapter collects the questions that come up when a hiring manager or a Fiverr client with a technical reviewer probes docx experience. Each answer is short enough to say aloud, and where a code snippet proves the point it is included. Practise saying the answers, not reading them.
+
+### How interviewers frame docx questions
+
+| Angle | What they are really testing |
+|---|---|
+| "Why docx instead of python-docx or a template engine?" | whether you understand build-from-scratch versus edit-existing |
+| "How do you handle X in the XML?" | whether you know that docx writes OOXML and can read the output |
+| "What happens at 700 pages?" | performance instincts |
+| "A client reports Y is wrong" | debugging method: unzip, diff, reproduce |
+
+### Core vocabulary you must own
+
+- **Document, Section, Paragraph, TextRun**: the object tree that maps one-to-one onto `w:document`, `w:sectPr`, `w:p` and `w:r`.
+- **Packer**: serialises the tree and zips it; `toBuffer`, `toBlob`, `toBase64String`, `toStream`, `toArrayBuffer`.
+- **Styles versus inline formatting**: `styles.paragraphStyles` and `characterStyles` versus properties on the run.
+- **Numbering config**: `numbering.config[].reference` and `levels[]` mapping onto `abstractNum` and `num`.
+- **Fields**: `PageNumber`, `TableOfContents`, `SimpleField`, and `features.updateFields`.
+- **patchDocument**: filling placeholders in an existing file.
+
+### A debugging story to tell
+
+Interviewers love a concrete failure. One from Ali's work: a 767-page handbook where the TOC showed only the first 200 headings. The cause was chapters generated from JSON where `heading: HeadingLevel.HEADING_1` was set on the paragraph but the chapter template also passed `style: "ChapterTitle"`, a custom style with no `outlineLevel`. `style` won, the paragraphs lost their outline level, and the TOC (which is built from outline levels) skipped them. The fix was adding `paragraph: { outlineLevel: 0 }` to `ChapterTitle`. The diagnosis came from unzipping the file and noticing `w:pStyle w:val="ChapterTitle"` with no `w:outlineLvl` in the style definition.
+
+### Reading the XML you generate
+
+```bash
+unzip -o handbook.docx -d out && xmllint --format out/word/document.xml | head -60
+```
+
+Being able to say "I unzip the output and read `document.xml`" in an interview separates library users from document engineers. A `w:p` with `w:pPr/w:pStyle`, then `w:r` with `w:rPr` and `w:t`, is the whole story of most documents.
+
+### Comparison questions
+
+| Tool | Best at | Weak at |
+|---|---|---|
+| docx (JS) | generating new documents from data, browser generation | editing arbitrary existing files |
+| python-docx | opening and editing existing files, quick scripts | headers/footers per section, fields, numbering definitions |
+| docxtemplater | mail-merge style templates with loops | anything not expressible as a tag in the template |
+| LibreOffice headless | converting to PDF, refreshing fields | generation logic |
+
+> **Interview note:** When asked to compare, always end with "and in production I combine them": docx to generate, LibreOffice to convert to PDF, and a Python check that counts pages and headings in the result.
+
+### Try It Yourself
+
+```js
+// A self-check: build a small document and inspect the generated XML in the console before downloading it.
+const { Document, Packer, Paragraph, TextRun, HeadingLevel } = docx;
+
+const doc = new Document({
+  styles: { paragraphStyles: [{ id: "ChapterTitle", name: "Chapter Title", basedOn: "Normal", run: { size: 36, bold: true }, paragraph: { outlineLevel: 0 } }] },
+  sections: [{ children: [
+    new Paragraph({ text: "1. Purpose", style: "ChapterTitle" }),
+    new Paragraph({ text: "1.1 Scope", heading: HeadingLevel.HEADING_2 }),
+    new Paragraph({ children: [new TextRun({ text: "Body text.", size: 22 })] }),
+  ]}],
+});
+
+const blob = await Packer.toBlob(doc);
+// Peek inside the ZIP with the browser's DecompressionStream is overkill; the base64 length is a quick sanity check.
+const b64 = await Packer.toBase64String(doc);
+console.log("base64 length:", b64.length, "bytes on disk:", blob.size);
+console.log("Check styles.xml for <w:outlineLvl w:val=\"0\"/> under ChapterTitle after unzipping.");
+download(blob, "interview-check.docx");
+```
+
+### Quiz
+
+1. A custom heading style is used but the TOC skips those headings. The most likely missing property is…
+- [x] `paragraph.outlineLevel` on the style
+- [ ] `quickFormat: true`
+- [ ] `next: "Normal"`
+> The TOC field collects paragraphs by outline level, which built-in headings set and custom styles must set explicitly.
+
+2. Which tool is the better fit for filling a legal contract template that has loops over line items?
+- [ ] docx from scratch
+- [x] docxtemplater or `patchDocument` with a generated table
+- [ ] LibreOffice headless
+> Template-filling tools keep the approved design; generating from scratch would re-create it.
+
+3. What is the fastest way to prove what docx actually wrote?
+- [ ] Open in Word and look
+- [x] Unzip the file and read `word/document.xml`
+- [ ] Print the `Document` object
+> The XML is the ground truth; Word's rendering hides details such as missing outline levels.
+
+### Exercises
+
+1. **Explain a bug** — A client says every bullet in a generated SOP is numbered "1." Without running code, list two causes and the fix for each.
+<details><summary>Solution</summary>
+
+Cause 1: each bullet paragraph was created with its own `numbering.config` entry (a new `reference` per paragraph), so each is a separate list starting at 1; fix by declaring one config and reusing the same `reference` and `instance`. Cause 2: the level uses `format: LevelFormat.DECIMAL` with `text: "%1."` and the paragraphs were meant to be bullets; fix by using `format: LevelFormat.BULLET` with `text: "•"`, or use `bullet: { level: 0 }` on the paragraph.
+
+</details>
+
+2. **Thirty-second pitch** — Write, in three sentences, why you would choose docx over generating HTML and converting it to Word.
+<details><summary>Solution</summary>
+
+HTML-to-Word converters produce documents with inline formatting, no real styles, no proper numbering definitions and no section properties, so clients cannot maintain them in Word. docx writes native styles, numbering, headers, footers, fields and sections, which is what a Word user expects when they open the file and press F9 or change a heading style. The output is also deterministic and testable at the XML level, which converters are not.
+
+</details>
+
+### Interview Questions
+
+**Q: Tell me about a document generator you built and what you would change today.**
+I built a Node generator that turns a JSON manifest into a branded suite of 21 Word templates plus a 767-page policy handbook with automated TOC, numbered headings, per-section headers and landscape appendices for rate matrices. The architecture is brand tokens, a style factory, block renderers and a template registry, with LibreOffice headless converting to PDF and a Python check counting pages and headings. What I would change is adding schema validation on the payload from day one and snapshot tests on `document.xml`; both were added after a silent numbering bug reached a client. I would also pin the docx version from the start, since the 9.0 `ImageRun` change cost an afternoon.
+
+**Q: How do headers, footers and page numbers work in docx and where do people go wrong?**
+Headers and footers are section properties: each section object has `headers.default`, `headers.first` and `headers.even`, and page numbers are `PageNumber.CURRENT` and `PageNumber.TOTAL_PAGES` children of a `TextRun` inside the footer. The first-page header only appears if `properties.titlePage` is true, and even headers only if the document has `evenAndOddHeaderAndFooters: true`. People go wrong by adding a new section for a landscape appendix and forgetting to pass the same header and footer objects, so those pages come out blank, or by restarting numbering with `pageNumberStart` and expecting `TOTAL_PAGES` to reset, which it does not because it is the whole document's `NUMPAGES` field; `SECTIONPAGES` is the per-section count.
+
+**Q: How would you convert generated documents to PDF at scale and verify them?**
+LibreOffice headless in a container: `soffice --headless --convert-to pdf --outdir out/ *.docx`, run in parallel with one process per core because a single soffice instance serialises jobs. Before conversion I make sure fields are static, since LibreOffice does not honour `updateFields`; for TOCs I either accept LibreOffice's own TOC refresh via a macro or generate TOC entries as plain paragraphs with hyperlinks for PDF-only deliverables. Verification is a pikepdf or PyMuPDF script that checks page count against the expected range, confirms the first heading text appears on page 1, and flags any PDF whose fonts are not embedded. Failures go into a report instead of stopping the batch.
+
+**Q: What is the difference between a character style and a paragraph style in docx, and when do you use each?**
+A paragraph style (`styles.paragraphStyles`, written to `w:style w:type="paragraph"`) carries both paragraph properties such as spacing and outline level and default run properties, and applies to the whole paragraph through `w:pStyle`. A character style (`styles.characterStyles`, `w:type="character"`) carries only run properties and applies to individual runs via `style` on the `TextRun`, writing `w:rStyle`. I use paragraph styles for structure, headings, body, captions and table cell text, and character styles for inline roles such as a defined term, a keyboard key or a code identifier, so a client can change "all defined terms to blue" from Word's style pane without touching the generator.

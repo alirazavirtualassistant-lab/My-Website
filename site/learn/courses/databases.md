@@ -1496,3 +1496,1823 @@ For audit trails, keeping a denormalised total in sync, enforcing cross-row rule
 
 **Q: How do you add a NOT NULL or CHECK constraint to a large existing table safely?**
 First find the violating rows with the negation of the rule and fix or quarantine them, otherwise the `ALTER` fails. Then add the constraint in a way that avoids a long exclusive lock: in PostgreSQL `ADD CONSTRAINT ... NOT VALID` then `VALIDATE CONSTRAINT`, which validates with a weaker lock; in SQL Server `WITH NOCHECK` followed by `CHECK CONSTRAINT`; in SQLite, which cannot add constraints in place, rebuild the table inside a transaction. I schedule it in a maintenance window anyway, take a backup first, and script the rollback.
+
+# LEVEL: Advanced
+
+## Indexing & B-trees & hash indexes
+
+A table with a million production orders and no index answers `WHERE file_no = 'TX-1001'` by reading every row. An **index** is a separate, ordered data structure that maps column values to row locations, so the engine can jump to the matching rows in a handful of page reads. Choosing indexes well is the single highest-leverage performance skill for anyone who writes SQL.
+
+### Pages, not rows
+
+Databases read and write **pages** (4 KB in SQLite by default, 8 KB in PostgreSQL and SQL Server, 16 KB in InnoDB), never individual rows. A million 200-byte rows occupy about 50,000 pages of 4 KB. A full scan reads all 50,000. The goal of an index is to reduce the number of pages touched to a few.
+
+### B-trees and B+trees
+
+Almost every relational index is a **B+tree**: a balanced tree whose internal nodes hold separator keys and whose leaf nodes hold the actual keys (plus row pointers or the rows themselves), linked left-to-right for range scans. With a fan-out of a few hundred keys per page, a tree of height 3 covers tens of millions of rows, so any lookup costs three or four page reads, and inserts keep the tree balanced by splitting full pages.
+
+```text
+                     [ 'M' ]                      root (height 1)
+              /                 \
+        [ 'F' | 'K' ]        [ 'S' | 'W' ]        internal nodes
+       /     |     \        /     |     \
+   [A..E] [F..J] [K..L]  [M..R] [S..V] [W..Z]     leaves, linked ->
+```
+
+Properties that follow from the structure: equality lookups, range scans (`BETWEEN`, `<`, `>`), prefix matches (`LIKE 'TX-%'`) and `ORDER BY` on the indexed columns are all efficient; leading-wildcard `LIKE '%001'` and functions on the column (`WHERE upper(state) = 'TX'`) are not, because the tree is ordered by the raw stored value.
+
+### Clustered versus secondary indexes
+
+A **clustered** index stores the table rows inside the leaf pages, in key order; a table can have only one. SQLite tables are B-trees keyed by `rowid` (or by the primary key for `WITHOUT ROWID` tables); InnoDB clusters by primary key; SQL Server lets you choose. A **secondary** (non-clustered) index stores the key plus a pointer (`rowid` or the primary key) and requires a second lookup into the table for any column not in the index. That second lookup is why a **covering index**, one that contains every column the query needs, is so much faster: the table is never touched.
+
+```sql
+CREATE INDEX idx_orders_state_status ON orders (state, status);
+-- covers: SELECT status FROM orders WHERE state = 'TX'
+-- does not cover: SELECT premium FROM orders WHERE state = 'TX'  (premium is not in the index)
+CREATE INDEX idx_orders_state_status_prem ON orders (state, status, premium);   -- now it covers
+```
+
+PostgreSQL 11+ and SQL Server support `INCLUDE (premium)` to add columns to the leaf without making them part of the key.
+
+### Composite indexes and the leftmost-prefix rule
+
+An index on `(state, status, opened)` is sorted by state, then status within state, then opened within that. It serves queries filtering on `state`, on `state AND status`, and on all three, but not on `status` alone (the tree is not ordered by status globally). Column order matters: put equality columns first, the range column last, and the most selective equality column earliest when several are equalities.
+
+### Hash indexes
+
+A **hash index** maps `hash(value)` to a bucket of row pointers. Equality lookups are O(1) on average; range queries, ordering and prefix matches are impossible because hashing destroys order. PostgreSQL offers `CREATE INDEX ... USING hash`, MySQL's MEMORY engine uses them, and most engines build temporary hash tables for joins. SQLite has no hash indexes. In practice B-trees are the default because they handle equality nearly as well and everything else better.
+
+| Index type | Equality | Range / ORDER BY | Prefix LIKE | Typical use |
+|---|---|---|---|---|
+| B+tree | yes | yes | yes | default for everything |
+| Hash | yes (fastest) | no | no | exact-match lookups, in-memory tables |
+| Bitmap | yes | limited | no | low-cardinality columns in warehouses |
+| GIN / inverted | contains | no | no | full-text, JSON, arrays (PostgreSQL) |
+| Partial (filtered) | yes | yes | yes | index only rows matching a predicate |
+
+### Partial and expression indexes
+
+```sql
+CREATE INDEX idx_open_orders ON orders (state) WHERE status = 'Open';   -- small index for the hot subset
+CREATE INDEX idx_orders_file_upper ON orders (upper(file_no));            -- makes WHERE upper(file_no) = ... indexable
+```
+
+Supported by SQLite, PostgreSQL and SQL Server (filtered indexes; computed-column indexes for expressions). MySQL 8 supports functional indexes.
+
+### The cost of indexes
+
+Every index is another B-tree that every `INSERT`, `UPDATE` of an indexed column and `DELETE` must maintain, and it occupies disk and cache. A weekly status-report table that is written once a day and read thousands of times can carry several; an audit log written thousands of times per hour should carry one. Unused indexes are pure cost: PostgreSQL's `pg_stat_user_indexes` and SQL Server's `sys.dm_db_index_usage_stats` reveal them.
+
+> **Interview note:** "Why is my query slow even though the column is indexed?" Common answers: a function or type cast on the column, a leading wildcard, low selectivity (the planner rightly prefers a scan when 40% of rows match), stale statistics, a composite index whose leading column is not in the predicate, or an implicit conversion (`WHERE file_no = 1001` against a TEXT column).
+
+### Try It Yourself
+
+```sql
+CREATE TABLE orders (
+  order_id INTEGER PRIMARY KEY, file_no TEXT NOT NULL, state TEXT NOT NULL,
+  status TEXT NOT NULL, premium REAL NOT NULL, opened TEXT NOT NULL
+);
+-- 2,000 synthetic rows via a recursive CTE
+WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 2000)
+INSERT INTO orders (file_no, state, status, premium, opened)
+SELECT printf('%s-%04d', substr('TXWYFLCA', 1 + (i % 4) * 2, 2), i),
+       substr('TXWYFLCA', 1 + (i % 4) * 2, 2),
+       CASE WHEN i % 5 = 0 THEN 'Open' ELSE 'Closed' END,
+       500 + (i * 37) % 2500,
+       date('2026-01-01', '+' || (i % 90) || ' days')
+FROM n;
+
+-- Before any index: full table scan
+EXPLAIN QUERY PLAN SELECT * FROM orders WHERE file_no = 'TX-1000';
+
+CREATE UNIQUE INDEX idx_orders_file ON orders (file_no);
+CREATE INDEX idx_orders_state_status ON orders (state, status);
+CREATE INDEX idx_open_by_state ON orders (state, opened) WHERE status = 'Open';
+
+-- After: index searches
+EXPLAIN QUERY PLAN SELECT * FROM orders WHERE file_no = 'TX-1000';
+EXPLAIN QUERY PLAN SELECT status FROM orders WHERE state = 'TX';                 -- covering index
+EXPLAIN QUERY PLAN SELECT * FROM orders WHERE status = 'Open';                   -- status alone cannot seek (state, status); SQLite scans the smaller partial index instead
+EXPLAIN QUERY PLAN SELECT file_no FROM orders WHERE state = 'WY' AND status = 'Open' ORDER BY opened;  -- partial index
+EXPLAIN QUERY PLAN SELECT * FROM orders WHERE upper(file_no) = 'TX-1000';        -- function defeats the index
+
+SELECT state, status, COUNT(*) AS n, ROUND(AVG(premium), 2) AS avg_premium
+FROM orders GROUP BY state, status ORDER BY state, status;
+```
+
+### Quiz
+
+1. Why can a B+tree index serve `ORDER BY` and range queries while a hash index cannot?
+- [x] B+tree leaves are kept in key order and linked; hashing destroys order
+- [ ] Hash indexes are slower for everything
+- [ ] B+trees store the whole row
+> Ordered leaves allow sequential range scans; a hash bucket has no neighbours.
+
+2. An index exists on `(state, status)`. Which query can use it?
+- [ ] `WHERE status = 'Open'`
+- [x] `WHERE state = 'TX'`
+- [ ] `WHERE upper(state) = 'TX'`
+> The leftmost prefix must appear as a plain equality or range predicate.
+
+3. What is a covering index?
+- [ ] An index on every column of the table
+- [x] An index that contains all the columns a query needs, so the table is not read
+- [ ] The clustered index
+> It eliminates the secondary lookup into the table for each matching key.
+
+4. What is the main cost of adding an index?
+- [ ] Reads become slower
+- [x] Every write must also update the index, and it uses disk and cache
+- [ ] It locks the table permanently
+> Indexes trade write cost and space for read speed.
+
+### Exercises
+
+1. **Design the index** — For `SELECT file_no, premium FROM orders WHERE state = 'TX' AND status = 'Open' AND opened >= '2026-03-01' ORDER BY opened`, write the best single index.
+<details><summary>Solution</summary>
+
+```sql
+-- equality columns first, then the range/order column, then included columns for coverage
+CREATE INDEX idx_orders_lookup ON orders (state, status, opened, file_no, premium);
+```
+
+</details>
+
+2. **Find the scan** — Given an index on `(file_no)`, explain why `WHERE file_no LIKE '%-1000'` still scans, and rewrite so an index can help if the suffix is what users search for.
+<details><summary>Solution</summary>
+
+```sql
+-- A leading wildcard cannot use an ordered index. Store a reversed copy (or an expression index) and search its prefix:
+CREATE INDEX idx_orders_file_rev ON orders (reverse_file_no);   -- column maintained as reverse(file_no) via trigger/generated column
+-- SELECT ... WHERE reverse_file_no LIKE '0001-%';
+-- (SQLite has no reverse(); PostgreSQL: CREATE INDEX ON orders (reverse(file_no)).)
+```
+
+</details>
+
+3. **Unused index audit** — Write the PostgreSQL query that lists indexes never used since statistics were reset.
+<details><summary>Solution</summary>
+
+```sql
+SELECT schemaname, relname, indexrelname, pg_size_pretty(pg_relation_size(indexrelid)) AS size
+FROM pg_stat_user_indexes
+WHERE idx_scan = 0 AND indexrelname NOT LIKE '%_pkey'
+ORDER BY pg_relation_size(indexrelid) DESC;
+```
+
+</details>
+
+### Interview Questions
+
+**Q: Explain how a B+tree index answers a query and why it is the default index structure.**
+The engine starts at the root page, uses the separator keys to choose a child, and repeats until it reaches a leaf; with hundreds of keys per page a tree of height three or four covers millions of rows, so an equality lookup costs three or four page reads instead of a scan of tens of thousands. Because the leaves are sorted and linked, the same structure serves range predicates, prefix `LIKE`, `ORDER BY`, `MIN`/`MAX` and merge joins by walking the leaf chain. Inserts split full pages and deletes merge them, keeping it balanced without rebuilds. Hash indexes win only for pure equality; bitmap and inverted indexes serve special cases. That breadth is why every mainstream engine uses B+trees for primary and secondary indexes by default.
+
+**Q: A query on an indexed column is slow. How do you diagnose it?**
+I read the plan first: `EXPLAIN (ANALYZE, BUFFERS)` in PostgreSQL, the actual execution plan in SQL Server, `EXPLAIN QUERY PLAN` in SQLite. If it shows a scan despite the index I check the usual suspects: a function or cast wrapping the column, an implicit type conversion (text column compared with a number), a leading wildcard, a composite index whose first column is missing from the predicate, or a predicate matching a large share of rows so the scan is genuinely cheaper. If the index is used but the query is still slow, it is often a secondary lookup per row on a wide result, fixed by a covering index, or stale statistics, fixed by `ANALYZE`. I confirm any change by comparing the measured buffers and time before and after, not by intuition.
+
+**Q: How do you decide which indexes a table should have?**
+From the workload, not the schema: I list the queries that run most often or hurt most, and for each identify the equality predicates, the range predicate, the sort and the selected columns, then design composite indexes with equality columns first, the range column next and, if the query is hot enough, included columns for coverage. I consolidate: an index on `(state, status, opened)` also serves queries on `state` alone, so a separate `(state)` index is redundant. I weigh write volume, keep the count small on heavily inserted tables, use partial indexes for hot subsets such as open orders, and drop indexes the usage statistics show are never scanned. Then I measure with the real data volume, because the planner's choices change with cardinality.
+
+## Query processing & optimisation
+
+Between the SQL you write and the pages the engine reads lies the **query processor**: a parser, a rewriter, a cost-based optimiser and an executor. Knowing what it does explains why two equivalent queries can differ a thousandfold in speed, and gives you the vocabulary to read an execution plan instead of guessing.
+
+### The pipeline
+
+1. **Parse**: the SQL text becomes a syntax tree; names are resolved against the catalog and permissions checked.
+2. **Rewrite**: views are expanded, subqueries flattened where legal, `IN (subquery)` turned into a semi-join, constants folded, redundant predicates removed.
+3. **Optimise**: for each logical operation the planner enumerates physical alternatives (scan versus index, nested loop versus hash versus merge join, join order) and picks the plan with the lowest estimated cost using table statistics.
+4. **Execute**: the plan is a tree of operators; in the Volcano/iterator model each calls `next()` on its children, streaming rows upward. Some operators (sort, hash build, aggregate) are blocking and must consume all input before producing output.
+
+### Reading a plan
+
+```sql
+EXPLAIN QUERY PLAN
+SELECT a.name, COUNT(*) AS files
+FROM orders o JOIN agents a ON a.agent_id = o.agent_id
+WHERE o.state = 'TX' AND o.status = 'Open'
+GROUP BY a.name;
+```
+
+SQLite prints lines such as `SEARCH o USING INDEX idx_orders_state_status (state=? AND status=?)`, `SEARCH a USING INTEGER PRIMARY KEY (rowid=?)` and `USE TEMP B-TREE FOR GROUP BY`. `SEARCH` means an index lookup; `SCAN` means every row. PostgreSQL's `EXPLAIN (ANALYZE, BUFFERS)` adds estimated versus actual row counts and pages touched; SQL Server's actual execution plan shows the same graphically. The number to compare is estimated rows against actual rows: a large gap means stale or missing statistics and a plan chosen on wrong assumptions.
+
+### Access paths
+
+| Path | When the planner picks it |
+|---|---|
+| Sequential (full) scan | small table, or predicate matches a large fraction of rows |
+| Index seek + lookup | selective predicate on an indexed column |
+| Index-only scan | covering index |
+| Bitmap heap scan (PostgreSQL) | moderately selective; combine several indexes, then read pages in order |
+
+### Join algorithms
+
+**Nested loop**: for each outer row, look up matching inner rows; ideal when the outer side is small and the inner side has an index on the join key. **Hash join**: build a hash table on the smaller input, probe with the larger; the workhorse for large equality joins with no useful index, needs memory. **Merge join**: both inputs sorted on the join key, walk them together; excellent when indexes already provide the order or for very large inputs. SQLite implements only nested loops (with automatic transient indexes when it helps), which is why join order and indexes matter so much there.
+
+### Statistics and cardinality estimation
+
+The optimiser estimates how many rows each operator will output from histograms and distinct-value counts gathered by `ANALYZE` (PostgreSQL, SQLite), `UPDATE STATISTICS` (SQL Server) or `ANALYZE TABLE` (MySQL). Correlated columns (`state` and `county`) fool the independence assumption, producing underestimates that lead to nested loops over millions of rows. PostgreSQL's `CREATE STATISTICS (dependencies)` and SQL Server's multi-column statistics address exactly that.
+
+### Rewrites that change plans
+
+```sql
+-- Sargable: index can seek
+WHERE opened >= '2026-03-01' AND opened < '2026-04-01'
+-- Not sargable: function on the column forces a scan
+WHERE strftime('%Y-%m', opened) = '2026-03'
+
+-- Correlated subquery evaluated per row...
+SELECT * FROM orders o WHERE premium > (SELECT AVG(premium) FROM orders WHERE state = o.state);
+-- ...versus one aggregate joined once
+SELECT o.* FROM orders o JOIN (SELECT state, AVG(premium) AS avg_p FROM orders GROUP BY state) s
+  ON s.state = o.state WHERE o.premium > s.avg_p;
+
+-- EXISTS stops at the first match; COUNT(*) > 0 counts everything
+WHERE EXISTS (SELECT 1 FROM audit a WHERE a.order_id = o.order_id)
+```
+
+**Sargable** ("search argument able") predicates compare a bare column with a value; keep functions and arithmetic on the constant side. `SELECT *` defeats covering indexes and moves more bytes; `DISTINCT` and `ORDER BY` add sorts; `OR` across different columns often forces a scan unless the engine can combine indexes; `OFFSET 100000` reads and discards 100,000 rows, so keyset pagination (`WHERE (opened, order_id) > (?, ?)`) is the scalable alternative.
+
+### Materialised views and caching
+
+When a weekly production report aggregates ten million rows, precompute it: a **materialised view** (PostgreSQL, Oracle; indexed views in SQL Server; a summary table maintained by triggers or a nightly job in MySQL and SQLite) stores the result and refreshes on a schedule. Power BI's import mode is the same idea one layer up.
+
+### Hints and plan stability
+
+Engines allow hints (`/*+ IndexScan(o idx) */` with pg_hint_plan, `WITH (INDEX(...))` in SQL Server, `INDEXED BY` in SQLite) to force a path. Use them as a last resort with a comment explaining why; a hint that was right at 10,000 rows is wrong at 10 million. Prefer fixing statistics, indexes or the query shape.
+
+> **Tip:** Measure with realistic data volumes. A plan on 500 development rows is nearly meaningless; the optimiser's choices flip as tables grow. Load a production-sized sample before declaring a query fast.
+
+### Try It Yourself
+
+```sql
+CREATE TABLE agents (agent_id INTEGER PRIMARY KEY, name TEXT NOT NULL, team TEXT NOT NULL);
+CREATE TABLE orders (order_id INTEGER PRIMARY KEY, file_no TEXT NOT NULL, state TEXT NOT NULL,
+  status TEXT NOT NULL, premium REAL NOT NULL, opened TEXT NOT NULL, agent_id INTEGER NOT NULL REFERENCES agents(agent_id));
+WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 20)
+INSERT INTO agents SELECT i, 'Agent ' || i, CASE WHEN i <= 10 THEN 'Search' ELSE 'Examination' END FROM n;
+WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 3000)
+INSERT INTO orders (file_no, state, status, premium, opened, agent_id)
+SELECT printf('%s-%04d', substr('TXWYFLCA', 1 + (i % 4) * 2, 2), i), substr('TXWYFLCA', 1 + (i % 4) * 2, 2),
+       CASE WHEN i % 6 = 0 THEN 'Open' ELSE 'Closed' END, 400 + (i * 53) % 3000,
+       date('2026-01-01', '+' || (i % 120) || ' days'), 1 + (i % 20) FROM n;
+CREATE INDEX idx_orders_state_status ON orders (state, status);
+CREATE INDEX idx_orders_opened ON orders (opened);
+ANALYZE;
+
+-- 1. Join plan: index seek on orders, primary-key lookup on agents, temp b-tree for the GROUP BY
+EXPLAIN QUERY PLAN
+SELECT a.name, COUNT(*) AS files FROM orders o JOIN agents a ON a.agent_id = o.agent_id
+WHERE o.state = 'TX' AND o.status = 'Open' GROUP BY a.name;
+
+-- 2. Sargable versus non-sargable date filter
+EXPLAIN QUERY PLAN SELECT COUNT(*) FROM orders WHERE opened >= '2026-03-01' AND opened < '2026-04-01';
+EXPLAIN QUERY PLAN SELECT COUNT(*) FROM orders WHERE strftime('%Y-%m', opened) = '2026-03';
+
+-- 3. Correlated subquery versus a pre-aggregated join
+EXPLAIN QUERY PLAN SELECT file_no FROM orders o WHERE premium > (SELECT AVG(premium) FROM orders x WHERE x.state = o.state);
+EXPLAIN QUERY PLAN SELECT o.file_no FROM orders o JOIN (SELECT state, AVG(premium) AS avg_p FROM orders GROUP BY state) s ON s.state = o.state WHERE o.premium > s.avg_p;
+
+-- 4. Keyset pagination: seek instead of OFFSET
+EXPLAIN QUERY PLAN SELECT file_no, opened FROM orders WHERE (opened, order_id) > ('2026-02-15', 0) ORDER BY opened, order_id LIMIT 50;
+
+-- The report itself
+SELECT a.team, o.state, COUNT(*) AS files, ROUND(SUM(o.premium), 2) AS premium
+FROM orders o JOIN agents a ON a.agent_id = o.agent_id
+WHERE o.opened >= '2026-03-01' AND o.opened < '2026-04-01'
+GROUP BY a.team, o.state ORDER BY a.team, o.state;
+```
+
+### Quiz
+
+1. What does a cost-based optimiser use to choose between plans?
+- [ ] The order of tables in the FROM clause
+- [x] Statistics about table sizes and value distributions
+- [ ] The length of the SQL text
+> Estimates of rows and pages per operator drive the cost model.
+
+2. Which predicate is sargable?
+- [ ] `WHERE strftime('%Y', opened) = '2026'`
+- [x] `WHERE opened >= '2026-01-01' AND opened < '2027-01-01'`
+- [ ] `WHERE premium * 1.1 > 1000`
+> A bare column compared with constants lets the engine seek an index.
+
+3. Which join algorithm needs no index and no sorted input but does need memory?
+- [ ] Nested loop
+- [x] Hash join
+- [ ] Merge join
+> It builds a hash table on the smaller input and probes it with the larger.
+
+4. Why is `OFFSET 100000` slow?
+- [x] The engine still reads and discards the first 100,000 rows
+- [ ] OFFSET disables indexes
+- [ ] It sorts twice
+> Keyset pagination seeks directly to the last seen key instead.
+
+### Exercises
+
+1. **Make it sargable** — Rewrite `WHERE substr(file_no, 1, 2) = 'TX'` so an index on `file_no` can be used.
+<details><summary>Solution</summary>
+
+```sql
+WHERE file_no LIKE 'TX-%'      -- prefix match uses the index (with default case-sensitive LIKE or COLLATE handling)
+-- or: WHERE file_no >= 'TX-' AND file_no < 'TX.'
+```
+
+</details>
+
+2. **Estimate versus actual** — In PostgreSQL, write the command that shows estimated and actual rows with buffer counts for a query.
+<details><summary>Solution</summary>
+
+```sql
+EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
+SELECT state, COUNT(*) FROM orders WHERE status = 'Open' GROUP BY state;
+```
+
+</details>
+
+3. **Keyset page** — Write the query that returns the next 25 orders after `(opened = '2026-02-10', order_id = 431)` sorted by `opened, order_id`.
+<details><summary>Solution</summary>
+
+```sql
+SELECT order_id, file_no, opened FROM orders
+WHERE (opened, order_id) > ('2026-02-10', 431)
+ORDER BY opened, order_id LIMIT 25;
+```
+
+</details>
+
+### Interview Questions
+
+**Q: Walk me through what happens when the database runs a SELECT with a join.**
+The parser turns the text into a tree and resolves names against the catalog; the rewriter expands views, flattens subqueries and folds constants; the optimiser enumerates access paths for each table (scan, index seek, index-only), join algorithms (nested loop, hash, merge) and join orders, estimates the cost of each using statistics, and picks the cheapest; the executor runs the plan tree, typically pulling rows through iterators, with blocking operators such as sorts and hash builds materialising their input. The plan cache may skip the first three steps for repeated parameterised statements. I illustrate with a concrete plan, for example an index seek on `orders (state, status)` feeding a nested loop against `agents` by primary key, then a hash aggregate for the `GROUP BY`.
+
+**Q: What is a sargable predicate and why does it matter?**
+A predicate the engine can turn into an index seek: a bare column compared with a constant or parameter using `=`, `<`, `>`, `BETWEEN`, `IN` or a prefix `LIKE`. Wrapping the column in a function, casting it, doing arithmetic on it, or using a leading wildcard hides the value the index is ordered by, so the engine must evaluate the expression for every row. The fix is to move the computation to the other side (`opened >= '2026-03-01' AND opened < '2026-04-01'` instead of `strftime(...) = '2026-03'`), to store a computed column and index that, or to use an expression index. In reporting SQL this is the most common cause of a query taking minutes instead of milliseconds.
+
+**Q: How would you optimise a weekly production report that takes twenty minutes?**
+Get the actual plan with timings and find where the time goes; it is rarely spread evenly. Typical fixes in order of cheapness: add or adjust an index so the date range and status filters seek, remove non-sargable expressions, replace correlated subqueries with joins to pre-aggregated subqueries, select only needed columns so a covering index applies, and refresh statistics. If the report aggregates the whole history every week, precompute: a materialised view or a summary table maintained incrementally, refreshed nightly, so the report reads thousands of rows instead of millions. I verify each change against production-sized data and keep the before-and-after numbers, because "twenty minutes to nine seconds" is a story interviewers and managers both remember.
+
+## Transactions & ACID
+
+Closing a title order touches several rows: the order's status, a premium ledger entry, an audit row, and the agent's daily count. If the process dies after the second write, the database must not be left half-updated. A **transaction** is the unit of work the DBMS promises to apply completely or not at all, and **ACID** names the four guarantees that promise rests on.
+
+### The four properties
+
+| Property | Guarantee | Mechanism |
+|---|---|---|
+| **Atomicity** | all of the transaction's writes happen, or none | undo logging, rollback journal or WAL |
+| **Consistency** | every committed state satisfies all constraints and triggers | constraint checking at statement or commit time |
+| **Isolation** | concurrent transactions do not see each other's partial work | locks or multi-version concurrency (next chapter) |
+| **Durability** | once committed, the data survives crashes and power loss | write-ahead log forced to disk before commit acknowledgement |
+
+Consistency here is the database's definition (constraints hold), not the application's; the application must still write a correct transaction.
+
+### Transaction syntax
+
+```sql
+BEGIN;                                                    -- START TRANSACTION in MySQL, BEGIN TRAN in SQL Server
+UPDATE orders SET status = 'Closed', closed = '2026-03-04' WHERE file_no = 'TX-1001';
+INSERT INTO ledger (file_no, amount, kind) VALUES ('TX-1001', 2150.00, 'premium');
+INSERT INTO audit (file_no, event) VALUES ('TX-1001', 'closed');
+COMMIT;                                                   -- or ROLLBACK
+```
+
+Without an explicit `BEGIN`, every statement is its own transaction (**autocommit**). A loop inserting 50,000 report rows in autocommit mode pays a disk sync per row and can take minutes; wrapping the loop in one transaction turns it into seconds, which is the first thing to check when a data load is slow.
+
+### Savepoints
+
+```sql
+BEGIN;
+INSERT INTO orders (...) VALUES (...);
+SAVEPOINT before_ledger;
+INSERT INTO ledger (...) VALUES (...);        -- suppose this fails a CHECK
+ROLLBACK TO before_ledger;                    -- undo only the ledger insert; the order insert survives
+INSERT INTO ledger (...) VALUES (...);        -- corrected
+RELEASE before_ledger;
+COMMIT;
+```
+
+Savepoints give partial rollback inside a transaction. They are how ORMs implement nested "transactions" and how a batch importer skips one bad row without abandoning the whole file.
+
+### What happens at COMMIT
+
+1. The engine checks deferred constraints.
+2. Log records describing the changes (and enough to undo them) are appended to the write-ahead log and the log is **fsync**ed to disk. This is the durability point: even if the data pages are still only in memory, the log can replay them after a crash.
+3. The client is told "committed".
+4. Data pages are written to their final location later, by a background checkpoint.
+
+Durability therefore costs one synchronous disk write per commit, which is why thousands of tiny transactions per second need fast storage or group commit, and why some systems offer relaxed modes (`synchronous_commit = off` in PostgreSQL, `PRAGMA synchronous = NORMAL` in SQLite WAL mode, `innodb_flush_log_at_trx_commit = 2` in MySQL) that trade a few milliseconds of possible loss for throughput.
+
+### Errors inside a transaction
+
+Engines differ, and interviewers know it. In PostgreSQL any error aborts the whole transaction: further statements fail with "current transaction is aborted" until you `ROLLBACK` (or `ROLLBACK TO` a savepoint). In SQLite and MySQL a failed statement is rolled back by itself and the transaction continues. In SQL Server behaviour depends on `XACT_ABORT`: `ON` aborts the transaction on most errors, which is the safer setting. Application code should therefore treat any error as "roll back and retry or report", never "ignore and commit".
+
+### Transaction scope in application code
+
+Keep transactions **short** and **free of user interaction**: begin as late as possible, do the writes, commit immediately. Never hold a transaction open while waiting for LibreOffice, an API call or a human, because every lock it holds blocks other users. Do the slow work first, then open the transaction to record the result. Retry on transient failures (deadlock victim, serialisation failure) with a fresh transaction, since the retry must re-read the data.
+
+```python
+# Python sqlite3: the connection is a context manager that commits or rolls back
+with sqlite3.connect("titles.db") as con:
+    con.execute("UPDATE orders SET status = 'Closed' WHERE file_no = ?", (file_no,))
+    con.execute("INSERT INTO audit (file_no, event) VALUES (?, 'closed')", (file_no,))
+# exception inside the block -> rollback; normal exit -> commit
+```
+
+### Idempotency and exactly-once
+
+A commit acknowledgement can be lost in transit: the database committed, the client saw a timeout and retries, and the order is closed twice or a ledger entry duplicated. Design writes to be idempotent (a `UNIQUE (file_no, kind)` on the ledger, an `idempotency_key` column on requests) so a retry is harmless.
+
+> **Warning:** A transaction guarantees atomicity within one database. A workflow that writes to the database and then sends an email or writes a file cannot be atomic; use an **outbox** table written in the same transaction and a separate worker that sends what it finds there.
+
+### Try It Yourself
+
+```sql
+CREATE TABLE orders (file_no TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'Open', premium REAL NOT NULL CHECK (premium >= 0));
+CREATE TABLE ledger (id INTEGER PRIMARY KEY, file_no TEXT NOT NULL REFERENCES orders(file_no), amount REAL NOT NULL CHECK (amount > 0), kind TEXT NOT NULL, UNIQUE (file_no, kind));
+CREATE TABLE audit (id INTEGER PRIMARY KEY, file_no TEXT NOT NULL, event TEXT NOT NULL);
+INSERT INTO orders VALUES ('TX-1001', 'Open', 2150), ('TX-1002', 'Open', 1180);
+
+-- Transaction 1: close TX-1001 atomically
+BEGIN;
+UPDATE orders SET status = 'Closed' WHERE file_no = 'TX-1001';
+INSERT INTO ledger (file_no, amount, kind) VALUES ('TX-1001', 2150, 'premium');
+INSERT INTO audit (file_no, event) VALUES ('TX-1001', 'closed');
+COMMIT;
+
+-- Transaction 2: a savepoint lets us abandon part of the work
+BEGIN;
+UPDATE orders SET status = 'Closed' WHERE file_no = 'TX-1002';
+SAVEPOINT ledger_step;
+INSERT INTO ledger (file_no, amount, kind) VALUES ('TX-1002', 1180, 'premium');
+INSERT INTO audit (file_no, event) VALUES ('TX-1002', 'ledger posted (will be undone)');
+ROLLBACK TO ledger_step;                 -- undo the ledger + audit rows, keep the status update
+INSERT INTO audit (file_no, event) VALUES ('TX-1002', 'closed without ledger');
+RELEASE ledger_step;
+COMMIT;
+
+-- Transaction 3: rolled back entirely
+BEGIN;
+UPDATE orders SET premium = 0 WHERE file_no = 'TX-1001';
+INSERT INTO audit (file_no, event) VALUES ('TX-1001', 'premium zeroed (rolled back)');
+ROLLBACK;
+
+SELECT * FROM orders;
+SELECT * FROM ledger;
+SELECT * FROM audit;
+-- Idempotent retry: the UNIQUE (file_no, kind) makes a duplicate posting fail instead of double-charging.
+-- Uncomment to see the constraint error:
+-- INSERT INTO ledger (file_no, amount, kind) VALUES ('TX-1001', 2150, 'premium');
+```
+
+### Quiz
+
+1. Which ACID property is provided by forcing the write-ahead log to disk before acknowledging COMMIT?
+- [ ] Atomicity
+- [ ] Isolation
+- [x] Durability
+> Once the log is on disk the change can be replayed after a crash.
+
+2. What does `ROLLBACK TO savepoint_name` do?
+- [x] Undoes work since the savepoint but keeps the transaction open
+- [ ] Ends the transaction
+- [ ] Commits work up to the savepoint
+> Only `COMMIT` or a full `ROLLBACK` ends the transaction.
+
+3. Why is inserting 50,000 rows in autocommit mode slow?
+- [ ] Autocommit disables indexes
+- [x] Each statement is its own transaction with its own disk sync
+- [ ] The rows are inserted twice
+> One enclosing transaction reduces 50,000 syncs to one.
+
+4. In PostgreSQL, what happens after a statement errors inside a transaction?
+- [ ] The statement is skipped and the transaction continues
+- [x] The transaction is aborted until you roll back
+- [ ] The transaction commits automatically
+> SQLite and MySQL roll back only the failed statement; PostgreSQL aborts the whole transaction.
+
+### Exercises
+
+1. **Batch import** — Sketch pseudocode that imports rows from a CSV in one transaction but uses a savepoint per row so a bad row is skipped and logged.
+<details><summary>Solution</summary>
+
+```python
+con.execute("BEGIN")
+for row in rows:
+    con.execute("SAVEPOINT r")
+    try:
+        con.execute("INSERT INTO orders VALUES (?, ?, ?)", row)
+        con.execute("RELEASE r")
+    except sqlite3.IntegrityError as e:
+        con.execute("ROLLBACK TO r"); con.execute("RELEASE r"); log(row, e)
+con.execute("COMMIT")
+```
+
+</details>
+
+2. **Outbox** — Write DDL for an `outbox` table that records an email to send in the same transaction as the order close.
+<details><summary>Solution</summary>
+
+```sql
+CREATE TABLE outbox (
+  id INTEGER PRIMARY KEY, created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  kind TEXT NOT NULL, payload TEXT NOT NULL, sent_at TEXT
+);
+-- inside the close transaction:
+-- INSERT INTO outbox (kind, payload) VALUES ('order_closed_email', json_object('file_no', 'TX-1001'));
+```
+
+</details>
+
+3. **Durability trade-off** — Name the setting in PostgreSQL that makes commits faster at the risk of losing the last few milliseconds of transactions, and say when it is acceptable.
+<details><summary>Solution</summary>
+
+```text
+synchronous_commit = off  (per session or globally)
+Acceptable for bulk loads and non-critical logging where losing the last ~200 ms of commits after a crash is tolerable;
+never for financial ledgers or anything the user was told was saved.
+```
+
+</details>
+
+### Interview Questions
+
+**Q: Explain ACID with an example from your work.**
+Closing a title order updates the order status, posts the premium to a ledger, writes an audit row and increments a daily count. Atomicity means that if the process dies after the ledger insert, the status update is rolled back too, so we never have a closed order without a ledger entry or the reverse. Consistency means the `CHECK (premium >= 0)`, the foreign key from ledger to orders and the unique posting constraint all hold at commit. Isolation means the weekly report running at the same moment either sees the order fully closed or still open, never the halfway state. Durability means that once the client sees "closed", a power cut a millisecond later cannot lose it, because the write-ahead log was flushed before the acknowledgement. I then note the trade-off that durability costs an fsync per commit and how batching mitigates it.
+
+**Q: Where should transaction boundaries be in an application?**
+Around the smallest set of writes that must succeed or fail together, opened as late as possible and committed as early as possible, and never spanning user interaction, external API calls or document generation. Slow work happens first with no transaction open; the transaction then records the result. For batch jobs I use one transaction per reasonable chunk (say 1,000 rows) with savepoints per item to skip bad rows, which balances throughput against lock duration and undo size. Retries happen at the transaction level with a fresh read, and writes are designed to be idempotent so a lost commit acknowledgement cannot duplicate effects.
+
+**Q: What is the difference between a rollback journal and a write-ahead log?**
+A rollback journal (SQLite's default, "undo logging") copies the original page to a journal before modifying the database file, so a crash is recovered by copying pages back; readers and the writer contend for the same file, so writes block reads. A write-ahead log ("redo logging", SQLite WAL mode, PostgreSQL, SQL Server, InnoDB) appends the new content to a separate log first, leaves the main file untouched until a checkpoint, and recovers by replaying the log; readers keep reading the main file while a writer appends, giving much better concurrency and sequential write patterns. WAL costs a checkpoint process and slightly more disk, and in SQLite it needs a shared-memory file, so it is not suitable on some network file systems.
+
+## Concurrency control (locks, MVCC, isolation levels)
+
+Twenty agents update production orders while the weekly report reads them and a nightly job posts ledger entries. **Concurrency control** decides what each transaction is allowed to see and change while others are in flight. The theory is about schedules and serialisability; the practice is about isolation levels, locks versus versions, and the anomalies you get when you choose speed over strictness.
+
+### Serialisability
+
+A schedule of interleaved operations is **serialisable** if its result equals some serial execution of the same transactions. The engine cannot run everything serially (throughput would collapse), so it interleaves while guaranteeing, at the strictest level, that the outcome is indistinguishable from serial. **Conflict serialisability** is the checkable version: two operations conflict if they touch the same item and at least one writes; a schedule is conflict-serialisable if the precedence graph of conflicts has no cycle.
+
+### The anomalies
+
+| Anomaly | What happens | Example |
+|---|---|---|
+| Dirty read | T2 reads a value T1 later rolls back | report counts an order as closed that never closed |
+| Non-repeatable read | T1 reads a row twice and sees different values | premium changes between the total and the detail |
+| Phantom read | T1 re-runs a query and new rows appear | second count of open TX orders is higher |
+| Lost update | T1 and T2 both read, both write; one write vanishes | two agents increment the same daily counter |
+| Write skew | T1 and T2 each read a condition and write disjoint rows, jointly breaking an invariant | two examiners each take the last available slot |
+
+### Isolation levels (SQL standard)
+
+| Level | Dirty read | Non-repeatable | Phantom | Typical implementation |
+|---|---|---|---|---|
+| Read uncommitted | possible | possible | possible | no read locks |
+| Read committed | no | possible | possible | short read locks, or read the latest committed version |
+| Repeatable read | no | no | possible (standard) | long read locks, or a snapshot |
+| Serializable | no | no | no | two-phase locking with range locks, or SSI |
+
+Defaults: PostgreSQL and Oracle use read committed; MySQL InnoDB uses repeatable read (and its snapshot also prevents most phantoms); SQL Server uses read committed with locking unless `READ_COMMITTED_SNAPSHOT` is on; SQLite is effectively serializable because there is one writer at a time. Set per transaction: `SET TRANSACTION ISOLATION LEVEL SERIALIZABLE` (PostgreSQL, SQL Server), `BEGIN ISOLATION LEVEL REPEATABLE READ` (PostgreSQL).
+
+### Lock-based control: two-phase locking
+
+A transaction acquires a **shared** (S) lock to read and an **exclusive** (X) lock to write; S locks are compatible with each other, X locks with nothing. In **strict two-phase locking** a transaction acquires locks as it goes and releases all of them only at commit, which guarantees serialisability but means readers block writers and writers block readers. Lock granularity ranges from row to page to table, with **intent locks** at the coarser levels so the engine can check compatibility cheaply. Locks are why a long report transaction can stall every update in a locking engine.
+
+### Deadlocks
+
+T1 holds order A and wants order B; T2 holds B and wants A. Engines detect the cycle (wait-for graph) or time out, and kill one transaction as the **victim**, which the application must retry. Prevention: touch rows in a consistent order (sort the keys you are about to update), keep transactions short, and avoid escalating from a read to a write on the same row (`SELECT ... FOR UPDATE` takes the X lock up front).
+
+### Multi-version concurrency control (MVCC)
+
+Instead of blocking, keep old versions. Each row carries the transaction id that created it and the one that deleted or replaced it; a transaction reads the version that was committed as of its **snapshot** and never blocks on writers, while writers never block readers. PostgreSQL stores versions in the table (hence `VACUUM` to reclaim dead tuples), InnoDB and Oracle keep them in undo segments, SQL Server in `tempdb` when snapshot isolation is on, SQLite WAL mode lets readers see the pre-write snapshot while one writer proceeds. Writers still conflict with writers: the second one to update the same row waits, then either continues (read committed) or aborts with a serialisation error (repeatable read/serializable).
+
+**Snapshot isolation** prevents dirty, non-repeatable and phantom reads but allows write skew, so it is not full serialisability; PostgreSQL's `SERIALIZABLE` adds predicate tracking (Serializable Snapshot Isolation) to detect it and abort one transaction.
+
+### Practical patterns
+
+```sql
+-- Pessimistic: lock the row while deciding
+BEGIN;
+SELECT status FROM orders WHERE file_no = 'TX-1001' FOR UPDATE;      -- PostgreSQL/MySQL/Oracle; SQL Server: WITH (UPDLOCK)
+UPDATE orders SET status = 'Closed' WHERE file_no = 'TX-1001';
+COMMIT;
+
+-- Optimistic: no lock, detect a concurrent change with a version column
+UPDATE orders SET status = 'Closed', version = version + 1
+WHERE file_no = 'TX-1001' AND version = 7;                            -- 0 rows affected -> someone else changed it, reload and retry
+
+-- Atomic increment: let the database do read-modify-write in one statement
+UPDATE daily_counts SET closed = closed + 1 WHERE agent_id = 4 AND day = '2026-03-04';
+```
+
+Optimistic concurrency suits web forms where a user edits an order for minutes; pessimistic suits short back-end jobs; single-statement updates avoid the lost-update problem entirely.
+
+> **Interview note:** Be ready to explain write skew with a concrete example and to say which isolation level prevents it (only true serializable, such as PostgreSQL's SSI or SQL Server's `SERIALIZABLE` with range locks).
+
+### Try It Yourself
+
+```sql
+-- SQLite in the browser has one connection, so we simulate two transactions with a version column and a lock table.
+CREATE TABLE orders (file_no TEXT PRIMARY KEY, status TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE daily_counts (agent_id INTEGER, day TEXT, closed INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (agent_id, day));
+CREATE TABLE log (step INTEGER PRIMARY KEY, txn TEXT, action TEXT, result TEXT);
+INSERT INTO orders VALUES ('TX-1001', 'Open', 1);
+INSERT INTO daily_counts VALUES (4, '2026-03-04', 10);
+
+-- Lost update with read-modify-write: both "transactions" read closed = 10, both write 11
+INSERT INTO log (txn, action, result) VALUES ('T1', 'read daily_counts', (SELECT closed FROM daily_counts WHERE agent_id = 4));
+INSERT INTO log (txn, action, result) VALUES ('T2', 'read daily_counts', (SELECT closed FROM daily_counts WHERE agent_id = 4));
+UPDATE daily_counts SET closed = 10 + 1 WHERE agent_id = 4;     -- T1 writes what it computed
+UPDATE daily_counts SET closed = 10 + 1 WHERE agent_id = 4;     -- T2 writes what it computed: one close is lost
+INSERT INTO log (txn, action, result) VALUES ('both', 'after two closes (lost update)', (SELECT closed FROM daily_counts WHERE agent_id = 4));
+
+-- Fix 1: atomic increment
+UPDATE daily_counts SET closed = closed + 1 WHERE agent_id = 4;
+UPDATE daily_counts SET closed = closed + 1 WHERE agent_id = 4;
+INSERT INTO log (txn, action, result) VALUES ('both', 'after two atomic increments', (SELECT closed FROM daily_counts WHERE agent_id = 4));
+
+-- Fix 2: optimistic concurrency with a version column
+UPDATE orders SET status = 'Closed', version = version + 1 WHERE file_no = 'TX-1001' AND version = 1;   -- T1 wins
+INSERT INTO log (txn, action, result) VALUES ('T1', 'optimistic update version=1', changes());
+UPDATE orders SET status = 'Cancelled', version = version + 1 WHERE file_no = 'TX-1001' AND version = 1; -- T2 read stale version
+INSERT INTO log (txn, action, result) VALUES ('T2', 'optimistic update version=1', changes() || ' rows (stale read, must retry)');
+
+SELECT * FROM log ORDER BY step;
+SELECT * FROM orders;
+```
+
+### Quiz
+
+1. Which anomaly does READ COMMITTED prevent?
+- [x] Dirty reads
+- [ ] Phantom reads
+- [ ] Write skew
+> It only guarantees you never see uncommitted data.
+
+2. Under MVCC, what happens when a reader and a writer touch the same row?
+- [ ] The reader waits for the writer to commit
+- [x] The reader sees the last committed version and does not block
+- [ ] The writer is aborted
+> Readers never block writers and vice versa; writers still conflict with writers.
+
+3. What is write skew?
+- [ ] Two transactions updating the same row
+- [x] Two transactions reading overlapping data and writing disjoint rows that together break an invariant
+- [ ] A disk write failing
+> Snapshot isolation allows it; only true serializable isolation prevents it.
+
+4. Which technique detects a concurrent edit without holding a lock?
+- [ ] `SELECT ... FOR UPDATE`
+- [x] A version column checked in the `WHERE` clause of the `UPDATE`
+- [ ] Table locks
+> Zero rows affected means the row changed since it was read.
+
+### Exercises
+
+1. **Deadlock avoidance** — Two jobs each update orders `A` and `B`. Show how to order the updates so they cannot deadlock.
+<details><summary>Solution</summary>
+
+```sql
+-- Both jobs update in the same key order (sorted file_no), so neither can hold B while waiting for A.
+BEGIN;
+UPDATE orders SET status = 'Closed' WHERE file_no = 'A';
+UPDATE orders SET status = 'Closed' WHERE file_no = 'B';
+COMMIT;
+```
+
+</details>
+
+2. **Choose an isolation level** — A month-end report must total premiums and then list them by state, and the two numbers must agree. Which level and why?
+<details><summary>Solution</summary>
+
+```text
+REPEATABLE READ (or a snapshot / SERIALIZABLE) so both queries read the same snapshot;
+under READ COMMITTED an order closed between the two queries makes the detail disagree with the total.
+```
+
+</details>
+
+3. **Write skew example** — Describe a scenario in the title-production system where two transactions under snapshot isolation break a rule, and the fix.
+<details><summary>Solution</summary>
+
+```text
+Rule: at least one examiner must be "on duty" per state. Examiners E1 and E2 (both TX) each check
+"count on duty for TX >= 2" (true), then each sets themselves off duty. Both commit; TX has nobody.
+Fix: SERIALIZABLE isolation (PostgreSQL SSI aborts one), or SELECT ... FOR UPDATE on the state row to serialise the check.
+```
+
+</details>
+
+### Interview Questions
+
+**Q: Compare lock-based concurrency control with MVCC.**
+Two-phase locking makes transactions take shared locks to read and exclusive locks to write and hold them until commit, which is simple and gives serialisability but makes readers and writers block each other, so a long report stalls updates and vice versa. MVCC keeps multiple versions of each row and gives each transaction a consistent snapshot, so readers never block writers; the costs are storage for old versions, a cleanup process (PostgreSQL's VACUUM, InnoDB purge), and the subtlety that snapshot isolation is not fully serialisable because of write skew. Most modern engines are MVCC for reads with locks for write-write conflicts. In a reporting-heavy system like production tracking, MVCC is the practical choice, and I would still keep write transactions short.
+
+**Q: Which isolation level would you use for a system that updates order status and produces reports, and why?**
+Read committed (the PostgreSQL default) for the routine status updates, because they are single-row and idempotent by design, plus optimistic versioning on the edit form to catch two agents editing the same order. Repeatable read or a snapshot for the reports so totals and details agree. Serializable only for the few operations with cross-row invariants, such as assigning the last available examiner slot, accepting that the application must retry serialisation failures. Choosing one level globally is the usual mistake: serializable everywhere costs throughput and retries; read committed everywhere produces reports that do not add up.
+
+**Q: How do you handle a deadlock in production?**
+First accept that in a locking engine deadlocks are a normal outcome rather than a bug, so every write transaction has retry logic for the deadlock-victim error (SQL Server 1205, PostgreSQL 40P01, MySQL 1213) with a small random backoff. Then reduce their frequency: order updates consistently by key, keep transactions short and free of external calls, take the strongest lock needed up front with `SELECT ... FOR UPDATE` rather than upgrading from shared to exclusive, and index foreign keys so the engine locks rows, not scans. I read the deadlock graph the engine logs (SQL Server's XML graph, PostgreSQL's `DETAIL` line) to find the two statements involved, which usually points at one job touching rows in the reverse order of another.
+
+## Recovery & logging
+
+The power fails while a batch of 300 status updates is half-written. When the server restarts, the database must come back in a state that contains every committed transaction and none of the uncommitted ones. **Recovery** is the machinery that makes this possible, and it rests almost entirely on the **log**.
+
+### Failure classes
+
+- **Transaction failure**: a constraint violation or a deadlock abort; undo just that transaction.
+- **System crash**: process or OS dies, memory is lost, disk survives; replay the log.
+- **Media failure**: the disk is destroyed; restore from backup and roll forward with archived logs.
+
+### The buffer pool and the two rules
+
+Data pages live in a memory cache (the buffer pool) and are written to disk lazily. Two policies define what recovery must handle. **Steal**: a dirty page belonging to an uncommitted transaction may be written to disk (frees memory, requires undo). **No-force**: a committed transaction's pages need not be on disk at commit (fast commits, requires redo). Practical engines are steal/no-force, so they need both undo and redo information, which is exactly what the write-ahead log provides.
+
+### Write-ahead logging (WAL)
+
+The **WAL rule**: before a data page is written to disk, every log record describing changes to that page must already be on disk; and before a commit is acknowledged, all of the transaction's log records (including the commit record) must be on disk. Log records are appended sequentially, so commits cost one sequential write and one fsync instead of scattered random page writes.
+
+```text
+LSN  Txn  Record
+100  T1   BEGIN
+101  T1   UPDATE orders page 7, row 3: status Open -> Closed        (before image / after image)
+102  T2   BEGIN
+103  T2   INSERT ledger page 12, row 9: (TX-1002, 1180)
+104  T1   COMMIT
+105  T2   UPDATE daily_counts page 2, row 4: 10 -> 11
+--- crash ---
+```
+
+Each record has a **log sequence number** (LSN); each data page stores the LSN of the last record applied to it (`pageLSN`), so recovery can tell whether a change is already on the page.
+
+### ARIES-style recovery
+
+The standard algorithm (ARIES, used in essentially this form by DB2, SQL Server and, in spirit, by PostgreSQL and InnoDB) has three passes:
+
+1. **Analysis**: scan the log from the last checkpoint to find which transactions were active at the crash and which pages were dirty.
+2. **Redo**: replay every logged change whose LSN is greater than the page's `pageLSN`, for committed and uncommitted transactions alike, reconstructing the exact pre-crash state ("repeating history").
+3. **Undo**: walk backwards through the records of transactions that never committed (T2 above) and reverse them, writing **compensation log records** so that a crash during recovery is itself recoverable.
+
+After the passes, T1's close is present and T2's ledger insert and counter increment are gone.
+
+### Checkpoints
+
+Without checkpoints the log grows forever and recovery replays everything since installation. A **checkpoint** writes dirty pages to disk (or at least records which ones are dirty and which transactions are active) and notes its position in the log, so recovery can start there. Fuzzy checkpoints run concurrently with normal work. In SQLite WAL mode `PRAGMA wal_checkpoint(TRUNCATE)` copies WAL pages back into the main file; PostgreSQL runs checkpoints every `checkpoint_timeout` (5 minutes by default) or when `max_wal_size` is reached; SQL Server has automatic and indirect checkpoints.
+
+### Durability settings and what they risk
+
+| Engine | Setting | Effect |
+|---|---|---|
+| SQLite | `PRAGMA synchronous = FULL / NORMAL / OFF` | NORMAL in WAL mode is durable across app crashes but may lose the last transactions on power loss |
+| PostgreSQL | `synchronous_commit = on / off` | off returns before the WAL flush; up to `wal_writer_delay` × 3 of commits can be lost |
+| MySQL InnoDB | `innodb_flush_log_at_trx_commit = 1 / 2 / 0` | 1 flushes per commit; 2 flushes per second |
+| SQL Server | delayed durability | `COMMIT WITH (DELAYED_DURABILITY = ON)` |
+
+`fsync` itself can lie when consumer SSDs or virtualised disks have write caches that ignore flush requests; production databases run on storage with battery-backed caches or verified flush semantics.
+
+### Media recovery: backups plus log archiving
+
+A full backup restores the database to the moment the backup was taken; **archived log** (PostgreSQL WAL archiving, SQL Server transaction-log backups, MySQL binary logs) lets you roll forward to any later instant. **Point-in-time recovery** (PITR) stops the replay just before the `DELETE FROM orders` that someone ran without a `WHERE`. The Expert level's security chapter covers backup strategy; the engine-level fact to remember is that log retention determines how far forward you can recover.
+
+### Logical versus physical logging
+
+Physical log records store page bytes before and after; logical records store the operation ("insert row X into table Y"). Physical logging is simpler to redo idempotently; logical logging is smaller and is what replication streams (PostgreSQL logical decoding, MySQL row-based binlog) and change-data-capture tools consume.
+
+> **Warning:** Copying a live database file with the operating system while the engine is running produces a torn, unrecoverable copy unless the engine's backup API is used (`sqlite3 .backup`, `pg_basebackup`, SQL Server `BACKUP DATABASE`). A "backup" that was never test-restored is not a backup.
+
+### Try It Yourself
+
+```sql
+-- A miniature write-ahead log with redo/undo recovery, simulated entirely in SQL.
+CREATE TABLE pages (page_id INTEGER PRIMARY KEY, contents TEXT NOT NULL, page_lsn INTEGER NOT NULL DEFAULT 0);   -- "disk"
+CREATE TABLE wal (lsn INTEGER PRIMARY KEY, txn TEXT NOT NULL, kind TEXT NOT NULL, page_id INTEGER, before TEXT, after TEXT);
+INSERT INTO pages (page_id, contents) VALUES (7, 'TX-1001:Open'), (12, '(empty)'), (2, 'agent4:10');
+
+-- Log records written before the crash (WAL rule: log first, data pages later)
+INSERT INTO wal VALUES (100, 'T1', 'BEGIN',  NULL, NULL, NULL);
+INSERT INTO wal VALUES (101, 'T1', 'UPDATE', 7,  'TX-1001:Open', 'TX-1001:Closed');
+INSERT INTO wal VALUES (102, 'T2', 'BEGIN',  NULL, NULL, NULL);
+INSERT INTO wal VALUES (103, 'T2', 'UPDATE', 12, '(empty)', 'TX-1002:1180');
+INSERT INTO wal VALUES (104, 'T1', 'COMMIT', NULL, NULL, NULL);
+INSERT INTO wal VALUES (105, 'T2', 'UPDATE', 2,  'agent4:10', 'agent4:11');
+-- Steal policy: page 2 happened to be flushed before the crash, with T2's uncommitted change on it
+UPDATE pages SET contents = 'agent4:11', page_lsn = 105 WHERE page_id = 2;
+
+SELECT 'before recovery' AS phase, * FROM pages;
+
+-- Pass 1, analysis: which transactions never committed?
+CREATE TEMP TABLE losers AS
+SELECT DISTINCT txn FROM wal WHERE txn NOT IN (SELECT txn FROM wal WHERE kind = 'COMMIT');
+
+-- Pass 2, redo: repeat history for every update whose LSN is newer than the page
+UPDATE pages SET contents = (SELECT after FROM wal w WHERE w.page_id = pages.page_id AND w.kind = 'UPDATE' ORDER BY lsn DESC LIMIT 1),
+                 page_lsn = (SELECT MAX(lsn) FROM wal w WHERE w.page_id = pages.page_id AND w.kind = 'UPDATE')
+WHERE page_id IN (SELECT page_id FROM wal w WHERE w.kind = 'UPDATE' AND w.lsn > pages.page_lsn);
+SELECT 'after redo' AS phase, * FROM pages;
+
+-- Pass 3, undo: reverse the losers' updates in reverse LSN order, writing compensation records
+INSERT INTO wal (lsn, txn, kind, page_id, before, after)
+SELECT 200 + row_number() OVER (ORDER BY lsn DESC), txn, 'CLR', page_id, after, before
+FROM wal WHERE kind = 'UPDATE' AND txn IN (SELECT txn FROM losers);
+UPDATE pages SET contents = (SELECT after FROM wal w WHERE w.page_id = pages.page_id AND w.kind = 'CLR' ORDER BY lsn DESC LIMIT 1),
+                 page_lsn = (SELECT MAX(lsn) FROM wal w WHERE w.page_id = pages.page_id AND w.kind = 'CLR')
+WHERE page_id IN (SELECT page_id FROM wal WHERE kind = 'CLR');
+INSERT INTO wal SELECT MAX(lsn) + 1, txn, 'END', NULL, NULL, NULL FROM wal WHERE txn IN (SELECT txn FROM losers) GROUP BY txn;
+
+SELECT 'after undo' AS phase, * FROM pages;
+SELECT * FROM wal ORDER BY lsn;
+```
+
+### Quiz
+
+1. What does the write-ahead rule require?
+- [x] Log records reach disk before the data pages they describe, and before commit is acknowledged
+- [ ] Data pages are written before the log
+- [ ] The log is only written at checkpoints
+> Without it a crash could leave a modified page with no record of how to undo or redo it.
+
+2. Why does ARIES redo changes of uncommitted transactions too?
+- [ ] To speed up recovery
+- [x] To reconstruct the exact pre-crash state so undo can be applied correctly
+- [ ] It does not; uncommitted changes are skipped
+> "Repeating history" makes undo simple and correct even for partially flushed pages.
+
+3. What is the purpose of a checkpoint?
+- [ ] To back up the database
+- [x] To bound how much log must be replayed after a crash
+- [ ] To commit all open transactions
+> It records a known-good starting point for recovery and lets old log be recycled.
+
+4. What does `synchronous_commit = off` risk in PostgreSQL?
+- [x] Losing the last few hundred milliseconds of committed transactions after a crash
+- [ ] Corrupting the database
+- [ ] Losing all uncommitted data
+> The database stays consistent; only recently acknowledged commits may vanish.
+
+### Exercises
+
+1. **Trace recovery** — Given log records: T1 BEGIN, T1 write A, T2 BEGIN, T2 write B, T1 COMMIT, crash. State what redo and undo do to A and B.
+<details><summary>Solution</summary>
+
+```text
+Redo: reapply T1's write to A and T2's write to B if the pages are older than those records.
+Undo: T2 never committed, so B is restored to its before-image with a compensation record; A keeps T1's committed value.
+```
+
+</details>
+
+2. **SQLite checkpoint** — Write the PRAGMA statements to enable WAL mode and force a full checkpoint.
+<details><summary>Solution</summary>
+
+```sql
+PRAGMA journal_mode = WAL;
+PRAGMA wal_checkpoint(TRUNCATE);
+```
+
+</details>
+
+3. **Point-in-time recovery plan** — Someone ran `DELETE FROM orders` at 14:32 without a WHERE. Outline the PostgreSQL recovery steps.
+<details><summary>Solution</summary>
+
+```text
+1. Stop writes; keep the current WAL files.
+2. Restore the latest base backup (pg_basebackup) to a new data directory.
+3. Configure recovery_target_time = '2026-03-04 14:31:50' with restore_command pointing at the WAL archive.
+4. Start PostgreSQL; it replays WAL up to the target, then pauses/promotes.
+5. Export the orders table from the recovered instance and reload it into production (or switch over).
+```
+
+</details>
+
+### Interview Questions
+
+**Q: How does a database guarantee durability without writing every data page at commit?**
+It writes the log instead. Every change is first described in a sequential write-ahead log record, and at commit the log up to the commit record is forced to stable storage; the data pages stay dirty in the buffer pool and are flushed later by checkpoints. If the system crashes, recovery replays the log from the last checkpoint so committed changes reach their pages, and undoes the changes of transactions that had no commit record. This turns many random page writes into one sequential append plus an fsync per commit, which is what makes thousands of commits per second possible, and it is why the log must be on reliable storage that honours flushes.
+
+**Q: Explain the ARIES recovery phases.**
+Analysis reads the log from the last checkpoint forward to rebuild the transaction table (which transactions were active and their last LSN) and the dirty page table. Redo starts at the earliest LSN that could have dirtied a page and reapplies every update whose LSN is greater than the page's stored LSN, regardless of whether its transaction committed, restoring the exact state at the crash. Undo then rolls back the transactions with no commit record, newest record first, writing compensation log records so that if recovery itself crashes, the undo already done is not repeated. The elegance is that redo is idempotent thanks to page LSNs and undo is restartable thanks to CLRs. I mention that PostgreSQL differs by never needing undo, because MVCC leaves aborted tuples in place and simply treats them as invisible.
+
+**Q: What is the difference between a backup and log archiving, and why do you need both?**
+A backup is a copy of the database at one instant; alone it lets you recover to that instant and lose everything after. Log archiving continuously preserves the write-ahead log, so from a backup you can roll forward through every committed transaction up to the crash, or stop at any chosen moment before a destructive mistake. Backups without logs lose a day; logs without a backup cannot be applied to anything. The retention of each defines the recovery point objective, and the size of both plus restore speed defines the recovery time objective, which is why I test restores on a schedule rather than trusting that the files exist.
+
+# LEVEL: Expert
+
+## Distributed databases & CAP
+
+One server holds all production orders until it cannot: the disk fills, the CPU saturates, or the business needs the data to survive a data-centre outage. **Distributed databases** spread data across machines through replication and partitioning, and in doing so trade away guarantees that a single node gives for free. The CAP theorem and its refinements are the vocabulary for those trade-offs.
+
+### Replication
+
+**Replication** keeps copies of the same data on several nodes for availability and read scaling.
+
+- **Single-leader** (primary/replica): all writes go to the leader, which streams its log to followers. PostgreSQL streaming replication, MySQL replicas, SQL Server Always On availability groups. Simple; the leader is a write bottleneck and a failover point.
+- **Multi-leader**: several nodes accept writes and exchange changes; needed for multi-region writes and offline clients. Requires conflict resolution (last-writer-wins, merge functions, CRDTs).
+- **Leaderless** (Dynamo-style: Cassandra, Riak, DynamoDB): any node accepts writes; clients write to W replicas and read from R, and with W + R > N (quorum) a read overlaps the latest write.
+
+**Synchronous** replication waits for a follower to acknowledge before committing, guaranteeing no data loss on failover at the cost of latency; **asynchronous** replication commits locally and streams later, so a failover can lose the last few seconds. Most deployments use one synchronous follower plus asynchronous others.
+
+### Replication lag and read-your-writes
+
+With asynchronous replicas, an agent who closes an order and immediately opens the report served by a replica may see it still open. Techniques: route a user's reads to the leader for a short window after their write, pass the leader's LSN with the request and wait until the replica has replayed it, or use monotonic reads (always the same replica per user).
+
+### Partitioning (sharding)
+
+**Partitioning** splits a large table across nodes so each holds a subset. **Range** partitioning by key (orders opened in 2025 on one node, 2026 on another) keeps ranges together but risks hot spots; **hash** partitioning spreads load evenly but destroys range locality; **consistent hashing** with virtual nodes lets you add machines while moving only a fraction of keys. Secondary indexes become either local (query all shards, "scatter-gather") or global (a second partitioned index that must be updated across shards). Cross-shard joins and transactions are expensive, so the partition key should be the one most queries filter on, for example `state` or `customer_id`, never something with only a few values.
+
+### Distributed transactions
+
+**Two-phase commit** (2PC): a coordinator asks every participant to prepare (write the transaction to their logs and promise to commit), and only if all vote yes sends commit. It gives atomicity across nodes but blocks if the coordinator dies after participants prepared. XA and SQL Server's MSDTC implement it. Modern systems prefer to avoid it: design so each transaction touches one shard, use idempotent sagas with compensating actions for cross-service workflows, or use a database with built-in distributed transactions (Spanner, CockroachDB, YugabyteDB) that combine 2PC with consensus-replicated logs.
+
+### Consensus
+
+Choosing a leader, or agreeing on the order of log entries, in the presence of failures requires a **consensus** protocol: Paxos or Raft. Raft elects a leader by majority vote; the leader appends entries to a replicated log and considers them committed when a majority acknowledge. etcd, CockroachDB, TiKV and Kafka's KRaft use Raft. Consensus needs a majority (3 of 5 nodes), tolerates minority failures, and cannot progress during a partition on the minority side.
+
+### CAP and PACELC
+
+CAP says a distributed system experiencing a **network partition** must choose between **consistency** (every read sees the latest write, linearisability) and **availability** (every request gets a non-error response). Partitions are not optional, so the real choice is CP (refuse or delay requests on the minority side: ZooKeeper, etcd, HBase, Spanner) or AP (serve possibly stale data: Cassandra, DynamoDB in eventually consistent mode, CouchDB). **PACELC** adds: even without a partition (Else), a system chooses between latency and consistency, which describes synchronous versus asynchronous replication.
+
+| System | During partition | Normally | Consistency model |
+|---|---|---|---|
+| PostgreSQL with sync replica | CP | latency | linearisable on leader |
+| Cassandra (QUORUM) | tunable | latency | eventual, per-request tunable |
+| DynamoDB | AP default, CP option | latency | eventual or strongly consistent reads |
+| Spanner / CockroachDB | CP | consistency | external consistency / serialisable |
+| MongoDB replica set | CP (majority writes) | tunable | causal sessions available |
+
+### Consistency models, briefly
+
+**Linearisability**: operations appear instantaneous in a single global order. **Sequential consistency**: a global order consistent with each client's order, not necessarily real time. **Causal consistency**: operations that depend on each other are seen in order everywhere. **Eventual consistency**: replicas converge if writes stop. Stronger models cost coordination and latency; the application decides what it needs per operation, not globally.
+
+> **Interview note:** Interviewers rarely want the CAP triangle recited. They want "which of these would you pick for X and why", with the honest observation that a well-run single PostgreSQL with replicas handles most businesses, and that sharding is a decision to postpone until measurements demand it.
+
+### Try It Yourself
+
+```sql
+-- Sharding by hash of the partition key, quorum reads, and replication lag, simulated in one SQLite database.
+CREATE TABLE orders_shard0 (file_no TEXT PRIMARY KEY, state TEXT, status TEXT);
+CREATE TABLE orders_shard1 (file_no TEXT PRIMARY KEY, state TEXT, status TEXT);
+CREATE TABLE orders_shard2 (file_no TEXT PRIMARY KEY, state TEXT, status TEXT);
+CREATE TABLE incoming (file_no TEXT, state TEXT, status TEXT);
+INSERT INTO incoming VALUES ('TX-1001','TX','Open'),('TX-1002','TX','Closed'),('WY-2001','WY','Open'),('FL-3001','FL','Open'),('CA-4001','CA','Closed'),('TX-1003','TX','Open'),('WY-2002','WY','Closed');
+-- A cheap deterministic hash: sum of character codes modulo the shard count
+CREATE VIEW routed AS
+SELECT file_no, state, status,
+  (unicode(substr(file_no,1,1)) + unicode(substr(file_no,2,1)) * 3 + CAST(substr(file_no,4) AS INTEGER) * 7) % 3 AS shard
+FROM incoming;
+INSERT INTO orders_shard0 SELECT file_no, state, status FROM routed WHERE shard = 0;
+INSERT INTO orders_shard1 SELECT file_no, state, status FROM routed WHERE shard = 1;
+INSERT INTO orders_shard2 SELECT file_no, state, status FROM routed WHERE shard = 2;
+SELECT shard, COUNT(*) AS rows_on_shard, GROUP_CONCAT(file_no) AS keys FROM routed GROUP BY shard;
+
+-- A query on the partition key hits one shard; a query on another column is scatter-gather across all shards
+SELECT file_no, shard AS routed_to FROM routed WHERE file_no = 'WY-2001';           -- the router computes the shard from the key
+SELECT 'single-shard lookup' AS kind, * FROM orders_shard0 WHERE file_no = 'WY-2001';
+SELECT 'scatter-gather' AS kind, * FROM (SELECT * FROM orders_shard0 UNION ALL SELECT * FROM orders_shard1 UNION ALL SELECT * FROM orders_shard2) WHERE status = 'Open';
+
+-- Leaderless quorum: N = 3 replicas, versions per replica; W = 2 and R = 2 overlap so a read sees the latest write
+CREATE TABLE replica (node TEXT, file_no TEXT, status TEXT, version INTEGER, PRIMARY KEY (node, file_no));
+INSERT INTO replica VALUES ('n1','TX-1001','Open',1),('n2','TX-1001','Open',1),('n3','TX-1001','Open',1);
+UPDATE replica SET status = 'Closed', version = 2 WHERE file_no = 'TX-1001' AND node IN ('n1','n2');   -- write acknowledged by W = 2
+SELECT 'R=2 read from n2,n3' AS read, status, version FROM replica WHERE file_no = 'TX-1001' AND node IN ('n2','n3') ORDER BY version DESC LIMIT 1;
+SELECT 'R=1 read from n3 (stale)' AS read, status, version FROM replica WHERE file_no = 'TX-1001' AND node = 'n3';
+
+-- Replication lag: the follower has applied the log only up to LSN 104
+CREATE TABLE wal (lsn INTEGER PRIMARY KEY, file_no TEXT, new_status TEXT);
+INSERT INTO wal VALUES (103,'FL-3001','Closed'),(104,'TX-1003','Closed'),(105,'WY-2001','Closed');
+CREATE TABLE follower_state (applied_lsn INTEGER);
+INSERT INTO follower_state VALUES (104);
+SELECT w.lsn, w.file_no, w.new_status, CASE WHEN w.lsn <= f.applied_lsn THEN 'visible on replica' ELSE 'not yet replicated (read-your-writes needs the leader)' END AS on_replica
+FROM wal w, follower_state f ORDER BY w.lsn;
+```
+
+### Quiz
+
+1. In CAP, what does a CP system do during a network partition?
+- [x] Refuses or delays some requests rather than return inconsistent data
+- [ ] Serves stale data to stay available
+- [ ] Shuts down entirely
+> Consistency is preserved by sacrificing availability on the side that cannot reach a majority.
+
+2. With N = 3 replicas, which W and R guarantee a read overlaps the latest write?
+- [ ] W = 1, R = 1
+- [x] W = 2, R = 2
+- [ ] W = 1, R = 2
+> Quorum requires W + R > N.
+
+3. What is the main weakness of two-phase commit?
+- [ ] It cannot guarantee atomicity
+- [x] Participants block if the coordinator fails after they prepared
+- [ ] It requires all nodes to use the same DBMS
+> The prepared participants hold locks and cannot decide alone.
+
+4. Which partitioning scheme spreads load evenly but loses range locality?
+- [ ] Range partitioning
+- [x] Hash partitioning
+- [ ] List partitioning
+> Hashing scatters adjacent keys across shards.
+
+### Exercises
+
+1. **Choose a partition key** — The orders table is queried by `file_no` (lookups), by `state` (reports) and by `customer_id` (portal). Pick a shard key and explain the trade-off.
+<details><summary>Solution</summary>
+
+```text
+Shard by customer_id (hash): portal queries and most writes are per customer, so they hit one shard;
+state reports become scatter-gather, acceptable for periodic reports; file_no lookups need a
+global lookup index (file_no -> customer_id) or an encoded customer prefix in the file number.
+```
+
+</details>
+
+2. **Read-your-writes** — Describe two ways to guarantee a user sees their own write when reads go to replicas.
+<details><summary>Solution</summary>
+
+```text
+1. Route that user's reads to the leader for N seconds after a write (sticky session).
+2. Return the commit LSN to the client; replicas serve the read only once they have replayed past it
+   (PostgreSQL: compare pg_last_wal_replay_lsn() on the replica).
+```
+
+</details>
+
+3. **Raft majority** — A 5-node Raft cluster is partitioned 3 versus 2. Which side keeps accepting writes and why?
+<details><summary>Solution</summary>
+
+```text
+The 3-node side: it can still form a majority (3 of 5) to elect a leader and commit entries.
+The 2-node side cannot reach a majority, so its leader (if any) steps down and it rejects writes.
+```
+
+</details>
+
+### Interview Questions
+
+**Q: Explain CAP and how you would apply it to a title-production system.**
+Under a network partition a distributed store must choose between returning consistent data and returning any data at all. Order status, premium ledger and closing documents need consistency: an agent must not close an order twice or see a stale status, so those live in a CP configuration, in practice a PostgreSQL primary with a synchronous replica where a partition means brief unavailability rather than divergence. Dashboards, search indexes and notification feeds tolerate staleness, so they can be served from asynchronous replicas or an AP cache. I add the PACELC point: even without partitions, synchronous replication costs latency, so I choose per data class rather than picking one label for the whole system.
+
+**Q: How would you scale a relational database that is running out of capacity?**
+In order of cost: tune queries and indexes (usually the real problem); add read replicas and move reports and dashboards to them, handling replication lag with read-your-writes routing; add caching for hot read paths; move cold history to partitioned or archived tables; scale the machine vertically, which today goes surprisingly far; and only then shard, choosing a partition key that keeps most transactions on one shard and accepting scatter-gather for analytics. Sharding is a one-way door that complicates joins, transactions, migrations and backups, so I want measurements showing the earlier steps are exhausted before taking it, and I would consider a distributed SQL engine that shards transparently if the team is small.
+
+**Q: What is replication lag and what problems does it cause?**
+The delay between a commit on the leader and its visibility on an asynchronous follower, typically milliseconds but seconds or minutes under load or during large transactions. Problems: a user updates an order and the next page, served by a replica, shows the old value; a report totals a mix of old and new rows across queries; a failover to a lagging replica loses the unreplicated commits. Mitigations are monitoring lag as a metric, routing a user's reads to the leader after their writes or waiting for the replica to reach the write's LSN, using a synchronous replica for the failover candidate, and keeping transactions small so replay does not fall behind.
+
+## NoSQL (document/key-value/column/graph)
+
+"NoSQL" is a family label for databases that drop parts of the relational model, usually the fixed schema, joins or multi-row transactions, to gain flexibility, horizontal scale or a data model closer to the application. Each family suits a shape of data; the interview skill is matching the shape to the store and knowing what you give up.
+
+### Key-value stores
+
+The simplest model: a key maps to an opaque value. Redis, Memcached, DynamoDB (at its core), RocksDB. Operations are get, put, delete, sometimes atomic increments and TTL expiry. Use for sessions, caches, rate-limit counters, feature flags and job queues. Redis adds data structures (lists, sets, sorted sets, streams) that make it a lightweight queue and leaderboard engine. No queries by value, no joins, no transactions across keys (Redis has MULTI for atomic batches on one node).
+
+```text
+SET session:8f3a '{"user":"ali","role":"analyst"}' EX 3600
+INCR ratelimit:api-key-123:2026-03-04T14
+```
+
+### Document stores
+
+Values are structured documents (JSON/BSON) that the database can index and query by field: MongoDB, CouchDB, Firestore, PostgreSQL's `jsonb`, SQLite's JSON functions. The unit of atomicity is the document, so you model an aggregate (an order with its embedded endorsements and status history) as one document and read or write it in one operation.
+
+```js
+// MongoDB
+db.orders.insertOne({ file_no: "TX-1001", state: "TX", status: "Open", liability: 350000,
+  endorsements: [{ code: "T-19", fee: 50 }, { code: "T-36", fee: 75 }],
+  history: [{ status: "Open", at: ISODate("2026-03-01") }] });
+db.orders.find({ state: "TX", "endorsements.code": "T-19" }, { file_no: 1, liability: 1 });
+db.orders.updateOne({ file_no: "TX-1001" }, { $set: { status: "Closed" }, $push: { history: { status: "Closed", at: new Date() } } });
+db.orders.aggregate([{ $match: { state: "TX" } }, { $group: { _id: "$status", n: { $sum: 1 }, liability: { $sum: "$liability" } } }]);
+```
+
+Embedding versus referencing is the core design decision: embed data that is read with the parent and bounded in size (endorsements); reference data that is shared or unbounded (the agent, an audit log with thousands of entries). Schema-on-read means the application must handle old document shapes or run migrations. MongoDB 4.0+ supports multi-document transactions, at a cost.
+
+### Wide-column stores
+
+Cassandra, HBase, ScyllaDB, Bigtable. Data is organised by a partition key that determines the node, and a clustering key that orders rows within the partition; each row can have its own set of columns. Designed for write-heavy, append-style workloads at massive scale (time series, event logs, IoT), with tunable consistency. The rule is **query-first modelling**: you design one table per query pattern, denormalising as needed, because there are no joins and no ad-hoc secondary access without an index.
+
+```sql
+-- Cassandra CQL: one table per access pattern
+CREATE TABLE status_events_by_order (file_no text, at timestamp, status text, agent text,
+  PRIMARY KEY (file_no, at)) WITH CLUSTERING ORDER BY (at DESC);
+SELECT * FROM status_events_by_order WHERE file_no = 'TX-1001' LIMIT 20;
+```
+
+### Graph databases
+
+Neo4j, Amazon Neptune, JanusGraph, and graph extensions in SQL Server and PostgreSQL (Apache AGE). Nodes and edges both carry properties; queries traverse relationships. Use when the questions are about paths and connections: chain-of-title ("who conveyed this parcel to whom, across 12 deeds"), fraud rings, org charts, recommendations. Relational databases can express graphs with recursive CTEs, and for shallow, fixed-depth traversals they are fine; graph engines win on deep, variable-length traversals.
+
+```cypher
+// Neo4j Cypher: chain of title for a parcel
+MATCH (p:Parcel {apn: '123-45-678'})<-[:CONVEYS]-(d:Deed)-[:FROM]->(grantor:Party), (d)-[:TO]->(grantee:Party)
+RETURN d.recorded, grantor.name, grantee.name ORDER BY d.recorded;
+MATCH path = (a:Party {name: 'Smith'})-[:TO|FROM*1..6]-(b:Party {name: 'Jones'}) RETURN path LIMIT 1;
+```
+
+### Search engines and time-series
+
+Elasticsearch/OpenSearch (inverted indexes for full-text and log analytics) and TimescaleDB/InfluxDB (time-partitioned, compressed series) are specialised stores usually fed from the system of record rather than replacing it.
+
+### Choosing
+
+| Need | Fit |
+|---|---|
+| Transactions across entities, ad-hoc reporting, constraints | Relational |
+| Cache, session, counters, queues | Key-value (Redis) |
+| Aggregates with flexible, nested shape; rapid iteration | Document |
+| Huge write volume, time-ordered, known queries | Wide-column |
+| Path and relationship queries | Graph |
+| Full-text search, log analytics | Search engine |
+
+Polyglot persistence (PostgreSQL for orders, Redis for sessions, Elasticsearch for document search) is normal; the discipline is a single system of record and clear ownership of each store.
+
+### JSON inside relational engines
+
+PostgreSQL `jsonb` with GIN indexes, SQL Server `JSON_VALUE`/`OPENJSON`, MySQL JSON columns and SQLite's JSON functions let you keep a relational core and add document flexibility for sparse or evolving attributes such as per-state endorsement details, without a second database. `->` returns JSON, `->>` returns text, `json_each` unnests arrays, and `json_extract` paths use `$.key[0]`.
+
+> **Tip:** When a client asks for "a NoSQL database because it scales", ask what the queries are. Most document-shaped workloads under a few hundred gigabytes run beautifully on PostgreSQL with `jsonb`, keeping transactions and reporting intact.
+
+### Try It Yourself
+
+```sql
+-- Document, key-value and graph patterns inside SQLite using its JSON functions and recursive CTEs.
+CREATE TABLE orders_doc (id INTEGER PRIMARY KEY, doc TEXT NOT NULL CHECK (json_valid(doc)));
+INSERT INTO orders_doc (doc) VALUES
+ ('{"file_no":"TX-1001","state":"TX","status":"Open","liability":350000,"endorsements":[{"code":"T-19","fee":50},{"code":"T-36","fee":75}],"history":[{"status":"Open","at":"2026-03-01"}]}'),
+ ('{"file_no":"TX-1002","state":"TX","status":"Closed","liability":280000,"endorsements":[{"code":"T-19","fee":50}],"history":[{"status":"Open","at":"2026-02-20"},{"status":"Closed","at":"2026-03-02"}]}'),
+ ('{"file_no":"WY-2001","state":"WY","status":"Open","liability":410000,"endorsements":[],"history":[{"status":"Open","at":"2026-03-03"}]}');
+-- Query by field, project fields, index an extracted path
+CREATE INDEX idx_doc_state ON orders_doc (json_extract(doc, '$.state'));
+SELECT doc ->> '$.file_no' AS file_no, doc ->> '$.status' AS status, doc ->> '$.liability' AS liability
+FROM orders_doc WHERE doc ->> '$.state' = 'TX';
+-- Unnest the embedded array (like MongoDB $unwind) and aggregate
+SELECT o.doc ->> '$.file_no' AS file_no, e.value ->> '$.code' AS code, e.value ->> '$.fee' AS fee
+FROM orders_doc o, json_each(o.doc, '$.endorsements') e;
+SELECT doc ->> '$.state' AS state, COUNT(*) AS n, SUM(doc ->> '$.liability') AS liability FROM orders_doc GROUP BY 1;
+-- Update inside the document ($set + $push)
+UPDATE orders_doc SET doc = json_set(doc, '$.status', 'Closed', '$.history[#]', json('{"status":"Closed","at":"2026-03-05"}'))
+WHERE doc ->> '$.file_no' = 'TX-1001';
+SELECT doc ->> '$.file_no' AS file_no, json_array_length(doc, '$.history') AS history_len, doc -> '$.history' AS history FROM orders_doc;
+
+-- Key-value with TTL
+CREATE TABLE kv (k TEXT PRIMARY KEY, v TEXT NOT NULL, expires_at TEXT);
+INSERT INTO kv VALUES ('session:8f3a', '{"user":"ali"}', datetime('now', '+1 hour')), ('session:old', '{"user":"x"}', datetime('now', '-1 minute'));
+SELECT k, v FROM kv WHERE expires_at IS NULL OR expires_at > datetime('now');
+
+-- Graph: chain of title as edges, traversed with a recursive CTE
+CREATE TABLE conveyance (deed_id INTEGER PRIMARY KEY, grantor TEXT, grantee TEXT, recorded TEXT);
+INSERT INTO conveyance VALUES (1,'State of Texas','Alvarez','1952-04-01'),(2,'Alvarez','Baker Trust','1978-09-12'),(3,'Baker Trust','Chen','2004-06-30'),(4,'Chen','Dunn LLC','2019-11-05');
+WITH RECURSIVE chain(step, owner, via_deed, recorded) AS (
+  SELECT 0, 'Dunn LLC', NULL, NULL
+  UNION ALL
+  SELECT step + 1, c.grantor, c.deed_id, c.recorded FROM conveyance c JOIN chain ON c.grantee = chain.owner
+)
+SELECT step, owner, via_deed, recorded FROM chain ORDER BY step;
+```
+
+### Quiz
+
+1. Which NoSQL family fits "who conveyed this parcel to whom over the last 70 years" best?
+- [ ] Key-value
+- [ ] Wide-column
+- [x] Graph
+> Variable-length path traversal is the graph database's core operation.
+
+2. What is the unit of atomicity in a classic document store?
+- [x] A single document
+- [ ] A collection
+- [ ] The whole database
+> Embed the data that must change together; multi-document transactions are a newer, costlier addition.
+
+3. In Cassandra, how do you support a new query pattern?
+- [ ] Add a join
+- [x] Create another table (or materialised view) keyed for that query
+- [ ] Add a WHERE clause on any column
+> Wide-column stores are modelled query-first with denormalised tables.
+
+4. What does `doc ->> '$.state'` return in SQLite or PostgreSQL?
+- [ ] A JSON object
+- [x] The value as text
+- [ ] A boolean
+> `->` returns JSON; `->>` returns the SQL text value, which is what you compare and index.
+
+### Exercises
+
+1. **Embed or reference** — For an order document, decide for each: endorsements (2 to 5 per order), audit events (thousands), the responsible agent (shared by many orders).
+<details><summary>Solution</summary>
+
+```text
+Endorsements: embed (small, bounded, read with the order).
+Audit events: reference (unbounded growth would bloat the document; store in their own collection keyed by file_no).
+Agent: reference by id, optionally embed a denormalised name for display and accept updating it on rename.
+```
+
+</details>
+
+2. **Redis rate limit** — Write the Redis commands to allow 100 requests per API key per minute.
+<details><summary>Solution</summary>
+
+```text
+INCR ratelimit:key123:202603041432
+EXPIRE ratelimit:key123:202603041432 60     (only when INCR returned 1)
+-- reject when the INCR result exceeds 100
+```
+
+</details>
+
+3. **JSON index in PostgreSQL** — Write the DDL for a `jsonb` column with a GIN index and a query that uses containment.
+<details><summary>Solution</summary>
+
+```sql
+CREATE TABLE orders_doc (id serial PRIMARY KEY, doc jsonb NOT NULL);
+CREATE INDEX idx_orders_doc ON orders_doc USING gin (doc jsonb_path_ops);
+SELECT doc->>'file_no' FROM orders_doc WHERE doc @> '{"state": "TX", "status": "Open"}';
+```
+
+</details>
+
+### Interview Questions
+
+**Q: When would you choose a document database over a relational one?**
+When the data is naturally an aggregate that is read and written as a unit, its shape varies per record or evolves quickly, and cross-aggregate transactions and ad-hoc reporting are secondary: product catalogues, user profiles, content, form submissions with different field sets per template. I would not choose it for a title-production ledger, where constraints, multi-row transactions and reporting across entities are the core, though I might store the per-order intake form as `jsonb` inside PostgreSQL to get both. The honest framing is that document stores trade integrity guarantees and query flexibility for development speed and horizontal scale, and that PostgreSQL's `jsonb` covers a large share of document use cases without a second system.
+
+**Q: How do you model data in a wide-column store like Cassandra?**
+Start from the queries, not the entities. For each access pattern, design a table whose partition key is exactly what the query filters on, so a read touches one partition, and whose clustering columns give the sort order the query needs; duplicate data across tables freely because storage is cheap and writes are fast, and keep partitions bounded (bucket time series by day or month) so no partition grows without limit. Updates that affect several tables are done by the application or batch statements, accepting eventual consistency between them. The anti-patterns are trying to join, filtering on non-key columns with ALLOW FILTERING, and unbounded partitions.
+
+**Q: What are the trade-offs of polyglot persistence?**
+It lets each workload use the best-fit store: PostgreSQL for transactions, Redis for sessions and queues, Elasticsearch for search, perhaps a graph store for chain-of-title analysis. The costs are operational (each store needs backups, monitoring, upgrades and expertise), consistency (data copied between stores is eventually consistent, so search results can lag the source of truth), and complexity in the application (multiple clients, no cross-store transactions). I mitigate by keeping one system of record, feeding the others through change data capture or an outbox so they can be rebuilt from it, and by resisting a new store until a measured need exists.
+
+## Data warehousing & star schema (Power BI models)
+
+The production database is designed for writes: normalised, many narrow tables, current state. A **data warehouse** is designed for questions: "premium by state by month by product, compared with last year", "average turnaround by examiner", "open files by age bucket". Those questions want wide, denormalised, history-preserving structures, and the **star schema** is the standard shape. Power BI, Tableau and every OLAP engine are built around it.
+
+### OLTP versus OLAP
+
+| | OLTP (operational) | OLAP (analytical) |
+|---|---|---|
+| Typical query | one order by key | aggregate millions of rows |
+| Writes | many small transactions | periodic bulk loads |
+| Schema | 3NF, current state | star, history kept |
+| Storage | row-oriented, B-trees | columnar, compressed, bitmap/zone maps |
+| Examples | PostgreSQL, SQL Server, MySQL | Synapse, BigQuery, Snowflake, Redshift, ClickHouse, Power BI's VertiPaq |
+
+**Columnar storage** stores each column contiguously, so a query summing `premium` reads only that column, and compression on repetitive values (state codes, statuses) is dramatic. VertiPaq, the in-memory engine inside Power BI and Analysis Services, is columnar, which is why a 10-million-row fact table can fit in a few hundred megabytes and filter instantly.
+
+### Facts and dimensions
+
+A **fact table** holds measurements at a declared **grain** (one row per order-status-change, or one row per order per day): numeric measures (premium, liability, days in stage) plus foreign keys to dimensions. A **dimension** describes the context: date, agent, state/county, product, status. Dimensions are wide and descriptive (agent name, team, hire date, office); facts are narrow and long.
+
+```text
+              dim_date                       dim_agent
+           (date_key, date, month,        (agent_key, agent_id, name,
+            quarter, year, is_weekend)     team, office, valid_from, valid_to)
+                     \                         /
+                      \                       /
+                        fact_order_events
+                (date_key, agent_key, state_key, product_key, status_key,
+                 file_no, premium, liability, days_in_stage, event_count)
+                      /                       \
+             dim_state (state_key,        dim_product (product_key,
+              state, region)               product, policy_type)
+```
+
+The star has one join hop from fact to any dimension, which is what makes slicing fast and models understandable. A **snowflake** normalises dimensions further (state to region table); Kimball practice is to keep dimensions flat unless size forces otherwise, and Power BI performs best with a pure star.
+
+### Surrogate keys and slowly changing dimensions
+
+Dimensions get integer **surrogate keys** independent of business keys, so that when an agent moves from the Search team to Examination you can keep history. **Type 1** overwrites (no history); **Type 2** adds a new row with `valid_from`/`valid_to` and a current flag, and facts point at the version that was current at the event. Type 2 is what makes "premium by team as it was at the time" answerable.
+
+### Fact table types
+
+- **Transaction fact**: one row per event (status change, endorsement added). Additive measures, unbounded growth.
+- **Periodic snapshot**: one row per order per day or week, with state at that instant (open, days open, stage). Perfect for "open files trend" and the weekly status report; semi-additive measures (balances) must not be summed across time.
+- **Accumulating snapshot**: one row per order with milestone dates (opened, search complete, examined, closed) updated as they occur; ideal for turnaround analysis.
+
+### The date dimension
+
+Every model needs one: a row per calendar day with year, quarter, month, week, fiscal period, weekday flag and holiday flag. It enables period comparisons and is what Power BI's time-intelligence DAX (`TOTALYTD`, `SAMEPERIODLASTYEAR`, `DATEADD`) requires, marked as the date table.
+
+### ETL / ELT
+
+Loading follows extract, transform, load: pull from the operational system (full or incremental by `updated_at` or change data capture), conform keys, look up or insert dimension rows, then insert facts. Modern warehouses often load raw first and transform in SQL (ELT) with tools like dbt. Power Query is Power BI's transformation layer; a large model should push transformations upstream into views or a warehouse so refreshes stay fast and **query folding** (Power Query translating steps back into source SQL) is preserved.
+
+### Power BI modelling rules
+
+1. One fact table per grain; do not merge different grains into one table.
+2. Single-direction one-to-many relationships from dimension to fact; avoid many-to-many and bidirectional filters unless necessary.
+3. Hide surrogate keys, create measures in DAX (`Total Premium = SUM(fact[premium])`) rather than calculated columns where possible.
+4. Import mode for speed; DirectQuery only when data must be live or is too large; composite models and aggregations for the middle.
+5. Use a star even when the source is one flat export: split out dimensions so slicers are small and relationships are clean.
+
+> **Interview note:** Be ready to define grain in one sentence and to explain why a Type 2 dimension exists. "One row per order per status change, and agents are Type 2 so team moves do not rewrite history" is the kind of answer that ends the question.
+
+### Try It Yourself
+
+```sql
+-- A star schema for title production with a generated date dimension, a Type 2 agent dimension and a transaction fact.
+CREATE TABLE dim_date (date_key INTEGER PRIMARY KEY, date TEXT NOT NULL, year INTEGER, quarter INTEGER, month INTEGER, month_name TEXT, weekday INTEGER, is_weekend INTEGER);
+WITH RECURSIVE d(dt) AS (SELECT '2026-01-01' UNION ALL SELECT date(dt, '+1 day') FROM d WHERE dt < '2026-03-31')
+INSERT INTO dim_date SELECT CAST(strftime('%Y%m%d', dt) AS INTEGER), dt, CAST(strftime('%Y', dt) AS INTEGER), (CAST(strftime('%m', dt) AS INTEGER) + 2) / 3,
+  CAST(strftime('%m', dt) AS INTEGER), substr('JanFebMarAprMayJunJulAugSepOctNovDec', 1 + 3 * (CAST(strftime('%m', dt) AS INTEGER) - 1), 3),
+  CAST(strftime('%w', dt) AS INTEGER), CASE WHEN strftime('%w', dt) IN ('0','6') THEN 1 ELSE 0 END FROM d;
+
+CREATE TABLE dim_agent (agent_key INTEGER PRIMARY KEY, agent_id INTEGER, name TEXT, team TEXT, valid_from TEXT, valid_to TEXT, is_current INTEGER);
+INSERT INTO dim_agent VALUES (1, 101, 'Sana', 'Search', '2025-01-01', '2026-02-14', 0), (2, 101, 'Sana', 'Examination', '2026-02-15', '9999-12-31', 1), (3, 102, 'Bilal', 'Search', '2025-01-01', '9999-12-31', 1);
+CREATE TABLE dim_state (state_key INTEGER PRIMARY KEY, state TEXT, region TEXT);
+INSERT INTO dim_state VALUES (1, 'TX', 'South'), (2, 'WY', 'Mountain'), (3, 'FL', 'South');
+CREATE TABLE dim_product (product_key INTEGER PRIMARY KEY, product TEXT);
+INSERT INTO dim_product VALUES (1, 'Owner'), (2, 'Lender');
+
+CREATE TABLE fact_closings (date_key INTEGER REFERENCES dim_date, agent_key INTEGER REFERENCES dim_agent, state_key INTEGER REFERENCES dim_state,
+  product_key INTEGER REFERENCES dim_product, file_no TEXT, premium REAL, liability REAL, turnaround_days INTEGER);
+-- Type 2 lookup: the fact points at the agent row valid on the closing date
+CREATE TABLE staging (file_no TEXT, closed TEXT, agent_id INTEGER, state TEXT, product TEXT, premium REAL, liability REAL, turnaround_days INTEGER);
+INSERT INTO staging VALUES ('TX-1001','2026-01-20',101,'TX','Owner',2150,350000,12),('TX-1002','2026-02-03',102,'TX','Lender',1180,280000,9),
+ ('WY-2001','2026-02-25',101,'WY','Owner',1890,410000,15),('FL-3001','2026-03-10',101,'FL','Owner',2410,455000,11),('TX-1003','2026-03-12',102,'TX','Owner',1725,300000,7);
+INSERT INTO fact_closings
+SELECT d.date_key, a.agent_key, s.state_key, p.product_key, st.file_no, st.premium, st.liability, st.turnaround_days
+FROM staging st
+JOIN dim_date d ON d.date = st.closed
+JOIN dim_agent a ON a.agent_id = st.agent_id AND st.closed BETWEEN a.valid_from AND a.valid_to
+JOIN dim_state s ON s.state = st.state
+JOIN dim_product p ON p.product = st.product;
+
+-- Premium by month and team, as the team was at the time (Type 2 in action: Sana counts as Search in January, Examination in March)
+SELECT d.year, d.month_name, a.team, COUNT(*) AS closings, ROUND(SUM(f.premium), 2) AS premium, ROUND(AVG(f.turnaround_days), 1) AS avg_turnaround
+FROM fact_closings f JOIN dim_date d ON d.date_key = f.date_key JOIN dim_agent a ON a.agent_key = f.agent_key
+GROUP BY d.year, d.month, a.team ORDER BY d.month, a.team;
+-- Region by product (two dimensions, one hop each)
+SELECT s.region, p.product, COUNT(*) AS closings, ROUND(SUM(f.liability) / 1000.0, 1) AS liability_k
+FROM fact_closings f JOIN dim_state s ON s.state_key = f.state_key JOIN dim_product p ON p.product_key = f.product_key
+GROUP BY s.region, p.product ORDER BY s.region, p.product;
+-- Weekday closings only, using a date-dimension attribute instead of date arithmetic
+SELECT COUNT(*) AS weekday_closings FROM fact_closings f JOIN dim_date d ON d.date_key = f.date_key WHERE d.is_weekend = 0;
+```
+
+### Quiz
+
+1. What is the "grain" of a fact table?
+- [x] What one row represents (for example, one closing, or one order per day)
+- [ ] The number of columns
+- [ ] The size of the table
+> Declare the grain first; every measure and key must make sense at that grain.
+
+2. Why do dimensions use surrogate keys?
+- [ ] Because business keys are always text
+- [x] To allow multiple versions of the same entity (Type 2 history) and decouple from source systems
+- [ ] To make joins slower
+> A surrogate key identifies a version of an agent, not just the agent.
+
+3. Which fact type best answers "how many files were open at the end of each week"?
+- [ ] Transaction fact
+- [x] Periodic snapshot fact
+- [ ] Accumulating snapshot fact
+> A snapshot captures state at intervals; transaction facts would need reconstruction.
+
+4. Why does Power BI prefer a star over a single flat table?
+- [x] Small dimensions make slicers and relationships efficient and the model understandable
+- [ ] Flat tables are not supported
+- [ ] Stars use less DAX
+> VertiPaq compresses facts well and filters through one-hop relationships quickly.
+
+### Exercises
+
+1. **Declare a grain** — For the weekly status report (open files by stage per state), specify the fact grain, measures and dimensions.
+<details><summary>Solution</summary>
+
+```text
+Grain: one row per order per week-ending date (periodic snapshot).
+Measures: days_open, is_open (0/1), premium (semi-additive across time).
+Dimensions: dim_date (week end), dim_state, dim_stage, dim_agent (current owner), dim_product.
+```
+
+</details>
+
+2. **Type 2 update** — Write the SQL that closes the current row for agent 102 and inserts a new version with team 'Examination' effective 2026-04-01.
+<details><summary>Solution</summary>
+
+```sql
+UPDATE dim_agent SET valid_to = '2026-03-31', is_current = 0 WHERE agent_id = 102 AND is_current = 1;
+INSERT INTO dim_agent (agent_key, agent_id, name, team, valid_from, valid_to, is_current)
+VALUES (4, 102, 'Bilal', 'Examination', '2026-04-01', '9999-12-31', 1);
+```
+
+</details>
+
+3. **DAX measures** — Write measures for total premium, closings count and year-to-date premium using the date table.
+<details><summary>Solution</summary>
+
+```dax
+Total Premium = SUM ( fact_closings[premium] )
+Closings = COUNTROWS ( fact_closings )
+Premium YTD = TOTALYTD ( [Total Premium], dim_date[date] )
+```
+
+</details>
+
+### Interview Questions
+
+**Q: Explain a star schema and why analytics tools prefer it.**
+A central fact table holds numeric measures at a declared grain with foreign keys to surrounding dimension tables that hold descriptive attributes; every dimension is one join away, so any question is "filter some dimensions, aggregate the fact". It is preferred because the join pattern is predictable and cheap, dimensions are small and compress well, columnar engines such as VertiPaq scan only the measure columns needed, and business users can read the model. Compared with a normalised schema it duplicates descriptive data and needs an ETL process to maintain, and compared with one flat table it needs relationships but avoids a huge repeated-text table that slicers cannot handle. In a Power BI model for production reporting I would have a closings fact, a weekly snapshot fact, and shared date, agent, state and product dimensions.
+
+**Q: How do you handle an agent moving teams without rewriting history?**
+With a Type 2 slowly changing dimension: the agent dimension has a surrogate key per version, `valid_from`, `valid_to` and a current flag; when Sana moves from Search to Examination, the old row is closed with an end date and a new row inserted, and facts loaded after that date point at the new key. Reports by team then attribute January closings to Search and March closings to Examination, which matches reality, while a "current team" attribute can be added for reports that want the present-day view. The cost is a more complex load (lookup by business key and date) and a larger dimension, which is negligible for a few dozen agents.
+
+**Q: Import or DirectQuery in Power BI, and how do you keep a large model fast?**
+Import by default: VertiPaq compresses and answers interactively, refreshes can be scheduled and incremental. DirectQuery when data must be live or exceeds memory, accepting slower visuals and source load. For a large model I reduce cardinality (no high-precision timestamps or free text in facts), remove unused columns, keep a proper star, push transformations to source views so query folding holds, set up incremental refresh on the fact by date, and use aggregation tables or composite models so common summaries are imported while detail stays in DirectQuery. I measure with Performance Analyzer and DAX Studio rather than guessing which visual is slow.
+
+## Security & backups
+
+Databases hold the most valuable and most regulated data a business has: personal information on title-insurance customers, premiums, agent performance. **Security** limits who can read or change what, and proves who did; **backups** make loss recoverable. Both are judged by the same standard: not whether the controls exist, but whether they were tested.
+
+### Authentication and roles
+
+Users authenticate to the DBMS (password, certificate, Kerberos or Active Directory, cloud IAM). Privileges are then granted to **roles**, and users are added to roles, so permissions are managed by job function rather than person.
+
+```sql
+-- PostgreSQL (SQL Server and MySQL are similar in spirit)
+CREATE ROLE reporting NOLOGIN;
+GRANT USAGE ON SCHEMA prod TO reporting;
+GRANT SELECT ON ALL TABLES IN SCHEMA prod TO reporting;
+ALTER DEFAULT PRIVILEGES IN SCHEMA prod GRANT SELECT ON TABLES TO reporting;   -- future tables too
+CREATE ROLE agent_app LOGIN PASSWORD '...';
+GRANT SELECT, INSERT, UPDATE ON prod.orders, prod.status_events TO agent_app;   -- no DELETE, no DDL
+GRANT reporting TO powerbi_reader;
+REVOKE ALL ON prod.customers FROM reporting;                                   -- PII stays out of the reporting role
+```
+
+**Least privilege**: the application account cannot drop tables, the report reader cannot write, and nobody uses the superuser for daily work. Separate accounts per application make audit logs meaningful.
+
+### Row- and column-level security
+
+Views restrict columns (`CREATE VIEW orders_public AS SELECT file_no, state, status FROM orders`) and rows (`WHERE state = current_setting('app.state')`). **Row-level security** policies (PostgreSQL `CREATE POLICY`, SQL Server security predicates) enforce row filters inside the engine for every query, so a Texas office account physically cannot read Wyoming rows. **Dynamic data masking** (SQL Server, Azure SQL) shows `XXX-XX-1234` to unprivileged users while storing the full value. Power BI implements row-level security with DAX filters on roles, applied per viewer.
+
+### SQL injection
+
+The most common database attack, and entirely preventable: never build SQL by concatenating user input.
+
+```python
+# Vulnerable: file_no = "' OR 1=1 --" returns every order
+cur.execute(f"SELECT * FROM orders WHERE file_no = '{file_no}'")
+# Safe: parameter binding; the value can never become SQL
+cur.execute("SELECT * FROM orders WHERE file_no = ?", (file_no,))
+```
+
+Identifiers (table or column names chosen by the user, as in a report builder) cannot be bound as parameters; whitelist them against a fixed list. ORMs parameterise automatically unless you use their raw-SQL escape hatches. Stored procedures do not protect you if they build dynamic SQL inside.
+
+### Encryption
+
+**In transit**: TLS between application and database (`sslmode=verify-full` in PostgreSQL, `Encrypt=True;TrustServerCertificate=False` in SQL Server). **At rest**: transparent data encryption (SQL Server TDE, Oracle TDE, cloud disk encryption, SQLCipher for SQLite) protects stolen disks and backups but not a logged-in attacker. **Column-level**: hash passwords with argon2 or bcrypt (never reversible encryption), encrypt sensitive fields with keys held outside the database (`pgcrypto`, SQL Server Always Encrypted, application-level envelope encryption with a KMS). Backups must be encrypted with the same seriousness as the database.
+
+### Auditing
+
+Know who did what: SQL Server Audit, PostgreSQL `pgaudit`, MySQL Enterprise Audit, or application-level audit tables written by triggers (as in the Integrity Constraints chapter). Log logins, privilege changes, schema changes and access to sensitive tables; ship logs off the database host so an attacker cannot erase them. Retention follows regulation (GLBA for US financial data, GDPR for EU personal data).
+
+### Backup strategy
+
+| Type | What | Restore granularity |
+|---|---|---|
+| Full | entire database | to the backup time |
+| Differential / incremental | changes since last full | to the last differential |
+| Log / WAL archive | every committed transaction | to any point in time |
+| Logical dump (`pg_dump`, `mysqldump`, `.dump`) | SQL or custom format | portable, slower to restore, per table possible |
+| Snapshot (storage or cloud) | disk image | fast, must be crash-consistent |
+
+Define **RPO** (how much data you may lose: "15 minutes" means log backups every 15 minutes) and **RTO** (how long restore may take: drives whether you need a standby replica). Follow 3-2-1: three copies, two media, one off-site, and make one copy immutable or offline so ransomware cannot encrypt it too.
+
+```bash
+# PostgreSQL: base backup plus continuous WAL archiving
+pg_basebackup -D /backups/base-2026-03-04 -Ft -z -X stream
+# postgresql.conf: archive_mode = on; archive_command = 'cp %p /backups/wal/%f'
+# SQLite: consistent online backup, never a plain file copy of a live database
+sqlite3 titles.db ".backup '/backups/titles-2026-03-04.db'"
+# SQL Server
+BACKUP DATABASE Titles TO DISK = 'D:\bak\Titles_full.bak' WITH COMPRESSION, CHECKSUM;
+BACKUP LOG Titles TO DISK = 'D:\bak\Titles_log_1432.trn';
+```
+
+### Testing restores
+
+A backup that has never been restored is a hypothesis. Automate a periodic restore to a scratch server, run integrity checks (`PRAGMA integrity_check`, `DBCC CHECKDB`, `pg_amcheck`), run a row-count comparison against production, and record the time it took, which is your real RTO. Practise point-in-time recovery once so the runbook is proven before the day the `DELETE` without a `WHERE` runs.
+
+> **Warning:** Backups contain everything the database contains, including PII. Encrypt them, restrict access to the backup location as tightly as the database itself, and include backup files in the retention and deletion policy; a five-year-old backup with customer SSNs is a liability, not an asset.
+
+### Try It Yourself
+
+```sql
+-- Security patterns that work in SQLite: column/row restriction through views, masking, an append-only audit trail, and injection shown safely.
+CREATE TABLE customers (customer_id INTEGER PRIMARY KEY, name TEXT NOT NULL, ssn TEXT NOT NULL, email TEXT NOT NULL, state TEXT NOT NULL);
+CREATE TABLE orders (file_no TEXT PRIMARY KEY, customer_id INTEGER REFERENCES customers(customer_id), state TEXT NOT NULL, status TEXT NOT NULL, premium REAL NOT NULL);
+INSERT INTO customers VALUES (1, 'Maria Alvarez', '123-45-6789', 'maria@example.com', 'TX'), (2, 'John Baker', '987-65-4321', 'john@example.com', 'WY');
+INSERT INTO orders VALUES ('TX-1001', 1, 'TX', 'Open', 2150), ('WY-2001', 2, 'WY', 'Closed', 1890), ('TX-1002', 1, 'TX', 'Closed', 1180);
+
+-- Column-level security + dynamic masking through a view (reporting role would be granted SELECT on the view only)
+CREATE VIEW v_customers_masked AS
+SELECT customer_id, name, 'XXX-XX-' || substr(ssn, -4) AS ssn_masked,
+       substr(email, 1, 1) || '***' || substr(email, instr(email, '@')) AS email_masked, state FROM customers;
+SELECT * FROM v_customers_masked;
+
+-- Row-level security: a per-session setting emulated with a one-row table (PostgreSQL: CREATE POLICY ... USING (state = current_setting('app.state')))
+CREATE TABLE session_ctx (allowed_state TEXT);
+INSERT INTO session_ctx VALUES ('TX');
+CREATE VIEW v_orders_rls AS SELECT o.* FROM orders o WHERE o.state = (SELECT allowed_state FROM session_ctx);
+SELECT 'TX office sees' AS who, * FROM v_orders_rls;
+
+-- Append-only audit trail: triggers record changes and block deletes from the audit table
+CREATE TABLE audit (id INTEGER PRIMARY KEY, at TEXT DEFAULT (datetime('now')), actor TEXT, file_no TEXT, old_status TEXT, new_status TEXT);
+CREATE TRIGGER trg_orders_status AFTER UPDATE OF status ON orders
+BEGIN INSERT INTO audit (actor, file_no, old_status, new_status) VALUES ((SELECT allowed_state FROM session_ctx) || '-office', NEW.file_no, OLD.status, NEW.status); END;
+CREATE TRIGGER trg_audit_immutable BEFORE DELETE ON audit BEGIN SELECT RAISE(ABORT, 'audit rows cannot be deleted'); END;
+UPDATE orders SET status = 'Closed' WHERE file_no = 'TX-1001';
+SELECT * FROM audit;
+
+-- SQL injection, demonstrated with a stored "user input" string instead of string concatenation in code
+CREATE TABLE user_input (value TEXT);
+INSERT INTO user_input VALUES ('TX-1001'), (''' OR 1=1 --');
+-- Concatenated query text an unsafe application would have built for each input:
+SELECT value AS input, 'SELECT * FROM orders WHERE file_no = ''' || value || '''' AS sql_built FROM user_input;
+-- Parameter binding compares the whole string as a value: the malicious input matches nothing
+SELECT u.value AS bound_parameter, COUNT(o.file_no) AS rows_returned FROM user_input u LEFT JOIN orders o ON o.file_no = u.value GROUP BY u.value;
+-- Uncomment to prove the audit table is append-only:
+-- DELETE FROM audit;
+```
+
+### Quiz
+
+1. What is the correct defence against SQL injection?
+- [ ] Escaping quotes with a regular expression
+- [x] Parameterised queries, with identifiers whitelisted
+- [ ] Stored procedures
+> Binding keeps data and SQL separate; procedures that build dynamic SQL are still vulnerable.
+
+2. What does transparent data encryption protect against?
+- [x] Theft of disks or backup files
+- [ ] A user with SELECT privilege reading data
+- [ ] SQL injection
+> TDE decrypts for any authenticated session; access control still governs who reads what.
+
+3. RPO of 15 minutes implies which backup practice?
+- [ ] A full backup every 15 minutes
+- [x] Log or WAL backups at least every 15 minutes
+- [ ] Weekly backups
+> Log backups let you roll forward to within the RPO window.
+
+4. Why keep one backup copy immutable or offline?
+- [x] So ransomware or a compromised account cannot destroy the backups too
+- [ ] To save space
+- [ ] Because tapes are faster
+> The 3-2-1 rule plus an immutable copy protects against attackers, not only disk failure.
+
+### Exercises
+
+1. **Least privilege** — Write the grants for a Power BI reader that may read all tables in schema `prod` except `customers`, and may never write.
+<details><summary>Solution</summary>
+
+```sql
+CREATE ROLE powerbi_reader LOGIN PASSWORD '...';
+GRANT USAGE ON SCHEMA prod TO powerbi_reader;
+GRANT SELECT ON ALL TABLES IN SCHEMA prod TO powerbi_reader;
+REVOKE SELECT ON prod.customers FROM powerbi_reader;
+ALTER DEFAULT PRIVILEGES IN SCHEMA prod GRANT SELECT ON TABLES TO powerbi_reader;
+```
+
+</details>
+
+2. **Row-level policy** — Write a PostgreSQL policy so users in role `tx_office` see only rows where `state = 'TX'`.
+<details><summary>Solution</summary>
+
+```sql
+ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tx_only ON orders FOR ALL TO tx_office USING (state = 'TX') WITH CHECK (state = 'TX');
+```
+
+</details>
+
+3. **Restore drill** — Write a checklist for a monthly restore test of a SQL Server database.
+<details><summary>Solution</summary>
+
+```text
+1. Restore latest full + differential + logs to a scratch instance with a new name (WITH MOVE, NORECOVERY then RECOVERY).
+2. Run DBCC CHECKDB WITH NO_INFOMSGS.
+3. Compare row counts of key tables with production; spot-check recent orders.
+4. Record elapsed time (RTO evidence) and the newest transaction time (RPO evidence).
+5. Drop the scratch database; file the report; fix anything that failed.
+```
+
+</details>
+
+### Interview Questions
+
+**Q: How do you secure a production database?**
+Layered: network (no public endpoint, TLS enforced, firewall to application hosts), authentication (per-application accounts, no shared superuser, integrated auth where possible), authorisation (roles with least privilege, row- and column-level security for multi-office data, views for reporting), code (parameterised queries everywhere, identifiers whitelisted), data (hashed passwords, encrypted sensitive columns with keys outside the database, TDE for disks and backups), and detection (audit logging shipped off-host, alerts on privilege changes and failed logins). Then patching and periodic review of who holds which role. I would give a concrete example such as a Power BI reader role that cannot see the customers table and an application account without DELETE or DDL rights.
+
+**Q: Design a backup and recovery plan for a production-tracking database.**
+Start from the business numbers: say RPO 15 minutes and RTO 2 hours. Nightly full backup, differential every 6 hours if the engine supports it, transaction-log or WAL backups every 15 minutes, all compressed, checksummed and encrypted, copied to a second location and to an immutable off-site bucket with retention matching regulation. A warm standby replica for fast failover covers the RTO for hardware failure; point-in-time restore from backups covers human error. Monthly automated restore tests to a scratch server with integrity checks and row-count comparisons, with the elapsed time recorded as the real RTO, and a written runbook for PITR that someone other than me has executed. Backups are treated as sensitive data with the same access control as production.
+
+**Q: A developer says stored procedures make SQL injection impossible. Do you agree?**
+No. A stored procedure that uses its parameters as values in static SQL is safe, but one that concatenates them into a dynamic string and executes it (`EXEC(@sql)`, `EXECUTE IMMEDIATE`) is just as injectable as application code. The defence is parameter binding at every layer where SQL text is formed, whitelisting when an identifier must vary, least-privilege accounts so a successful injection cannot drop tables or read unrelated data, and testing with hostile inputs. I would also point out that ORMs have raw-query escape hatches that developers reach for in report builders, which is exactly where injection appears in practice.
+
+## Database design case study (title-insurance production tracking) & interview questions
+
+This chapter applies the whole course to one realistic system: tracking title-insurance orders from intake to policy issuance across several states, with agents, tasks, rate calculation, documents and management reporting. It is the kind of design exercise interviewers set ("design the database for X") and the kind of system a production-support analyst lives inside. Work through it as a method, not a fixed answer.
+
+### Step 1: requirements as questions
+
+Gather what the system must answer and do:
+
+- Intake: create an order (file number, state, county, product, liability amount, customer, lender), assign it to an agent.
+- Workflow: every order passes through stages (Open, Search, Examination, Commitment, Closing, Policy Issued, Closed) and may be put on hold or cancelled; every change must be attributable and timestamped.
+- Rates: premium is computed from a state rate matrix by liability band, product and effective date; endorsements add fees.
+- Documents: each order accumulates documents (commitment, policy, deeds) with versions.
+- QA: a checker reviews a sample of completed searches and records errors by category.
+- Reporting: weekly status by state and stage, turnaround per stage, agent productivity and error rates, premium by month and product, ageing of open files.
+
+### Step 2: entities and relationships
+
+```text
+customers 1---* orders *---1 agents            (current owner)
+orders 1---* status_events *---1 agents         (who changed it)
+orders 1---* order_endorsements *---1 endorsements
+orders 1---* documents (versioned)
+orders 1---* qa_reviews *---1 agents (reviewer);  qa_reviews 1---* qa_findings *---1 error_categories
+rate_bands: (state, product, band_from, band_to, effective_from) -> rate_per_thousand
+```
+
+Decisions with reasons: status lives in `orders.status` for fast filtering **and** in `status_events` for history (a controlled denormalisation kept consistent by a trigger); premium is stored on the order at the time of quoting, because rates change and the historical premium must not; agents are referenced by surrogate `agent_id`, with name changes and team moves handled in the warehouse as Type 2.
+
+### Step 3: schema
+
+```sql
+CREATE TABLE agents (agent_id INTEGER PRIMARY KEY, name TEXT NOT NULL, team TEXT NOT NULL CHECK (team IN ('Search','Examination','Closing','QA')), active INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE customers (customer_id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE);
+CREATE TABLE stages (stage_id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL, seq INTEGER NOT NULL);
+CREATE TABLE orders (
+  order_id INTEGER PRIMARY KEY, file_no TEXT NOT NULL UNIQUE CHECK (file_no GLOB '[A-Z][A-Z]-[0-9]*'),
+  state TEXT NOT NULL CHECK (length(state) = 2), county TEXT NOT NULL,
+  product TEXT NOT NULL CHECK (product IN ('Owner','Lender','Both')),
+  liability REAL NOT NULL CHECK (liability > 0), premium REAL CHECK (premium >= 0),
+  customer_id INTEGER NOT NULL REFERENCES customers, agent_id INTEGER NOT NULL REFERENCES agents,
+  stage_id INTEGER NOT NULL REFERENCES stages, opened TEXT NOT NULL, closed TEXT, CHECK (closed IS NULL OR closed >= opened)
+);
+CREATE TABLE status_events (event_id INTEGER PRIMARY KEY, order_id INTEGER NOT NULL REFERENCES orders, from_stage INTEGER REFERENCES stages,
+  to_stage INTEGER NOT NULL REFERENCES stages, agent_id INTEGER NOT NULL REFERENCES agents, at TEXT NOT NULL, note TEXT);
+CREATE TABLE rate_bands (state TEXT, product TEXT, band_from REAL, band_to REAL, rate_per_k REAL NOT NULL CHECK (rate_per_k > 0),
+  effective_from TEXT NOT NULL, PRIMARY KEY (state, product, band_from, effective_from), CHECK (band_to > band_from));
+CREATE TABLE endorsements (code TEXT PRIMARY KEY, description TEXT NOT NULL, fee REAL NOT NULL CHECK (fee >= 0));
+CREATE TABLE order_endorsements (order_id INTEGER REFERENCES orders, code TEXT REFERENCES endorsements, PRIMARY KEY (order_id, code));
+CREATE TABLE qa_reviews (review_id INTEGER PRIMARY KEY, order_id INTEGER NOT NULL REFERENCES orders, reviewer_id INTEGER NOT NULL REFERENCES agents,
+  reviewed_at TEXT NOT NULL, passed INTEGER NOT NULL CHECK (passed IN (0,1)));
+CREATE TABLE qa_findings (finding_id INTEGER PRIMARY KEY, review_id INTEGER NOT NULL REFERENCES qa_reviews, category TEXT NOT NULL, severity TEXT NOT NULL CHECK (severity IN ('Minor','Major','Critical')));
+```
+
+Indexes follow the queries: `orders (state, stage_id)`, `orders (agent_id) WHERE closed IS NULL`, `status_events (order_id, at)`, `qa_reviews (reviewer_id, reviewed_at)`.
+
+### Step 4: the hard queries
+
+**Turnaround per stage** comes from pairing each status event with the next one for the same order using the `LEAD` window function. **Ageing** buckets open orders by `julianday('now') - julianday(opened)`. **Rate lookup** joins the order to the band that contains its liability and is the latest effective on the opening date. **Agent productivity** counts closings and QA error rates per agent per week, joining sparse QA data with `LEFT JOIN` so agents without reviews still appear. The Try It block implements all four.
+
+### Step 5: operations
+
+Transactions wrap "advance stage": update `orders.stage_id` and insert the `status_events` row together, with the trigger guaranteeing the pair. Constraints enforce the domain; a nightly job snapshots open orders into the warehouse's periodic snapshot fact; role-based access keeps PII in `customers` away from reporting; backups follow the previous chapter. When volume grows, `status_events` is the table to partition by date, and reporting moves to replicas or the warehouse.
+
+> **Interview note:** In a design interview, narrate the method: questions, entities, keys, the one or two deliberate denormalisations and why, indexes from the queries, and how history is kept. Then invite the interviewer to add a requirement; changing your design gracefully is what they are scoring.
+
+### Database interview questions: the recurring set
+
+1. Explain normalisation up to BCNF and when you would denormalise.
+2. Primary versus unique versus foreign keys; natural versus surrogate keys.
+3. How does a B+tree index work; composite index column order; covering indexes.
+4. Read an execution plan; sargable predicates; why is this query slow?
+5. ACID with a concrete example; what happens at COMMIT.
+6. Isolation levels and the anomalies each allows; MVCC versus locking; deadlocks.
+7. Write-ahead logging and crash recovery; checkpoints; point-in-time recovery.
+8. Joins (inner, left, semi, anti), window functions, CTEs, `GROUP BY` versus `HAVING`.
+9. CAP, replication, sharding, and when not to shard.
+10. SQL versus NoSQL: choose for a given workload.
+11. Star schema, grain, slowly changing dimensions.
+12. SQL injection, least privilege, encryption, backup strategy with RPO/RTO.
+13. Design the database for X (this chapter's method).
+
+### Try It Yourself
+
+```sql
+-- The production-tracking schema in miniature, with the four hard queries: turnaround per stage, ageing, rate lookup, agent productivity.
+CREATE TABLE agents (agent_id INTEGER PRIMARY KEY, name TEXT NOT NULL, team TEXT NOT NULL);
+CREATE TABLE stages (stage_id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL, seq INTEGER NOT NULL);
+CREATE TABLE orders (order_id INTEGER PRIMARY KEY, file_no TEXT NOT NULL UNIQUE, state TEXT NOT NULL, product TEXT NOT NULL,
+  liability REAL NOT NULL CHECK (liability > 0), premium REAL, agent_id INTEGER NOT NULL REFERENCES agents, stage_id INTEGER NOT NULL REFERENCES stages,
+  opened TEXT NOT NULL, closed TEXT, CHECK (closed IS NULL OR closed >= opened));
+CREATE TABLE status_events (event_id INTEGER PRIMARY KEY, order_id INTEGER NOT NULL REFERENCES orders, to_stage INTEGER NOT NULL REFERENCES stages,
+  agent_id INTEGER NOT NULL REFERENCES agents, at TEXT NOT NULL);
+CREATE TABLE rate_bands (state TEXT, product TEXT, band_from REAL, band_to REAL, rate_per_k REAL NOT NULL, effective_from TEXT NOT NULL,
+  PRIMARY KEY (state, product, band_from, effective_from));
+CREATE TABLE qa_reviews (review_id INTEGER PRIMARY KEY, order_id INTEGER REFERENCES orders, reviewer_id INTEGER REFERENCES agents, passed INTEGER NOT NULL);
+-- Trigger keeps orders.stage_id and the event history consistent
+CREATE TRIGGER trg_stage_history AFTER UPDATE OF stage_id ON orders
+BEGIN INSERT INTO status_events (order_id, to_stage, agent_id, at) VALUES (NEW.order_id, NEW.stage_id, NEW.agent_id, '2026-03-' || printf('%02d', 10 + NEW.order_id)); END;
+
+INSERT INTO agents VALUES (1,'Sana','Search'),(2,'Bilal','Examination'),(3,'Hira','QA');
+INSERT INTO stages VALUES (1,'Open',1),(2,'Search',2),(3,'Examination',3),(4,'Commitment',4),(5,'Closed',5);
+INSERT INTO rate_bands VALUES ('TX','Owner',0,100000,5.75,'2025-01-01'),('TX','Owner',100000,500000,4.25,'2025-01-01'),('TX','Owner',100000,500000,4.50,'2026-02-01'),
+  ('WY','Owner',0,250000,3.90,'2025-01-01'),('WY','Owner',250000,1000000,3.10,'2025-01-01');
+INSERT INTO orders (file_no,state,product,liability,agent_id,stage_id,opened) VALUES
+  ('TX-1001','TX','Owner',350000,1,1,'2026-02-20'),('TX-1002','TX','Owner',80000,1,1,'2026-01-15'),('WY-2001','WY','Owner',410000,2,1,'2026-03-01'),('TX-1003','TX','Owner',300000,2,1,'2026-03-06');
+INSERT INTO status_events (order_id,to_stage,agent_id,at) SELECT order_id, 1, agent_id, opened FROM orders;
+-- Rate lookup: band containing the liability, latest effective on or before the opening date, premium stored on the order
+UPDATE orders SET premium = (
+  SELECT ROUND(orders.liability / 1000.0 * rb.rate_per_k, 2) FROM rate_bands rb
+  WHERE rb.state = orders.state AND rb.product = orders.product AND orders.liability > rb.band_from AND orders.liability <= rb.band_to AND rb.effective_from <= orders.opened
+  ORDER BY rb.effective_from DESC LIMIT 1);
+-- Advance stages (each UPDATE fires the trigger)
+UPDATE orders SET stage_id = 2 WHERE file_no IN ('TX-1001','TX-1002','WY-2001');
+UPDATE orders SET stage_id = 3 WHERE file_no IN ('TX-1001','TX-1002');
+UPDATE orders SET stage_id = 5, closed = '2026-03-14' WHERE file_no = 'TX-1002';
+INSERT INTO qa_reviews VALUES (1, 2, 3, 0), (2, 1, 3, 1);
+
+SELECT o.file_no, o.state, s.name AS stage, o.liability, o.premium, o.opened FROM orders o JOIN stages s ON s.stage_id = o.stage_id ORDER BY o.file_no;
+-- 1. Turnaround per stage: days between consecutive events (LEAD window function)
+SELECT o.file_no, s.name AS stage, e.at AS entered, LEAD(e.at) OVER (PARTITION BY e.order_id ORDER BY e.at) AS left_at,
+       julianday(COALESCE(LEAD(e.at) OVER (PARTITION BY e.order_id ORDER BY e.at), '2026-03-20')) - julianday(e.at) AS days_in_stage
+FROM status_events e JOIN orders o ON o.order_id = e.order_id JOIN stages s ON s.stage_id = e.to_stage ORDER BY o.file_no, e.at;
+-- 2. Ageing of open files as of 2026-03-20
+SELECT CASE WHEN julianday('2026-03-20') - julianday(opened) <= 7 THEN '0-7 days' WHEN julianday('2026-03-20') - julianday(opened) <= 21 THEN '8-21 days' ELSE '22+ days' END AS age_bucket,
+       COUNT(*) AS open_files, ROUND(SUM(premium), 2) AS premium_at_risk FROM orders WHERE closed IS NULL GROUP BY 1 ORDER BY 1;
+-- 3. Agent productivity with QA error rate (LEFT JOIN keeps agents with no reviews)
+SELECT a.name, a.team, COUNT(DISTINCT o.order_id) AS files, SUM(o.closed IS NOT NULL) AS closed_files,
+       COUNT(q.review_id) AS reviews, ROUND(100.0 * SUM(CASE WHEN q.passed = 0 THEN 1 ELSE 0 END) / NULLIF(COUNT(q.review_id), 0), 1) AS error_rate_pct
+FROM agents a LEFT JOIN orders o ON o.agent_id = a.agent_id LEFT JOIN qa_reviews q ON q.order_id = o.order_id GROUP BY a.agent_id ORDER BY a.name;
+```
+
+### Quiz
+
+1. Why store `premium` on the order when it can be computed from the rate matrix?
+- [x] Rates change over time; the quoted premium must remain what it was
+- [ ] Computed columns are not allowed
+- [ ] To avoid joins in every query
+> This is a deliberate denormalisation justified by history, not convenience.
+
+2. Which window function pairs each status event with the next one for the same order?
+- [ ] `ROW_NUMBER()`
+- [x] `LEAD()`
+- [ ] `SUM() OVER`
+> `LEAD(at) OVER (PARTITION BY order_id ORDER BY at)` gives the next event's time.
+
+3. Why is `orders.stage_id` kept alongside `status_events`?
+- [x] Fast filtering on current stage, with history preserved in the events table
+- [ ] The events table is optional
+- [ ] To avoid triggers
+> Current state and history serve different queries; a trigger keeps them consistent.
+
+4. In a design interview, what should you do first?
+- [ ] Draw every table
+- [x] Clarify the questions and operations the system must support
+- [ ] Choose the database vendor
+> Requirements decide the grain, the keys and the denormalisations.
+
+### Exercises
+
+1. **Add a requirement** — Orders can be reassigned between agents, and reports need "who owned the file during each stage". Change the design.
+<details><summary>Solution</summary>
+
+```sql
+-- status_events already records the acting agent per transition; add an explicit assignment history for ownership changes:
+CREATE TABLE assignments (assignment_id INTEGER PRIMARY KEY, order_id INTEGER NOT NULL REFERENCES orders,
+  agent_id INTEGER NOT NULL REFERENCES agents, from_at TEXT NOT NULL, to_at TEXT);
+-- Stage ownership = assignment active at the stage's entered time (join on from_at <= entered < COALESCE(to_at, '9999'))
+```
+
+</details>
+
+2. **Non-overlapping bands** — Write a query that finds overlapping liability bands for the same state, product and effective date.
+<details><summary>Solution</summary>
+
+```sql
+SELECT a.state, a.product, a.effective_from, a.band_from AS a_from, a.band_to AS a_to, b.band_from AS b_from, b.band_to AS b_to
+FROM rate_bands a JOIN rate_bands b
+  ON a.state = b.state AND a.product = b.product AND a.effective_from = b.effective_from AND a.band_from < b.band_from
+WHERE a.band_to > b.band_from;
+```
+
+</details>
+
+3. **Weekly snapshot** — Write the INSERT that captures every open order into `snapshot_open(week_end, order_id, stage_id, days_open)` for 2026-03-20.
+<details><summary>Solution</summary>
+
+```sql
+INSERT INTO snapshot_open (week_end, order_id, stage_id, days_open)
+SELECT '2026-03-20', order_id, stage_id, CAST(julianday('2026-03-20') - julianday(opened) AS INTEGER)
+FROM orders WHERE closed IS NULL;
+```
+
+</details>
+
+### Interview Questions
+
+**Q: Design the database for a title-insurance production tracking system.**
+I start with the questions it must answer and the operations it must support: intake, stage transitions with attribution, premium calculation from a versioned rate matrix, endorsements, QA reviews, and weekly reporting on status, turnaround, productivity and premium. Entities: customers, agents, orders, stages, status_events, rate_bands, endorsements, order_endorsements, qa_reviews, qa_findings. Keys: surrogate integer ids with unique business keys such as file number; composite keys where natural, as in order_endorsements and rate_bands by state, product, band and effective date. Deliberate denormalisations: current stage on the order for filtering, with full history in status_events kept consistent by a trigger, and premium stored at quote time because rates change. Indexes from the queries: state plus stage, open orders per agent, events by order and time. Then transactions around stage advances, role-based access keeping customer PII out of reporting, and a star-schema warehouse fed nightly for Power BI.
+
+**Q: How would you compute turnaround per stage and why not store it directly?**
+From the event history: each status event has the time the order entered a stage, and `LEAD(at) OVER (PARTITION BY order_id ORDER BY at)` gives the time it left, so the difference is the days in that stage, with open stages measured to the report date. Storing a duration column would duplicate derivable data, go stale when an event is corrected, and force every transition to update the previous row; computing it from events keeps one source of truth. For a very large history I would materialise the computed durations into the warehouse's accumulating snapshot fact nightly, which gives fast reporting without compromising the operational schema.
+
+**Q: What would you change in this design at ten times the volume?**
+Partition `status_events` and the QA tables by date so old partitions can be archived and indexes stay small; move all reporting to a read replica or the warehouse so the operational database only serves intake and transitions; add the covering indexes that the top five report queries need and drop any the usage statistics show are idle; batch the nightly snapshot loads in transactions of a few thousand rows; and review the rate lookup, replacing the correlated subquery with a set-based join if it appears in the profile. I would not shard: an orders table growing by tens of thousands of rows a month fits a single well-indexed PostgreSQL for years, and sharding would complicate the joins that this workload is built on.
