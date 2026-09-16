@@ -77,3 +77,14 @@ learn/
     ├── validate.js              Content validator
     └── build-catalog.js         Catalogue / index generator
 ```
+
+## Offline (download and open, no server)
+
+For a copy that works by double-clicking with no web server or internet:
+
+```bash
+cd site/learn
+node tools/build-offline.js     # writes dist-offline/skillforge/ with all content inlined
+```
+
+Then open `dist-offline/skillforge/index.html` in any browser, or zip that folder and share it. All reading, quizzes, exercises, interview prep, flashcards, the mock interview and the roadmap work fully offline; only the Python/SQL "Try it Yourself" runners and generating real Office/PDF files still need internet the first time.

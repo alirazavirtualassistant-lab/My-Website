@@ -28,7 +28,8 @@
     return items;
   }
 
-  fetch('data/interview-bank.json').then(function (r) { return r.json(); }).then(function (d) { bank = d; refresh(); }).catch(function () { bank = []; refresh(); });
+  if (window.INTERVIEW_BANK) { bank = window.INTERVIEW_BANK; Promise.resolve().then(refresh); }
+  else fetch('data/interview-bank.json').then(function (r) { return r.json(); }).then(function (d) { bank = d; refresh(); }).catch(function () { bank = []; refresh(); });
 
   /* ---------- bank ---------- */
   const bankBox = App.el('#bank'), bankQ = App.el('#bank-q');

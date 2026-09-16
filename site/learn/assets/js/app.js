@@ -71,6 +71,7 @@
   /* ---------- search ---------- */
   let index = null, indexPromise = null;
   function loadIndex() {
+    if (window.SEARCH_INDEX) { index = window.SEARCH_INDEX; return Promise.resolve(index); }
     if (!indexPromise) indexPromise = fetch('data/search-index.json').then(function (r) { return r.json(); }).then(function (d) { index = d; return d; }).catch(function () { index = []; return index; });
     return indexPromise;
   }
@@ -112,13 +113,21 @@
 
   /* ---------- course loading ---------- */
   const courseCache = {};
+  function finishCourse(id, text) {
+    const c = LearnMD.parseCourse(text);
+    c.id = id;
+    const cat = App.courseById(id); if (cat) Object.keys(cat).forEach(function (k) { if (!c.meta[k]) c.meta[k] = cat[k]; });
+    return c;
+  }
   App.loadCourse = function (id) {
     if (courseCache[id]) return courseCache[id];
+    // Offline bundle: content is inlined on window.COURSES, so no fetch (works from file://).
+    if (window.COURSES && typeof window.COURSES[id] === 'string') {
+      courseCache[id] = Promise.resolve(finishCourse(id, window.COURSES[id]));
+      return courseCache[id];
+    }
     courseCache[id] = fetch('courses/' + encodeURIComponent(id) + '.md', { cache: 'no-cache' }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); }).then(function (text) {
-      const c = LearnMD.parseCourse(text);
-      c.id = id;
-      const cat = App.courseById(id); if (cat) Object.keys(cat).forEach(function (k) { if (!c.meta[k]) c.meta[k] = cat[k]; });
-      return c;
+      return finishCourse(id, text);
     });
     return courseCache[id];
   };
