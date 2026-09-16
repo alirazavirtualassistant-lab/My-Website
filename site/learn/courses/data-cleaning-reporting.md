@@ -2070,3 +2070,1422 @@ With the same rules and more transparency. Definitions, period and sources are i
 
 **Q: Give an example of a comparison where the total-cost view changed the conclusion.**
 Comparing underwriters on base premium alone, one was cheapest by about $50 at $350k. Adding a typical endorsement bundle and the simultaneous-issue loan policy, it became the second most expensive because its endorsement pricing was high and its simultaneous-issue credit was small, while a mid-priced base underwriter had the lowest bundle cost by roughly $90. Weighting by county transaction volume also mattered, since the cheap underwriter did not cover several high-volume counties. The lesson I bring to interviews is that the headline rate is one cell; the decision needs the scenario a real client faces, computed the same way for every alternative.
+
+## KPIs & SLAs (accuracy, TAT, throughput, backlog) & how to define them
+
+A **KPI** (key performance indicator) is a number that tells you whether an operation is healthy. An **SLA** (service level agreement) is a promise about a KPI: "95% of files delivered within 24 business hours". The analyst's job is to define each KPI so precisely that two people computing it from the same data get the same number, and to build the report so that an SLA breach is visible before the client notices it.
+
+### The four production KPIs
+
+Every document or data-processing operation, from a title-search team to a Fiverr DOCX queue, is described by the same four numbers:
+
+| KPI | Question it answers | Typical definition |
+|---|---|---|
+| **Accuracy** | How much of the work was right? | items passing QA ÷ items audited |
+| **Turnaround time (TAT)** | How long did each item take? | delivered − received, in business hours |
+| **Throughput** | How much did we complete? | items completed per agent per day |
+| **Backlog** | How much is waiting? | items received but not delivered, at a point in time |
+
+Accuracy, TAT and throughput are **flow** measures over a period; backlog is a **stock** measure at an instant. Mixing them up is the most common reporting error: "backlog this week" is meaningless unless you say "as of Friday 17:00".
+
+### Writing a KPI definition
+
+A definition that survives an argument has six parts. Here is the one I use for turnaround:
+
+```text
+KPI:        Turnaround time (TAT)
+Grain:      one file
+Formula:    delivered_at - received_at, counted in business hours
+            (Mon-Fri 08:00-18:00 client local time, excluding US federal holidays)
+Population: files with status = Delivered in the period; cancelled files excluded
+Aggregate:  median, p90 and % within SLA (<= 24 h); never the mean alone
+Source:     production_log.received_at / delivered_at (system timestamps, not agent-entered)
+Owner:      Reporting analyst; reviewed with the client quarterly
+```
+
+The formula line settles the clock; the population line settles which rows count; the aggregate line settles how it is summarised. A vendor whose "average TAT" is 20 hours may have a p90 of 60 hours, which is what the client actually feels.
+
+### Computing all four from one log
+
+```python
+import pandas as pd
+
+log = pd.DataFrame({
+    "file_id":     [101, 102, 103, 104, 105, 106],
+    "agent":       ["Sana", "Sana", "Bilal", "Bilal", "Usman", "Usman"],
+    "received_at": pd.to_datetime(["2026-03-02 09:00", "2026-03-02 11:00", "2026-03-02 10:00",
+                                   "2026-03-03 09:30", "2026-03-03 14:00", "2026-03-04 08:30"]),
+    "delivered_at": pd.to_datetime(["2026-03-02 16:00", "2026-03-03 10:00", "2026-03-04 12:00",
+                                    "2026-03-03 17:00", pd.NaT, pd.NaT]),
+    "qa_result":   ["pass", "pass", "fail", "pass", None, None],
+})
+done = log.dropna(subset=["delivered_at"]).copy()
+done["tat_h"] = (done["delivered_at"] - done["received_at"]).dt.total_seconds() / 3600
+print("Accuracy   :", round((done["qa_result"] == "pass").mean() * 100, 1), "%")
+print("TAT median :", done["tat_h"].median(), "h   p90:", done["tat_h"].quantile(0.9))
+print("Within 24h :", round((done["tat_h"] <= 24).mean() * 100, 1), "%")
+print("Throughput :", done.groupby("agent").size().to_dict())
+print("Backlog    :", log["delivered_at"].isna().sum(), "files as of run time")
+```
+
+Two things to notice. The TAT here is in calendar hours because the example is short; a real implementation uses `numpy.busday_count` or a custom business-hour function, and the definition says which. Accuracy is computed only on audited files, so a week with three audits is a week with a wide confidence interval, and the report should say so.
+
+### Setting the SLA level
+
+An SLA has a **threshold** (24 hours), a **target** (95% of files) and a **measurement window** (calendar month). Set the threshold from the client's downstream need, and the target from your own historical distribution: if your p90 is 22 hours, a 95%-within-24 promise is achievable with slack; if your p90 is 30 hours, promising it is a plan to fail. Always keep an internal **warning level** tighter than the contractual one, for example flag at 92% so a breach at 95% is prevented, not reported.
+
+> **Warning:** Never define accuracy as "errors found by the client". That measures the client's diligence, not your quality, and it rewards teams whose clients do not check. Accuracy must come from your own sampled audit against a written checklist.
+
+### Common KPI traps
+
+- **Averages hide tails.** Report median and p90, or the share within SLA.
+- **Denominator drift.** Excluding cancelled files is fine; excluding "difficult" files is not, unless the definition says so.
+- **Gaming.** A throughput target per agent invites cherry-picking easy files; pair it with accuracy and TAT so the three balance each other.
+- **Point-in-time backlog.** Capture it at a fixed time daily; the Friday 17:00 snapshot is the one to trend.
+- **Small samples.** Three failed files out of ten audits is 70%, but the true rate could be anywhere from 35% to 93%.
+
+### Try It Yourself
+
+```python
+import pandas as pd
+
+log = pd.DataFrame({
+    "file_id": range(1, 11),
+    "agent": ["A", "A", "A", "B", "B", "B", "C", "C", "C", "C"],
+    "tat_h": [6, 9, 30, 12, 15, 26, 8, 40, 11, None],
+    "qa": ["pass", "pass", "fail", "pass", None, "pass", "pass", "fail", "pass", None],
+})
+done = log.dropna(subset=["tat_h"])
+audited = done.dropna(subset=["qa"])
+print("Delivered :", len(done), " Backlog :", log["tat_h"].isna().sum())
+print("Accuracy  :", round((audited["qa"] == "pass").mean() * 100, 1), "% on", len(audited), "audited")
+print("TAT median:", done["tat_h"].median(), " p90:", done["tat_h"].quantile(0.9))
+print("Within SLA:", round((done["tat_h"] <= 24).mean() * 100, 1), "% (target 95%)")
+print(done.groupby("agent")["tat_h"].agg(["count", "median", "max"]))
+```
+
+### Quiz
+
+1. Which KPI is a stock measured at a point in time rather than a flow over a period?
+- [ ] Throughput
+- [ ] Turnaround time
+- [x] Backlog
+> Backlog is how much is waiting right now; the others accumulate over a period.
+
+2. A client asks for the "average TAT". What should the analyst report?
+- [ ] The mean, because that is what was asked
+- [x] The median and p90, or the share within SLA, with the mean only as a supplement
+- [ ] The minimum, to show best-case performance
+> Averages hide the slow tail that the client actually experiences; the p90 and the share within the threshold describe it.
+
+3. What is wrong with defining accuracy as "errors reported by the client"?
+- [x] It measures the client's diligence, not the team's quality
+- [ ] It is too strict
+- [ ] It requires a database
+> A client who never checks makes the team look perfect. Accuracy must come from your own audit.
+
+4. Your p90 TAT is 30 hours. Which SLA is realistic?
+- [ ] 95% within 24 hours
+- [x] 90% within 30 hours, tightening as the process improves
+- [ ] 100% within 12 hours
+> An SLA is a promise; set it from the measured distribution with slack, not from what sounds impressive.
+
+### Exercises
+
+1. **Definition sheet** — Write the six-part definition (grain, formula, population, aggregate, source, owner) for **throughput** in a document-formatting team where some deliverables are 5 pages and some are 700.
+<details><summary>Solution</summary>
+
+```text
+KPI:        Throughput
+Grain:      one delivered document, weighted by page count
+Formula:    sum(pages delivered) per agent per working day
+Population: documents with status = Delivered in the period; revisions of the same
+            document count once (first delivery); cancelled excluded
+Aggregate:  daily total and per-agent mean; also unweighted document count shown alongside
+Source:     jobs.delivered_at and jobs.page_count (page count from the final PDF, not the order form)
+Owner:      Reporting analyst
+```
+
+Weighting by pages stops a 700-page handbook from counting the same as a 5-page letter.
+
+</details>
+
+2. **Business hours** — Using `numpy.busday_count`, compute business days between `2026-03-06` (Friday) and `2026-03-10` (Tuesday), then convert to business hours assuming a 10-hour day.
+<details><summary>Solution</summary>
+
+```python
+import numpy as np
+days = np.busday_count("2026-03-06", "2026-03-10")   # Fri, Mon = 2
+print(days, "business days =", days * 10, "business hours")
+```
+
+`busday_count` excludes the end date, so Friday and Monday are counted; add intraday minutes separately for a precise figure.
+
+</details>
+
+3. **Warning level** — The contractual SLA is 95% within 24h measured monthly. On day 20 of the month you are at 93.5%. Explain what the report should say and what the team can still do.
+<details><summary>Solution</summary>
+
+The report should flag the SLA as at risk, state the current 93.5% against 95%, and compute how many of the remaining expected files must be within 24h to recover: if 400 files are done and 150 remain, you need (0.95 × 550) − (0.935 × 400) = 522.5 − 374 = 148.5, so essentially every remaining file must be on time. The honest message is that the month will likely breach, and the action is to prioritise files nearest their deadline and to warn the client early rather than on the 31st.
+
+</details>
+
+### Interview Questions
+
+**Q: How would you define a turnaround-time KPI for a title-search team?**
+Grain is one order; the clock starts at the system timestamp when the order is received and stops at the timestamp when the completed search is delivered, counted in business hours on the client's calendar with US federal holidays excluded. Cancelled orders are excluded, and orders returned for clarification pause the clock only if the definition says so and the pause is logged. I report the median, the p90 and the share within the 24-hour SLA, never the mean alone, because the p90 is what the client experiences. The source is the production system, not agent-entered times, because those drift. I write the definition down with an owner and review it with the client quarterly so that nobody argues about the number in a dispute.
+
+**Q: A team's throughput doubled last month. Is that good news?**
+It is a question, not an answer. I would check the other three KPIs first: did accuracy fall, did TAT lengthen for complex files, and did the mix of work change toward easier items? Then I would check the denominator, because a change in what counts as "completed" or in headcount can double a number without doubling output. If accuracy and TAT held and the mix was similar, it is genuinely good and I would want to know what changed so it can be repeated. When I led a data-processing team, a throughput jump turned out to be agents splitting multi-page items into separate records; the count doubled, the pages did not.
+
+**Q: How do you choose the SLA target and threshold?**
+Threshold comes from the client's downstream need, such as a closing date that requires the search 24 hours before signing. Target comes from our measured distribution: I look at the last three months of p90 and p95 and set the promise where we can meet it with slack, then set an internal warning level tighter than the contract so we act before we breach. I also define the measurement window, usually monthly, so that one bad day does not trigger a breach but a bad month does. An SLA we cannot meet is worse than none, because it converts every report into an apology.
+
+**Q: What is the difference between a KPI and a metric?**
+A metric is anything you can measure; a KPI is a metric tied to a decision or a promise. A production log yields dozens of metrics, but the four that management acts on are accuracy, TAT, throughput and backlog, and each has a target and an owner. The test I apply is: if this number moved, would someone do something different? If not, it belongs in an appendix, not on the first page.
+
+## Designing the weekly status report (structure, audience, exceptions first)
+
+The weekly status report is the most-read document an analyst produces and the one most often done badly: twenty pages of tables that answer no question. A good one is read in three minutes by a manager, tells them what changed, what is at risk and what needs their decision, and lets a curious reader drill into the detail. This chapter is the structure I used for weekly production reports for a US title-insurance team and for BPO client reviews.
+
+### Start from the reader
+
+Ask three questions before opening Excel:
+
+1. **Who reads it?** The operations manager wants exceptions and decisions; the client wants SLA compliance and volume; the team lead wants per-agent detail.
+2. **What decision do they make with it?** Reassign agents, escalate to a vendor, warn a client, approve overtime.
+3. **How long do they have?** Usually under five minutes. Everything that matters must be on page one.
+
+One report can serve all three readers if it is layered: summary first, exceptions second, detail last.
+
+### The exceptions-first structure
+
+```text
+1. Headline (2 lines)     Volume, SLA status, one sentence on the biggest change
+2. KPI scorecard          4 KPIs x (this week, last week, 4-wk avg, target, status)
+3. Exceptions             Anything red or amber, each with cause and action
+4. Trend                  8-13 weeks of the KPIs, one small chart each
+5. Detail                 Per-client / per-state / per-agent tables
+6. Data notes             Definitions, period, source, known gaps, who prepared it
+```
+
+The word "exceptions" is the key. A reader should never have to scan a 40-row table to find the two rows that matter; the report finds them and puts them at the top with the reason and the action.
+
+### The scorecard row
+
+Each KPI gets one row with the same columns every week, so the eye learns where to look:
+
+| KPI | This week | Last week | 4-wk avg | Target | Status |
+|---|---|---|---|---|---|
+| Files delivered | 1 284 | 1 190 | 1 205 | — | ▲ +8% |
+| Within 24h TAT | 93.1% | 96.4% | 95.8% | ≥ 95% | ● Amber |
+| Accuracy (audited) | 98.2% (n=110) | 97.9% | 98.0% | ≥ 98% | ● Green |
+| Backlog (Fri 17:00) | 212 | 148 | 160 | ≤ 180 | ● Red |
+
+Status is a rule, not an opinion: green when at or better than target, amber within a tolerance band (say 2 points), red beyond it. Write the rule in the data notes. Include the sample size on accuracy so a 100% on four audits is not mistaken for a strong week.
+
+### Building the scorecard with pandas
+
+```python
+import pandas as pd
+
+weekly = pd.DataFrame({
+    "week": ["W09", "W10", "W11", "W12", "W13"],
+    "delivered": [1150, 1210, 1190, 1270, 1284],
+    "within_sla": [0.962, 0.955, 0.964, 0.958, 0.931],
+    "backlog":   [155, 162, 148, 170, 212],
+})
+targets = {"within_sla": (0.95, "higher"), "backlog": (180, "lower")}
+
+def status(kpi, value):
+    target, direction = targets[kpi]
+    good = value >= target if direction == "higher" else value <= target
+    tolerance = 0.02 if kpi == "within_sla" else 20
+    near = abs(value - target) <= tolerance
+    return "Green" if good else ("Amber" if near else "Red")
+
+latest, prev = weekly.iloc[-1], weekly.iloc[-2]
+for kpi in ["within_sla", "backlog"]:
+    print(f"{kpi:11} this={latest[kpi]:>7} last={prev[kpi]:>7} "
+          f"avg4={weekly[kpi].tail(4).mean():>8.3f} status={status(kpi, latest[kpi])}")
+```
+
+The `status()` function is the rule from the data notes made executable; when the client changes the tolerance, you change one number.
+
+### Writing the exceptions
+
+Each exception has four parts, in one short paragraph or a table row: **what** (backlog 212 vs 180 limit), **why** (Harris County volume up 31% after a rate filing; two agents on leave), **impact** (SLA compliance will fall below 95% next week if unchanged), **action and owner** (two agents borrowed from the Dallas queue from Monday; A. Raza to confirm by Tuesday). A red status without a cause and an action is a complaint, not a report.
+
+### Trend and detail
+
+Thirteen weeks is the right window for a weekly trend: long enough to show a slope, short enough to fit one chart. Use small line charts with the target as a horizontal line, one per KPI, same scale every week. The detail tables come last and are filtered: per client, per state, per agent, with the same status colouring as the scorecard so a reader can find their own row quickly.
+
+> **Tip:** Keep the layout identical every week, including column order and chart positions. Readers build a mental map; a report that moves things around costs them the three minutes you were trying to save.
+
+### Data notes
+
+The last section is what makes the report defensible: period covered (Mon 00:00 to Sun 23:59 client time), snapshot time for backlog, definitions or a link to them, source systems and extract time, known gaps ("client X's Friday files arrived after the extract; included next week"), and the preparer's name. Nobody reads it until there is a dispute, and then it is the only thing they read.
+
+### Try It Yourself
+
+```python
+import pandas as pd
+
+detail = pd.DataFrame({
+    "client": ["Stewart-TX", "Stewart-TX", "Stewart-OK", "Stewart-OK", "FirstAm-TX"],
+    "state":  ["TX", "TX", "OK", "OK", "TX"],
+    "county": ["Harris", "Dallas", "Tulsa", "Oklahoma", "Harris"],
+    "delivered": [420, 310, 180, 160, 214],
+    "within_sla": [0.91, 0.97, 0.96, 0.98, 0.90],
+    "backlog": [96, 40, 20, 18, 38],
+})
+def flag(r):
+    return "Red" if r["within_sla"] < 0.93 else ("Amber" if r["within_sla"] < 0.95 else "Green")
+detail["status"] = detail.apply(flag, axis=1)
+exceptions = detail[detail["status"] != "Green"].sort_values("within_sla")
+print("HEADLINE: %d files delivered; %.1f%% within SLA overall" %
+      (detail["delivered"].sum(), 100 * (detail["delivered"] * detail["within_sla"]).sum() / detail["delivered"].sum()))
+print("\nEXCEPTIONS")
+print(exceptions[["client", "county", "within_sla", "backlog", "status"]].to_string(index=False))
+print("\nDETAIL")
+print(detail.to_string(index=False))
+```
+
+### Quiz
+
+1. What goes first in an exceptions-first weekly report?
+- [ ] The per-agent detail table
+- [x] A two-line headline and the KPI scorecard
+- [ ] The data notes
+> The reader should know the state of the operation in the first ten seconds.
+
+2. Why show the sample size next to accuracy?
+- [x] So a 100% on four audits is not mistaken for a strong week
+- [ ] To fill the column
+- [ ] Because auditors demand it
+> Accuracy on a tiny sample has a huge confidence interval; the n tells the reader how much to trust it.
+
+3. A KPI row is red. What must accompany it?
+- [ ] A larger font
+- [ ] Nothing; red speaks for itself
+- [x] The cause, the impact and an action with an owner
+> Red without cause and action is a complaint. The report's job is to move the reader to a decision.
+
+4. Why keep the layout identical week to week?
+- [x] Readers build a mental map and find things faster
+- [ ] Excel cannot handle changes
+- [ ] It is required by ISO
+> Consistency is what lets a manager read the report in three minutes.
+
+### Exercises
+
+1. **Headline** — Write the two-line headline for a week with 1 284 files (+8% on last week), 93.1% within SLA (target 95%), and a backlog of 212 driven by Harris County.
+<details><summary>Solution</summary>
+
+```text
+Week 13: 1,284 files delivered (+8% vs W12). SLA compliance 93.1% (target 95%) - AMBER.
+Backlog 212 vs 180 limit (RED), driven by Harris County volume +31%; two agents reassigned from Monday.
+```
+
+Numbers, status and the one cause; the action is teased so the reader knows a plan exists.
+
+</details>
+
+2. **Status rule** — Define a green/amber/red rule for accuracy with target 98% and write the sentence for the data notes.
+<details><summary>Solution</summary>
+
+Green: accuracy ≥ 98.0% with n ≥ 30 audits. Amber: 96.0% to 97.9%, or any result with n < 30. Red: below 96.0%. Data-notes sentence: "Accuracy status: Green at or above 98% with at least 30 audits; Amber between 96% and 98% or when fewer than 30 files were audited; Red below 96%." The sample-size condition prevents a small week from showing a misleading green.
+
+</details>
+
+3. **Audience split** — The client and the internal ops manager both receive the report. Which sections would you remove or add for the client version?
+<details><summary>Solution</summary>
+
+Remove per-agent detail and internal staffing causes ("two agents on leave"), replacing them with neutral phrasing ("capacity temporarily reduced; restored from Monday"). Keep the headline, scorecard, exceptions with actions, and trend. Add the SLA compliance table by the contractual measurement window (month-to-date) since that is what the client is paying for. Keep the data notes; the client-facing version is the one most likely to be questioned.
+
+</details>
+
+### Interview Questions
+
+**Q: Walk me through the structure of a weekly status report you have produced.**
+The one I produced for a US title-insurance production team had six parts. A two-line headline with volume and SLA status; a scorecard with four KPIs (delivered, within-24h TAT, audited accuracy with sample size, Friday backlog) against last week, the four-week average and the target, with a rule-based green/amber/red; an exceptions section listing every non-green item with cause, impact and an owned action; thirteen-week trend charts with the target drawn in; detail tables per client, state and county with the same colouring; and data notes with period, snapshot time, definitions, sources and known gaps. The manager read the first two sections; the team leads read the detail; the data notes existed for disputes. The layout never changed week to week, which is why it took three minutes to read.
+
+**Q: How do you decide what is an exception?**
+By a written rule, not by judgement each week. Every KPI has a target and a tolerance band, and anything outside the band is an exception automatically; I also add a rule for large movements, such as any county whose volume changed more than 25% week on week, because a green KPI can hide a shift that matters. The rules live in the data notes and in the code that builds the report, so a reader can predict what will be flagged and a new analyst produces the same report. Judgement goes into the cause and the action, not into whether the row appears.
+
+**Q: How do you report a bad week to a client without damaging the relationship?**
+Early, factually and with a plan. The report states the miss in the headline with the number and the target, the exceptions section gives the cause without excuses and the action with a date, and the trend shows whether it is a one-off or a slope. I never bury a miss in the detail table or soften the colour; clients who find a miss themselves trust nothing afterwards. When a rate-filing surge pushed a team past its backlog limit, telling the client on Monday with a recovery plan turned a complaint into a conversation about forecasting volume together.
+
+**Q: What would you automate in the weekly report and what would you keep manual?**
+Automate everything that is a rule: the extract, the KPI calculations, the status colouring, the trend charts, the detail tables and the data-notes boilerplate with the extract timestamp. Keep manual the headline sentence, the causes and actions in the exceptions section, and a final read-through against last week's version. The automated part guarantees the numbers are the same every week; the manual part is where an analyst adds value, and it takes twenty minutes instead of a day.
+
+## Automating reports (Python/Excel/Power BI pipeline)
+
+A report that takes a day to assemble by hand is a report that is late, inconsistent and impossible to hand over. Automation is not about replacing the analyst; it is about making the numbers identical every week so the analyst's time goes into the narrative. This chapter builds a small pipeline: extract from source, transform into the KPI tables, load into an Excel workbook that feeds Power BI, and schedule it.
+
+### The pipeline shape
+
+```text
+source systems  -->  extract  -->  clean & validate  -->  KPI tables  -->  outputs
+(production DB,      (SQL /        (rules from the      (pandas)         (XLSX with formulas,
+ CSV exports,         API /         validation chapter)                   Power BI dataset,
+ QA spreadsheet)      pandas)                                              PDF/email summary)
+```
+
+Each arrow is a function with one input and one output, and each stage writes its result to disk. That way a failure in stage four does not require re-running stage one, and you can open the intermediate file to see what stage three produced.
+
+### Stage 1 and 2: extract and validate
+
+```python
+import pandas as pd
+
+def extract(path_or_frames):
+    # In production: pd.read_sql(query, engine) or pd.read_csv(export_path)
+    log, qa = path_or_frames
+    return log.copy(), qa.copy()
+
+def validate(log):
+    problems = []
+    if log["file_id"].duplicated().any():
+        problems.append("duplicate file_id")
+    if (log["delivered_at"] < log["received_at"]).any():
+        problems.append("delivered before received")
+    if log["received_at"].max() < pd.Timestamp.now() - pd.Timedelta(days=7):
+        problems.append("extract looks stale (no rows in last 7 days)")
+    if problems:
+        raise ValueError("Extract failed validation: " + "; ".join(problems))
+    return log
+```
+
+The validation stage is the cheapest insurance you will ever buy. An automated report that silently runs on a stale or duplicated extract publishes wrong numbers with full confidence; a report that stops and says "extract looks stale" costs one email.
+
+### Stage 3: KPI tables
+
+```python
+def kpis(log, qa, week_end):
+    start = week_end - pd.Timedelta(days=6)
+    done = log[(log["delivered_at"] >= start) & (log["delivered_at"] <= week_end)].copy()
+    done["tat_h"] = (done["delivered_at"] - done["received_at"]).dt.total_seconds() / 3600
+    audited = qa[qa["file_id"].isin(done["file_id"])]
+    scorecard = pd.DataFrame([{
+        "week_end": week_end.date(),
+        "delivered": len(done),
+        "within_sla": (done["tat_h"] <= 24).mean(),
+        "accuracy": (audited["result"] == "pass").mean() if len(audited) else None,
+        "audited_n": len(audited),
+        "backlog": log["delivered_at"].isna().sum(),
+    }])
+    by_county = (done.groupby(["state", "county"])
+                     .agg(delivered=("file_id", "size"),
+                          within_sla=("tat_h", lambda s: (s <= 24).mean()))
+                     .reset_index())
+    return scorecard, by_county
+```
+
+The function takes `week_end` as a parameter rather than computing "today", so you can re-run last week's report exactly, which matters when someone questions a number a month later.
+
+### Stage 4: Excel output that Power BI reads
+
+`openpyxl` writes the workbook; the KPI sheets are plain tables with a header row, which is what Power BI's Excel connector and Power Query expect. Keep formulas out of the data sheets and use them only on a presentation sheet:
+
+```python
+from openpyxl import Workbook
+from openpyxl.utils.dataframe import dataframe_to_rows
+from openpyxl.worksheet.table import Table, TableStyleInfo
+
+def write_workbook(scorecard, by_county, path):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Scorecard"
+    for row in dataframe_to_rows(scorecard, index=False, header=True):
+        ws.append(row)
+    ws2 = wb.create_sheet("ByCounty")
+    for row in dataframe_to_rows(by_county, index=False, header=True):
+        ws2.append(row)
+    ref = f"A1:{chr(64 + by_county.shape[1])}{len(by_county) + 1}"
+    ws2.add_table(Table(displayName="tblByCounty", ref=ref,
+                        tableStyleInfo=TableStyleInfo(name="TableStyleMedium2", showRowStripes=True)))
+    ws2["G1"] = "Status"
+    for r in range(2, len(by_county) + 2):
+        ws2[f"G{r}"] = f'=IF(D{r}>=0.95,"Green",IF(D{r}>=0.93,"Amber","Red"))'
+    wb.save(path)
+```
+
+An Excel **Table** (`tblByCounty`) is what makes the Power BI refresh robust: Power Query references the table by name, so adding rows or a column does not break the query. In Power BI Desktop, use **Get data → Excel workbook**, pick `tblByCounty`, and the weekly refresh becomes **Home → Refresh** or a scheduled refresh through a gateway.
+
+### Stage 5: schedule and log
+
+On Windows, Task Scheduler runs `python build_report.py --week-end 2026-03-29` every Monday at 07:00; on Linux, a cron line `0 7 * * 1`. The script writes a log line per stage with row counts and the extract timestamp, and it exits non-zero on any validation failure so the scheduler shows a red run instead of a silent wrong report. The email or Teams post is generated last, from the scorecard, with the workbook attached and the log excerpt in the body.
+
+> **Interview note:** Interviewers ask "what happens when it fails?" more often than "how does it work?". Have an answer: validation stops the run, the failure is logged with the stage name, a person is notified, and last week's report is never overwritten because outputs are named by week-end date.
+
+### What not to automate
+
+- The headline sentence and the exception narratives.
+- Judgement calls on ambiguous data (a county renamed mid-week).
+- The first run of any changed definition; run it by hand next to the old one and reconcile before scheduling.
+
+### Try It Yourself
+
+```python
+import pandas as pd
+
+log = pd.DataFrame({
+    "file_id": [1, 2, 3, 4, 5, 6, 7],
+    "state": ["TX", "TX", "TX", "OK", "OK", "TX", "TX"],
+    "county": ["Harris", "Harris", "Dallas", "Tulsa", "Tulsa", "Harris", "Dallas"],
+    "received_at": pd.to_datetime(["2026-03-23 09:00", "2026-03-23 10:00", "2026-03-24 09:00",
+                                   "2026-03-24 11:00", "2026-03-25 09:00", "2026-03-26 09:00", "2026-03-27 09:00"]),
+    "delivered_at": pd.to_datetime(["2026-03-24 08:00", "2026-03-25 16:00", "2026-03-24 17:00",
+                                    "2026-03-25 10:00", "2026-03-25 18:00", None, None]),
+})
+qa = pd.DataFrame({"file_id": [1, 2, 4], "result": ["pass", "fail", "pass"]})
+
+def validate(log):
+    assert not log["file_id"].duplicated().any(), "duplicate file_id"
+    assert not (log["delivered_at"] < log["received_at"]).any(), "delivered before received"
+    return log
+
+def kpis(log, qa, week_end):
+    start = week_end - pd.Timedelta(days=6)
+    done = log[(log["delivered_at"] >= start) & (log["delivered_at"] <= week_end)].copy()
+    done["tat_h"] = (done["delivered_at"] - done["received_at"]).dt.total_seconds() / 3600
+    audited = qa[qa["file_id"].isin(done["file_id"])]
+    score = {"delivered": len(done), "within_sla": round((done["tat_h"] <= 24).mean(), 3),
+             "accuracy": round((audited["result"] == "pass").mean(), 3), "audited_n": len(audited),
+             "backlog": int(log["delivered_at"].isna().sum())}
+    by_county = done.groupby(["state", "county"]).agg(delivered=("file_id", "size"),
+                  within_sla=("tat_h", lambda s: round((s <= 24).mean(), 2))).reset_index()
+    return score, by_county
+
+score, by_county = kpis(validate(log), qa, pd.Timestamp("2026-03-29 23:59"))
+print("Stage 3 scorecard:", score)
+print(by_county.to_string(index=False))
+# Stage 4 would write these with openpyxl; here we save CSV and report its size
+by_county.to_csv("/tmp/by_county.csv", index=False)
+import os; print("wrote", os.path.getsize("/tmp/by_county.csv"), "bytes")
+```
+
+### Quiz
+
+1. Why should each pipeline stage write its result to disk?
+- [x] So a failure later does not force a re-run from the start and intermediates can be inspected
+- [ ] Because pandas requires it
+- [ ] To use more storage
+> Staged outputs make debugging and partial re-runs cheap.
+
+2. What is the safest behaviour when the extract fails validation?
+- [ ] Publish with a footnote
+- [x] Stop, log the failure with the stage name, and notify a person
+- [ ] Use last week's data silently
+> A confident wrong report is worse than a late one.
+
+3. Why write the KPI data as an Excel Table before connecting Power BI?
+- [ ] Tables are prettier
+- [x] Power Query references the table by name, so added rows or columns do not break the refresh
+- [ ] Power BI cannot read plain ranges
+> Named tables give a stable contract between the Python output and the BI layer.
+
+4. Why does `kpis()` take `week_end` as a parameter?
+- [x] So any past week can be re-run exactly
+- [ ] To make the code longer
+- [ ] Because pandas cannot compute today's date
+> Reproducibility: when a number is questioned a month later, you can regenerate it.
+
+### Exercises
+
+1. **Stale extract guard** — Add a check to `validate()` that fails if more than 5% of `received_at` values are missing.
+<details><summary>Solution</summary>
+
+```python
+missing = log["received_at"].isna().mean()
+if missing > 0.05:
+    problems.append(f"{missing:.1%} of received_at missing (limit 5%)")
+```
+
+A missing timestamp means the TAT for that file is undefined; above a small share, the extract is broken rather than merely imperfect.
+
+</details>
+
+2. **Output naming** — Write the expression for the workbook filename so weekly runs never overwrite each other and sort correctly in a folder.
+<details><summary>Solution</summary>
+
+```python
+path = f"reports/weekly_production_{week_end:%Y-%m-%d}.xlsx"
+```
+
+ISO dates sort chronologically as strings, and a re-run for the same week overwrites only that week's file, which is the desired behaviour.
+
+</details>
+
+3. **Cron** — Write the cron line to run the report at 07:00 every Monday and append output to a log.
+<details><summary>Solution</summary>
+
+```bash
+0 7 * * 1 cd /srv/reports && /usr/bin/python3 build_report.py >> logs/weekly.log 2>&1
+```
+
+Minute 0, hour 7, any day-of-month, any month, weekday 1 (Monday). Redirecting `2>&1` captures the validation errors as well as normal output.
+
+</details>
+
+### Interview Questions
+
+**Q: Describe a report you automated end to end.**
+The weekly production report for a title-insurance support team. Extract was a SQL query against the production log plus the QA team's spreadsheet; a validation stage checked for duplicate file IDs, negative turnaround and stale extracts and stopped the run on failure. A pandas stage computed the scorecard and county tables for a given week-end date, and openpyxl wrote them into a workbook with named tables, which Power BI read through Power Query for the dashboard; a presentation sheet held the status formulas. Task Scheduler ran it Monday 07:00, the log recorded row counts per stage, and outputs were named by week-end date so nothing was overwritten. Assembly time went from most of a day to twenty minutes of writing the exceptions narrative, and the numbers stopped varying with who built the report.
+
+**Q: How do you make sure the automated numbers match what was produced by hand?**
+By running both in parallel for at least two cycles and reconciling every KPI to the cent before switching. Where they disagree I find the rule that differs, usually an implicit exclusion the manual process applied, such as skipping cancelled files, and I either make it explicit in the code or agree with the owner that the old number was wrong. I keep the manual version for the first cycle after go-live as a fallback. The reconciliation sheet becomes part of the documentation, because it records why the numbers are what they are.
+
+**Q: Python, Power Query or DAX: where do you put the transformation logic?**
+As close to the source as possible and in one place. Heavy cleaning, validation and KPI calculation go in Python (or SQL) because they are testable, versioned in git and reusable by other outputs such as the email summary. Power Query handles light shaping when the source is a workbook someone else maintains, and DAX is reserved for measures that must respond to slicers, such as within-SLA share filtered by county, because those cannot be precomputed for every combination. Duplicating a rule in two layers is how two dashboards end up disagreeing.
+
+**Q: What happens when the report fails at 07:00 on Monday?**
+The validation stage raises with the stage name and the reason, the scheduler records a failed run, and a notification goes to me and a backup with the log excerpt. Last week's workbook is untouched because outputs are named by date. I fix the cause, usually a late extract or a schema change upstream, and re-run with the same week-end parameter, so the output is identical to what the 07:00 run would have produced. The report is late by an hour rather than wrong.
+
+# LEVEL: Expert
+
+## Statistical process control & trend analysis for production data
+
+Management asks two questions about every KPI: "is this week different?" and "is it getting worse?". Eyeballing a chart answers both badly, because random variation looks like a trend to a worried reader. **Statistical process control (SPC)** gives a rule for the first question and simple trend statistics answer the second. Both are old, robust and easy to compute in pandas.
+
+### Common cause and special cause
+
+Every process varies. An agent processes 41 files one day and 38 the next with nothing changed; that is **common-cause** variation, the noise of the process. A day with 22 files because the source system was down is **special-cause** variation, something identifiable happened. SPC's job is to separate them so you investigate special causes and stop reacting to noise, which is what most weekly "why did TAT go up 4%?" emails are.
+
+### The control chart
+
+An **individuals (I) chart** plots each period's value with a centre line at the mean and control limits at ±3 sigma, where sigma is estimated from the average **moving range** (the absolute difference between consecutive points) divided by 1.128:
+
+```text
+centre line  CL  = mean(x)
+sigma_hat        = mean(|x[i] - x[i-1]|) / 1.128
+UCL / LCL        = CL ± 3 * sigma_hat
+```
+
+A point outside the limits is a signal. So are runs: eight consecutive points on one side of the centre line, or six consecutive points all rising or all falling (the Western Electric and Nelson rules).
+
+```python
+import pandas as pd
+
+tat = pd.Series([19.2, 20.1, 18.7, 21.0, 19.8, 20.4, 19.1, 22.3, 20.0, 19.6, 27.9, 20.8],
+                index=[f"W{w:02d}" for w in range(1, 13)])
+cl = tat.mean()
+mr = tat.diff().abs().dropna()
+sigma = mr.mean() / 1.128
+ucl, lcl = cl + 3 * sigma, cl - 3 * sigma
+print(f"CL={cl:.2f}  sigma={sigma:.2f}  UCL={ucl:.2f}  LCL={lcl:.2f}")
+print("Out of control:", tat[(tat > ucl) | (tat < lcl)].to_dict())
+```
+
+Week 11 at 27.9 hours is a signal; week 8 at 22.3 is not, even though it looked bad in the meeting. The chart lets you say "week 8 is within normal variation; week 11 needs a cause".
+
+### Choosing the chart
+
+| Data | Chart | Notes |
+|---|---|---|
+| One measurement per period (median TAT, backlog) | I-MR | Most common for reporting |
+| Proportion of items failing (accuracy) | p-chart | Limits vary with sample size: CL ± 3√(p(1−p)/n) |
+| Counts of defects per unit (errors per file) | u-chart | For QA error counts |
+| Subgroups of measurements (5 files sampled daily) | X̄-R | Rare in reporting; common in manufacturing |
+
+The p-chart matters for accuracy because the sample size changes weekly: with 30 audits the limits are wide, with 200 they are tight, and a fixed "±2 points" tolerance is wrong for both.
+
+```python
+import math
+p_bar, n = 0.975, 40                       # long-run accuracy, this week's audits
+half = 3 * math.sqrt(p_bar * (1 - p_bar) / n)
+print(f"p-chart limits for n={n}: {max(0, p_bar-half):.3f} to {min(1, p_bar+half):.3f}")
+```
+
+With 40 audits, an accuracy of 92% is inside the limits; the process has not changed, the sample is small. The report should say exactly that.
+
+### Trend: is it getting worse?
+
+A control chart detects shifts; a **trend** is a slope. Three simple tools:
+
+- **Rolling mean** over 4 weeks to smooth noise before plotting.
+- **Linear fit** to the last 13 weeks: `numpy.polyfit(x, y, 1)` gives hours per week; report the slope with its sign and whether it is practically meaningful (0.3 h/week compounds to 4 hours a quarter).
+- **Seasonality** check: compare the same week last year, or the day-of-week pattern (Mondays have more receipts, Fridays more deliveries), before declaring a trend.
+
+```python
+import numpy as np
+x = np.arange(len(tat))
+slope, intercept = np.polyfit(x, tat.values, 1)
+print(f"slope {slope:+.2f} h/week; 4-wk rolling mean now {tat.rolling(4).mean().iloc[-1]:.1f} h")
+```
+
+### Reporting SPC honestly
+
+State the baseline period the limits were computed from (freeze them; do not recompute every week or a drifting process moves its own limits), the rule that triggered (point beyond UCL, or 8 in a row above CL), and what changed. When the process genuinely improves, recompute the limits from the new baseline and note the date. Show the chart with the limits drawn; a number alone ("UCL exceeded") is unconvincing.
+
+> **Tip:** Twelve to twenty periods is the minimum to compute usable limits. With fewer, say "limits provisional" on the chart.
+
+### Try It Yourself
+
+```python
+import pandas as pd, math
+
+backlog = pd.Series([150, 162, 148, 170, 155, 158, 161, 167, 172, 178, 181, 190, 212],
+                    index=[f"W{w:02d}" for w in range(1, 14)])
+base = backlog.iloc[:8]                      # frozen baseline
+cl = base.mean(); sigma = base.diff().abs().dropna().mean() / 1.128
+ucl, lcl = cl + 3 * sigma, cl - 3 * sigma
+print(f"Baseline W01-W08: CL={cl:.1f} UCL={ucl:.1f} LCL={lcl:.1f}")
+beyond = backlog[backlog > ucl]
+print("Beyond UCL:", beyond.to_dict())
+above = (backlog > cl).astype(int)
+run = above.groupby((above != above.shift()).cumsum()).cumsum()
+print("Longest run above CL:", run.max(), "weeks (signal if >= 8)")
+rising = (backlog.diff() > 0).astype(int)
+streak = rising.groupby((rising != rising.shift()).cumsum()).cumsum()
+print("Longest rising streak:", streak.max(), "weeks (signal if >= 6)")
+```
+
+### Quiz
+
+1. A weekly TAT of 22.3 h is inside the control limits but above the mean. What should the report say?
+- [ ] Investigate immediately
+- [x] Within normal variation; no special cause indicated
+- [ ] Recompute the limits
+> SPC exists to stop reaction to common-cause noise.
+
+2. Why use a p-chart for accuracy rather than an I chart?
+- [x] Its limits widen or narrow with the number of audits each week
+- [ ] It is easier to draw
+- [ ] Accuracy is never below 90%
+> A proportion from 30 audits is far noisier than one from 200; the p-chart accounts for that.
+
+3. Why freeze the baseline period for the limits?
+- [ ] To save computation
+- [x] So a drifting process does not move its own limits and hide the drift
+- [ ] Because pandas cannot recompute
+> Limits recomputed every week from a worsening series will chase the series upward.
+
+4. Which is a valid run rule signal?
+- [ ] Two points above the mean
+- [x] Eight consecutive points on one side of the centre line
+- [ ] Any point above the four-week average
+> Eight in a row on one side has probability about 1 in 128 under a stable process.
+
+### Exercises
+
+1. **p-chart limits** — Long-run accuracy is 97.5%. Compute the lower limit for weeks with 25 and 250 audits and interpret a 94% result in each.
+<details><summary>Solution</summary>
+
+```python
+import math
+for n in (25, 250):
+    half = 3 * math.sqrt(0.975 * 0.025 / n)
+    print(n, round(0.975 - half, 3))
+# 25 -> 0.881 ; 250 -> 0.945
+```
+
+At n=25, 94% is inside the limits: no evidence of change. At n=250, 94% is below the lower limit: a real drop that needs a cause.
+
+</details>
+
+2. **Slope** — Fit a line to `[19.2, 20.1, 18.7, 21.0, 19.8, 20.4, 19.1, 22.3, 20.0, 19.6, 20.9, 20.8]` and say whether the trend is practically meaningful.
+<details><summary>Solution</summary>
+
+```python
+import numpy as np
+y = [19.2, 20.1, 18.7, 21.0, 19.8, 20.4, 19.1, 22.3, 20.0, 19.6, 20.9, 20.8]
+print(np.polyfit(range(12), y, 1)[0])   # about +0.12 h/week
+```
+
+About 0.12 hours per week, roughly 1.5 hours per quarter, against week-to-week noise of about ±1.5 hours. It is small and not distinguishable from noise with 12 points; report it as "no meaningful trend" and revisit at 26 weeks.
+
+</details>
+
+3. **Baseline reset** — After a process change, TAT drops from a mean of 20 h to 15 h and stays there for 10 weeks. What should you do with the control limits, and what should the chart show?
+<details><summary>Solution</summary>
+
+Recompute CL and limits from the 10 post-change weeks, freeze them, and draw both sets of limits on the chart with a vertical line and label at the change date. The chart then shows the shift as a step, the new limits as the new normal, and future signals are judged against the improved process rather than the old one.
+
+</details>
+
+### Interview Questions
+
+**Q: How do you tell a manager whether a bad week is noise or a real change?**
+With a control chart. I compute the centre line and ±3-sigma limits from a frozen baseline of at least twelve periods using the moving-range estimate of sigma, and I apply the run rules: a point beyond a limit, eight in a row on one side, six in a row rising. If this week is inside the limits and no run rule fires, I say it is within normal variation and we should not change anything; if a rule fires, I say a special cause is indicated and go find it. For accuracy I use a p-chart because the limits depend on how many files were audited. The chart with the limits drawn is what convinces; a manager who sees that last week's "spike" is inside the band stops sending the weekly panic email.
+
+**Q: What is the difference between a shift and a trend, and how do you detect each?**
+A shift is a step change in the level of the process, detected by a control-chart signal such as a point beyond the limits or a run of eight on one side. A trend is a gradual slope, detected by a run of six rising or falling points, a rolling mean moving steadily, or a linear fit whose slope is practically meaningful over the reporting horizon. They need different responses: a shift usually has a single identifiable cause on a date, such as a new client or a lost agent; a trend usually reflects accumulating load or slow drift in the mix, and it is caught earlier by the rolling mean than by any limit. I check for seasonality before calling either, because a same-week-last-year comparison often explains the "trend".
+
+**Q: When would SPC be the wrong tool?**
+When the periods are not comparable, for example volume that is driven by client demand rather than by our process; a control chart on receipts tells you about the client, not about us. When there are fewer than about twelve periods, the limits are too uncertain to act on. When the data is heavily autocorrelated, such as backlog, which carries over from week to week, the standard limits are too narrow and produce false signals; there I use the chart on the week-on-week change or an EWMA chart instead. And when the process is deliberately changing every week during an improvement project, the limits are meaningless until it stabilises.
+
+**Q: How do you present a control chart to non-technical readers?**
+As three lines and a story: "the middle line is normal, the outer lines are the edges of normal, and points outside them are the weeks something happened". I label the signals with their cause, draw the target as a separate dashed line so the reader can see that "normal" and "acceptable" are different things, and mark the baseline period. I avoid the word sigma. The message is usually "of the four weeks you asked about, one was real", and that saves the team three investigations.
+
+## Root-cause analysis of accuracy drops
+
+An accuracy drop is the KPI signal that most often reaches a client. The wrong response is retraining everyone; the right response is finding which files failed, on which checklist item, from which source, and fixing that. **Root-cause analysis (RCA)** is a disciplined way to get from "accuracy fell to 94%" to "the county's new deed format is not in the extraction template", and this chapter shows the data steps that make it fast.
+
+### Confirm the signal first
+
+Before investigating, check that the drop is real: is it beyond the p-chart limit for this week's sample size? Did the audit checklist, the auditors or the sampling rule change? Did the population change (a new client whose files are harder)? Roughly a third of "accuracy drops" I have investigated were changes in measurement, not in work.
+
+### Stratify: cut the failures every way
+
+A single accuracy number hides structure. Stratify the failed audits by every dimension you have and look for concentration:
+
+```python
+import pandas as pd
+
+audits = pd.DataFrame({
+    "file_id": range(1, 21),
+    "agent":   ["Sana"]*7 + ["Bilal"]*7 + ["Usman"]*6,
+    "county":  ["Harris","Dallas","Harris","Harris","Tarrant","Harris","Dallas",
+                "Harris","Harris","Dallas","Tarrant","Harris","Harris","Dallas",
+                "Dallas","Tarrant","Harris","Dallas","Harris","Tarrant"],
+    "error_type": [None, None, "legal_desc", "legal_desc", None, "legal_desc", None,
+                   "legal_desc", None, None, None, "legal_desc", "vesting", None,
+                   None, None, "legal_desc", None, "legal_desc", None],
+})
+audits["fail"] = audits["error_type"].notna()
+print("Overall accuracy:", round(1 - audits["fail"].mean(), 3))
+for dim in ["agent", "county", "error_type"]:
+    print(f"\nby {dim}:")
+    print(audits.groupby(dim, dropna=False)["fail"].agg(["size", "sum", "mean"]).round(2))
+```
+
+Output shows failures spread across agents but concentrated in Harris County and almost all of one type, `legal_desc`. That is not an agent problem; it is a Harris County legal-description problem, and retraining the agents would have wasted a week.
+
+### Pareto: the vital few
+
+Sort error types by count and compute the cumulative share. Typically two or three types account for 80% of failures; those are the ones worth fixing this month.
+
+```python
+pareto = (audits.dropna(subset=["error_type"])["error_type"].value_counts().to_frame("count"))
+pareto["cum_share"] = pareto["count"].cumsum() / pareto["count"].sum()
+print(pareto)
+```
+
+### Ask why five times
+
+With the concentration found, walk from symptom to cause:
+
+| Why? | Answer |
+|---|---|
+| Why did legal descriptions fail in Harris? | Agents transcribed the lot/block from the old deed, not the new plat |
+| Why did they use the old deed? | The Harris clerk started attaching replats in a second PDF in February |
+| Why did nobody notice? | The SOP says "use the attached deed" and the second PDF was unnamed |
+| Why was the SOP not updated? | No one owns county-format changes; the last review was 2024 |
+| Why is there no owner? | County intake changes are not part of the change-control process |
+
+The root cause is a missing process (county format changes have no owner), not a person. Fixing the SOP fixes February; fixing the ownership fixes the next county.
+
+### Fishbone categories for production work
+
+When the five whys stall, use the Ishikawa categories to prompt hypotheses: **People** (new hires, leave, workload), **Process** (SOP gaps, checklist changes), **Inputs** (source documents, client formats), **Tools** (template versions, macro updates, system outages), **Measurement** (auditor change, sampling change), **Environment** (volume surges, deadline pressure). Write each hypothesis down with the data that would confirm or refute it, then test the cheapest ones first.
+
+### Corrective vs preventive action
+
+- **Correction**: re-check and fix the affected Harris files delivered since February (find them with a query, not by memory).
+- **Corrective action**: update the SOP and extraction template; brief the team; add a checklist item.
+- **Preventive action**: assign an owner for county-format changes; add "new attachment pattern" to the intake exception report so the next change is noticed in a week, not a quarter.
+
+Track each action with an owner and a date, and confirm closure with data: accuracy in Harris on the next 40 audits back above 98%.
+
+> **Interview note:** The strongest RCA answers show the stratification step with numbers, name a root cause that is a process not a person, and describe how closure was verified. "We retrained the team" is the answer interviewers are hoping you will not give.
+
+### Try It Yourself
+
+```python
+import pandas as pd
+
+audits = pd.DataFrame({
+    "week":   ["W10"]*10 + ["W11"]*10 + ["W12"]*10,
+    "source": ["clerk_pdf","clerk_pdf","vendor_api","vendor_api","clerk_pdf"]*6,
+    "county": ["Harris","Dallas","Harris","Dallas","Tarrant"]*6,
+    "error":  [None,None,None,None,None, None,None,None,None,None,
+               "legal",None,None,None,None, "legal",None,None,None,None,
+               "legal",None,None,None,None, "legal",None,None,None,"vesting"],
+})
+audits["fail"] = audits["error"].notna()
+print(audits.groupby("week")["fail"].mean().round(2).rename("fail_rate"))
+print()
+print(pd.crosstab([audits["county"], audits["source"]], audits["fail"], margins=True))
+pareto = audits["error"].value_counts()
+print("\nPareto:\n", (pareto.cumsum() / pareto.sum()).round(2))
+```
+
+### Quiz
+
+1. Accuracy fell from 98% to 94% this week. What is the first step?
+- [ ] Retrain the team
+- [x] Confirm the drop is real: sample size, checklist and auditor unchanged, population comparable
+- [ ] Email the client
+> Many drops are changes in measurement, and a small sample can produce 94% by chance.
+
+2. Failures are spread across all agents but concentrated in one county and one error type. What does that suggest?
+- [ ] Agent skill
+- [x] An input or process cause specific to that county
+- [ ] Random noise
+> Concentration by county and type with no agent pattern points to source documents or the SOP.
+
+3. What is the purpose of the Pareto step?
+- [x] To find the few error types that account for most failures
+- [ ] To rank agents
+- [ ] To compute the mean
+> Fixing the top two or three types usually removes 80% of failures.
+
+4. Which is a preventive action rather than a correction?
+- [ ] Re-checking the affected files
+- [ ] Fixing the template
+- [x] Assigning an owner for county-format changes so the next change is caught early
+> Corrections fix the past, corrective actions fix this cause, preventive actions stop the next one.
+
+### Exercises
+
+1. **Stratify** — Given audit rows with `agent`, `client`, `doc_type` and `fail`, write the pandas to print failure rate and count for each dimension, sorted by rate.
+<details><summary>Solution</summary>
+
+```python
+for dim in ["agent", "client", "doc_type"]:
+    t = audits.groupby(dim)["fail"].agg(n="size", fails="sum", rate="mean")
+    print(t.sort_values("rate", ascending=False).round(3), "\n")
+```
+
+Look for a dimension where one value has a much higher rate on a reasonable n; that is where to drill next.
+
+</details>
+
+2. **Five whys** — A Fiverr client reports that a 300-page handbook's table of contents shows wrong page numbers. Write a five-whys chain that ends in a process cause.
+<details><summary>Solution</summary>
+
+Why wrong numbers? The TOC field was not updated before export. Why not updated? The exporter saved to PDF directly from the editing view without pressing F9 / Update Field. Why? The delivery checklist does not include "update all fields". Why? The checklist was written for short letters where fields are rare. Why? There is no separate checklist for long documents with TOC, cross-references and captions. Root cause: one checklist for all document types. Fix: a long-document checklist with "Ctrl+A, F9, Update entire table" and a final PDF page-number spot check.
+
+</details>
+
+3. **Closure test** — Define what "closed" means for the Harris legal-description issue in terms of data.
+<details><summary>Solution</summary>
+
+Closed when: all Harris files delivered since 1 February have been re-checked and corrections logged; the updated SOP and template are published with a version date; and accuracy on the next 40 Harris audits is at or above 98% with zero `legal_desc` failures. Until the 40-audit check passes, the action stays open on the report's exceptions list.
+
+</details>
+
+### Interview Questions
+
+**Q: Walk me through an accuracy investigation you ran.**
+Weekly audited accuracy fell from 98% to 94% on a title-search team. First I confirmed it was real: 110 audits, same checklist, same two auditors, and 94% was below the p-chart lower limit. Then I stratified the 7 failures: spread across four agents, but six of seven were in Harris County and all six were legal-description errors. A Pareto on the prior month showed the same type rising. Five whys led from "agents used the old deed" to "the county started attaching replats as a second unnamed PDF in February" to "no one owns county-format changes". Correction was re-checking 140 Harris files; corrective action was the SOP and template update; preventive action was adding new-attachment patterns to the intake exception report with an owner. Accuracy in Harris was 99% on the next 40 audits and the item was closed. The whole thing took two days, most of it the re-check.
+
+**Q: Why is "retrain the team" usually the wrong root cause?**
+Because it assumes the cause is people when the data usually says otherwise, and because it is unfalsifiable: there is no test that shows retraining fixed anything. When failures are spread across agents and concentrated by county, client, document type or date, the cause is an input, a process or a tool, and retraining leaves it in place to fail again. Even when one agent does account for the failures, the question is why the process let that happen: onboarding, checklist, review step. I reserve training as an action for cases where stratification shows a skill gap specifically, and then I verify it with that agent's next 30 audits.
+
+**Q: How do you handle an RCA when the data is thin, say five failures?**
+I say so, and I treat the investigation as hypothesis generation rather than proof. Five failures can still be read individually: I open each file, note the error, the source document and the step where it went wrong, and I look for anything three of the five share. Then I widen the window, pulling the last quarter's failures of the same type, so the stratification has enough rows to mean something. If a hypothesis emerges, I test it cheaply, for example by sampling twenty more Harris files rather than waiting for next week's audit. The report states the finding as "likely cause, confirming with an extra sample" rather than as a conclusion.
+
+**Q: What is the difference between corrective and preventive action, with an example?**
+Corrective action removes the cause of the failure that already happened; preventive action removes the conditions that would let a similar failure happen elsewhere. When a rate-calculator sheet produced wrong premiums for one state because a tier boundary was typed as 250,000 instead of 200,000, the correction was fixing the cell and re-issuing the affected quotes, the corrective action was adding a validation row that checks tier boundaries are ascending and match the filed rate card, and the preventive action was a change-control rule that any rate-card update is entered by one person and checked against the source PDF by another before publication. Interviewers want all three, with the preventive one showing you think about the system.
+
+## Data governance, lineage & versioning of matrices
+
+A rate matrix that six underwriters, three states and a dozen counties feed into is only useful if a reader can answer "where did this cell come from, when, and has it changed?". **Governance** is the set of rules that make that answerable: who owns each dataset, what a value means, where it came from, and how changes are controlled. This chapter is the practical version for an analyst maintaining matrices and reporting datasets, not the enterprise-programme version.
+
+### The four questions governance answers
+
+| Question | Mechanism | Artefact |
+|---|---|---|
+| What does this column mean? | Data dictionary | `dictionary.md` or a sheet |
+| Who owns it and who may change it? | Ownership and access | Owner column, folder permissions |
+| Where did this value come from? | Lineage / provenance | `source`, `as_of`, `source_ref` columns |
+| What did it look like last month? | Versioning | Dated snapshots, git, change log |
+
+Without the third and fourth, a matrix is a rumour with formatting.
+
+### Provenance columns on every row
+
+Long-format storage (from the matrix chapter) makes provenance cheap: add the columns to every row rather than to a footnote.
+
+```python
+import pandas as pd
+
+rates = pd.DataFrame({
+    "underwriter": ["A", "A", "B"],
+    "state": ["TX", "TX", "TX"],
+    "tier_upper": [100000, 200000, 100000],
+    "rate_per_1000": [5.75, 4.90, 5.60],
+    "effective_from": ["2026-01-01", "2026-01-01", "2026-03-01"],
+    "source": ["TDI filing", "TDI filing", "Underwriter B rate card v7"],
+    "source_ref": ["TDI-2025-1187 p.4", "TDI-2025-1187 p.4", "B-RC7.pdf p.2"],
+    "as_of": ["2026-01-05", "2026-01-05", "2026-03-03"],
+    "entered_by": ["araza", "araza", "araza"],
+    "checked_by": ["nkhan", "nkhan", None],
+})
+unchecked = rates[rates["checked_by"].isna()]
+print("Rows awaiting four-eyes check:\n", unchecked[["underwriter", "state", "tier_upper", "source_ref"]])
+```
+
+`checked_by` is the **four-eyes** rule made visible: a rate entered by one person is not published until a second person has compared it with the source page. The report that consumes this matrix can refuse to render rows where `checked_by` is empty.
+
+### Effective dating, not overwriting
+
+Rates change. Never overwrite a value; add a row with a new `effective_from` and, if you like, close the old one with `effective_to`. Then a quote dated 15 February uses the January rate and a quote dated 15 March uses the March rate, and both are reproducible:
+
+```python
+def rate_on(rates, underwriter, state, amount, on_date):
+    r = rates[(rates["underwriter"] == underwriter) & (rates["state"] == state)
+              & (pd.to_datetime(rates["effective_from"]) <= pd.Timestamp(on_date))]
+    latest = r[r["effective_from"] == r["effective_from"].max()]
+    tier = latest[latest["tier_upper"] >= amount].sort_values("tier_upper").iloc[0]
+    return tier["rate_per_1000"], tier["source_ref"]
+print(rate_on(rates, "A", "TX", 150000, "2026-02-15"))
+```
+
+The function returns the source reference with the rate, so a quote can cite its own evidence.
+
+### Versioning the whole matrix
+
+Three layers, cheapest first:
+
+1. **Dated snapshots**: `rates_2026-03-03.csv`; never edit a snapshot after the day it was taken.
+2. **Git** for the CSV and the code that builds the pivot: every change has an author, a date and a message ("B TX tiers updated per RC7; checked by nkhan"). `git diff` between two snapshots is the change report.
+3. **A human change log** at the top of the workbook or in `CHANGELOG.md`: date, what changed, why, who checked. Readers who will never open git read this.
+
+Binary workbooks diff badly, which is one reason to keep the source of truth as CSV or a database table and treat the XLSX as a generated output.
+
+### The data dictionary as a contract
+
+Each column gets: name, type, unit, allowed values or range, definition, source, owner, and the date the definition last changed. When a definition changes (turnaround moves from calendar to business hours), the dictionary records the date, and every historical report before that date is labelled with the old definition. A KPI whose definition silently changed is the most common cause of a "trend" that is not real.
+
+### Access and change control
+
+- Source tables: write access for the owner and the checker only; everyone else reads.
+- Changes go through a request with the source document attached; the checker compares and signs.
+- Generated outputs (pivots, dashboards) are rebuilt from source, never hand-edited; a hand edit in an output is a governance breach because it cannot be traced.
+- A quarterly reconciliation compares the matrix against each underwriter's current published card and logs any drift.
+
+> **Warning:** The most common lineage failure is a value that was "corrected" directly in the pivot or the dashboard. Next refresh overwrites it, the correction vanishes, and nobody knows why the number changed twice. Fix the source, then rebuild.
+
+### Try It Yourself
+
+```python
+import pandas as pd
+
+old = pd.DataFrame({"underwriter": ["A","A","B","B"], "tier_upper": [100000,200000,100000,200000],
+                    "rate": [5.75, 4.90, 5.60, 4.80]})
+new = pd.DataFrame({"underwriter": ["A","A","B","B","C"], "tier_upper": [100000,200000,100000,200000,100000],
+                    "rate": [5.75, 4.95, 5.60, 4.80, 5.50]})
+key = ["underwriter", "tier_upper"]
+m = old.merge(new, on=key, how="outer", suffixes=("_old", "_new"), indicator=True)
+changed = m[(m["_merge"] == "both") & (m["rate_old"] != m["rate_new"])]
+added = m[m["_merge"] == "right_only"]
+removed = m[m["_merge"] == "left_only"]
+print("CHANGE REPORT 2026-03-03 vs 2026-01-05")
+print("changed:\n", changed[key + ["rate_old", "rate_new"]].to_string(index=False))
+print("added:\n", added[key + ["rate_new"]].to_string(index=False))
+print("removed:", len(removed))
+```
+
+### Quiz
+
+1. Which column makes a matrix row traceable to its evidence?
+- [ ] `rate_per_1000`
+- [x] `source_ref`
+- [ ] `tier_upper`
+> A source reference (filing number, page) lets any reader verify the value.
+
+2. A rate changes on 1 March. What should you do to the January row?
+- [ ] Overwrite it
+- [x] Keep it and add a new row with `effective_from = 2026-03-01`
+- [ ] Delete it after a month
+> Effective dating keeps historical quotes reproducible.
+
+3. Why keep the source of truth as CSV or a table rather than XLSX?
+- [x] Text diffs cleanly in git; workbooks do not
+- [ ] Excel cannot store rates
+- [ ] CSV is faster to open
+> Versioning needs readable diffs; the workbook is a generated output.
+
+4. What is the governance problem with correcting a number directly in the dashboard?
+- [ ] It is slow
+- [x] The next rebuild overwrites it and the correction is untraceable
+- [ ] Dashboards cannot be edited
+> Fix the source and rebuild, so every value has a lineage.
+
+### Exercises
+
+1. **Dictionary entry** — Write the data-dictionary entry for `within_sla` in the weekly scorecard.
+<details><summary>Solution</summary>
+
+```text
+Column:      within_sla
+Type/unit:   decimal 0-1 (rendered as %)
+Definition:  share of files delivered in the week whose turnaround (business hours,
+             client calendar) is <= 24; cancelled files excluded
+Source:      production_log.received_at, delivered_at (system timestamps)
+Owner:       Reporting analyst (A. Raza)
+Definition history: 2025-06-01 changed from calendar hours to business hours;
+             reports before that date use the old definition
+```
+
+</details>
+
+2. **Four-eyes gate** — Add a check to the report builder that stops if any rate row used in the week has an empty `checked_by`.
+<details><summary>Solution</summary>
+
+```python
+used = rates[rates["checked_by"].isna()]
+if len(used):
+    raise ValueError(f"{len(used)} rate rows unchecked: " +
+                     ", ".join(used["source_ref"].astype(str)))
+```
+
+The message lists the source references so the checker knows exactly which pages to compare.
+
+</details>
+
+3. **Snapshot and log** — Write the change-log line for the March update and the git commit message.
+<details><summary>Solution</summary>
+
+Change log: `2026-03-03 | Underwriter B, TX: tiers 100k/200k updated per rate card v7 (B-RC7.pdf p.2), effective 2026-03-01 | entered araza, checked nkhan`. Commit: `rates: B TX tiers per RC7 effective 2026-03-01 (checked by nkhan)`. Both say what, why, since when and who verified.
+
+</details>
+
+### Interview Questions
+
+**Q: How do you make sure a rate matrix stays trustworthy over time?**
+Every row carries its provenance: source document, page reference, as-of date, who entered it and who checked it against the source, and no row is published until the checker column is filled. Rates are effective-dated rather than overwritten, so any quote on any date can be recomputed with its evidence. The source of truth is a CSV or table under git; the workbook and the Power BI dataset are generated from it and never hand-edited. A change log at the top of the workbook records each update in plain language, and a quarterly reconciliation compares the matrix against each underwriter's current card. When a client questioned a Texas premium six months after the quote, I could show the rate, the filing page and the checker's name in under a minute.
+
+**Q: What is data lineage and why does a reporting analyst care?**
+Lineage is the recorded path from a number on a report back through every transformation to the source it came from: which extract, which filter, which formula, which version of the rate card. An analyst cares because the first question about any surprising number is "where did that come from?", and lineage turns a two-day archaeology exercise into a lookup. It also protects against silent definition changes: when the TAT definition moved from calendar to business hours, lineage meant we could label every historical report with the definition it used instead of showing a fake improvement. Practically it is provenance columns on rows, code in git, and a data dictionary with definition history.
+
+**Q: How do you handle a correction to a published report?**
+Never in the output. I fix the source row or the code, regenerate the report with the same week-end parameter, and issue it as a versioned file (`_v2`) with a change note stating what changed, why, and the numeric difference. The original stays in the archive. If the client already acted on the wrong number, the note goes to them the same day. Hand-editing the published workbook would make the number untraceable and would be overwritten by the next rebuild, so the extra ten minutes of doing it properly is always worth it.
+
+**Q: Describe a versioning scheme for a set of Excel deliverables that clients keep asking you to "restore the version from last month".**
+Source data and build scripts in git with tagged releases per month; generated workbooks saved as `name_YYYY-MM-DD.xlsx` in an archive folder that is never edited, plus a `latest` copy for convenience; a `CHANGELOG.md` per deliverable listing each release, what changed and who approved it. Restoring last month is copying one dated file; explaining a difference is `git diff` between two tags plus the change log. For clients on SharePoint I turn on version history as a safety net, but the dated archive is the system of record because version history is invisible to anyone outside the tenant.
+
+## Presenting to management (executive summary, insights, recommendations)
+
+Analysis that stays in a notebook changes nothing. The last step of every reporting job is a presentation, usually a one-page summary and ten minutes in a meeting, and the skill is different from analysis: fewer numbers, sharper claims, and a recommendation the reader can accept or reject. This chapter gives a structure that works for a client review, a monthly ops review or an interview case presentation.
+
+### Lead with the answer
+
+Management reads top-down. State the conclusion first, then the evidence, then the detail; this is the **pyramid principle** and it is the opposite of how the analysis was done. Compare:
+
+```text
+Bottom-up (how you worked):
+  We pulled 13 weeks of TAT... stratified by county... Harris was slower... because of replats...
+  therefore we recommend an intake check.
+
+Top-down (how they read):
+  Recommendation: add a county-format check at intake (owner: ops lead, by 15 April).
+  Because: Harris County TAT is 9 hours slower than the rest of Texas, driven by
+  replat attachments the SOP does not cover; this cost 4 SLA misses in March.
+  Evidence: [one chart, one table]
+```
+
+### The one-page executive summary
+
+```text
+TITLE       Weekly Production Review - Week 13 (23-29 Mar 2026)
+HEADLINE    SLA compliance 93.1% vs 95% target; backlog 212 (limit 180). Cause identified; recovery by W15.
+SCORECARD   4 KPIs, this week / target / status (one line each)
+INSIGHTS    3 bullets, each: finding + number + why it matters
+RECOMMEND   2-3 actions, each: what, owner, date, expected effect on the KPI
+RISKS       1-2 lines: what could stop the recovery
+APPENDIX    charts and tables referenced by number
+```
+
+Every bullet in Insights has a number in it. "Harris is slower" is an opinion; "Harris median TAT is 27.9 h against 18.7 h elsewhere, on 420 files" is a finding.
+
+### From data to insight
+
+An insight is a finding plus a **so what**. Build it from the analysis with three questions:
+
+1. **What is different?** Harris TAT 27.9 h vs 18.7 h.
+2. **Why?** Replat attachments not in SOP; 38% of Harris files affected.
+3. **What does it cost or gain?** 4 of the 6 SLA misses in March; at current volume, about 5 misses a month going forward.
+
+```python
+import pandas as pd
+files = pd.DataFrame({
+    "county": ["Harris"]*4 + ["Other"]*4,
+    "replat": [True, True, False, False, False, False, False, False],
+    "tat_h": [31.0, 29.5, 19.2, 18.0, 18.9, 17.5, 19.8, 18.2],
+})
+print(files.groupby(["county", "replat"])["tat_h"].agg(["size", "median"]))
+impact = files[(files["county"] == "Harris") & files["replat"]]["tat_h"].median() - files[files["county"] != "Harris"]["tat_h"].median()
+print(f"Replat files are {impact:.1f} h slower than the non-Harris median")
+```
+
+The table shows Harris files without replats are as fast as everyone else; the insight is about replats, not Harris, and the recommendation follows directly.
+
+### Recommendations that can be accepted
+
+A recommendation has four parts: the action, the owner, the date and the expected effect, expressed in the KPI the reader cares about. "Improve intake" is not acceptable or rejectable; "Add a replat check to Harris intake (ops lead, by 15 April), expected to bring Harris TAT to about 19 h and remove roughly 4 SLA misses a month" is. Offer at most three, ordered by effect, and say what you would do if only one is approved.
+
+### Charts for a management audience
+
+- One message per chart, stated in the title: "Harris replat files take 10 h longer" rather than "TAT by county".
+- Bar or line; no pies, no 3D, no dual axes.
+- Target drawn as a line; the gap is what the reader looks at.
+- The same colours every week: green/amber/red mean status and nothing else.
+- Source and period in small text under the chart.
+
+### Handling the room
+
+Anticipate the three questions you will be asked: "are you sure?" (show the sample size and the control chart), "what will it cost?" (hours, not vague effort) and "what if we do nothing?" (the projected KPI). Bring the appendix but do not present it. When you do not know, say "I do not know; I can have it by Thursday" and then do. Credibility is built on the questions you decline to bluff.
+
+> **Tip:** Rehearse the ten-second version. If the meeting is cut short, the headline and the recommendation are all that survive, so make sure they can stand alone.
+
+### Try It Yourself
+
+```python
+import pandas as pd
+
+kpi = {"delivered": 1284, "within_sla": 0.931, "sla_target": 0.95, "backlog": 212, "backlog_limit": 180}
+harris = {"files": 420, "median_tat": 27.9, "other_median": 18.7, "replat_share": 0.38, "misses_mar": 4, "misses_total": 6}
+actions = [
+    ("Add replat check to Harris intake", "Ops lead", "2026-04-15", "Harris TAT to ~19 h; ~4 fewer misses/month"),
+    ("Borrow 2 agents from Dallas queue for 2 weeks", "Team lead", "2026-03-31", "Backlog below 180 by W15"),
+]
+print("EXECUTIVE SUMMARY - Week 13")
+print(f"HEADLINE: SLA {kpi['within_sla']:.1%} vs {kpi['sla_target']:.0%}; backlog {kpi['backlog']} vs limit {kpi['backlog_limit']}. Cause identified; recovery by W15.")
+print("INSIGHTS:")
+print(f" - Harris median TAT {harris['median_tat']} h vs {harris['other_median']} h elsewhere on {harris['files']} files.")
+print(f" - {harris['replat_share']:.0%} of Harris files carry replat attachments the SOP does not cover.")
+print(f" - Harris caused {harris['misses_mar']} of {harris['misses_total']} SLA misses in March.")
+print("RECOMMENDATIONS:")
+for i, (what, who, when, effect) in enumerate(actions, 1):
+    print(f" {i}. {what} - {who}, by {when}. Expected: {effect}")
+```
+
+### Quiz
+
+1. Where does the recommendation go in a management presentation?
+- [x] First, followed by the evidence
+- [ ] Last, after all the analysis
+- [ ] In the appendix
+> Executives read top-down; the pyramid principle puts the answer first.
+
+2. Which is an insight rather than a finding?
+- [ ] Harris median TAT is 27.9 h
+- [x] Harris replat files are 10 h slower and caused 4 of 6 SLA misses; fixing intake removes about 4 misses a month
+- [ ] TAT is measured in business hours
+> An insight is a finding plus its consequence for the decision.
+
+3. What must every recommendation include?
+- [ ] A chart
+- [x] Action, owner, date and expected effect on the KPI
+- [ ] A cost-benefit spreadsheet
+> Without owner, date and effect it cannot be accepted or rejected.
+
+4. A chart's title should be:
+- [ ] "TAT by county"
+- [x] "Harris replat files take 10 h longer than other files"
+- [ ] "Figure 3"
+> The title states the message; the chart proves it.
+
+### Exercises
+
+1. **Rewrite bottom-up** — Rewrite this as a top-down summary: "We examined 110 audits. We found 7 failures. Six were in Harris. They were legal-description errors caused by replat attachments. We think intake should check for replats."
+<details><summary>Solution</summary>
+
+"Recommendation: add a replat check to Harris intake (ops lead, by 15 April). Reason: six of seven audit failures this week were Harris legal-description errors caused by replat attachments the SOP does not cover; fixing intake should restore Harris accuracy to 98%+. Evidence: 110 audits, stratification table in appendix A."
+
+</details>
+
+2. **Do-nothing projection** — Harris volume is 420 files a week, 38% carry replats, and replat files miss the 24 h SLA 30% of the time. Estimate weekly SLA misses from replats if nothing changes.
+<details><summary>Solution</summary>
+
+420 × 0.38 × 0.30 ≈ 48 files a week missing the SLA from this cause alone, which is about 3.7% of 1,284 weekly files. That alone consumes most of the 5-point gap between 100% and the 95% target, which is the sentence to put in the "what if we do nothing" answer.
+
+</details>
+
+3. **Three questions** — For the recommendation "borrow 2 agents from Dallas for 2 weeks", write your answers to "are you sure?", "what will it cost?" and "what if we do nothing?".
+<details><summary>Solution</summary>
+
+Are you sure: Dallas backlog is 40 against a limit of 60 and its 4-week TAT median is 17 h, so it has capacity; two agents at 45 files a day clear the 32-file excess in one day and the projected inflow in two weeks. Cost: 2 agents × 10 days × 8 h = 160 agent-hours redirected; Dallas TAT is projected to rise by about 1 h, staying within SLA. Do nothing: backlog grows by roughly 20 a week at current inflow, SLA compliance falls below 92% by W15 and the month breaches the contractual 95%.
+
+</details>
+
+### Interview Questions
+
+**Q: How do you present a data analysis to senior management?**
+Answer first, then evidence, then detail. I open with the recommendation and the one number that justifies it, then give three insights that each carry a figure and a consequence, then the recommendations with owner, date and expected KPI effect, and I keep the charts and tables in an appendix I bring but do not walk through. Each chart has one message in its title and the target drawn in. I rehearse the ten-second version because meetings get cut, and I prepare answers to "are you sure", "what does it cost" and "what if we do nothing". When I presented a Harris County turnaround finding this way, the recommendation was approved in the meeting; the previous month's twelve-slide analysis of the same problem had been deferred twice.
+
+**Q: How do you handle a manager who challenges your numbers in front of others?**
+Calmly and with the data notes. I state the definition, the period, the source and the sample size, which are on the last page for exactly this reason, and I offer to walk through the reconciliation after the meeting if the disagreement is about a specific figure. If they are right, I say so and correct it in a versioned reissue that day; being seen to correct quickly builds more credibility than being right. If the challenge is about interpretation rather than the number, I separate the two: "the number is 93.1% by the definition on page 6; whether that is acceptable is your call". I never argue about a number I cannot trace, which is the practical reason for lineage.
+
+**Q: What makes a recommendation actionable?**
+A single concrete action, one named owner, a date, and an expected effect expressed in the KPI the reader already tracks, plus the cost in hours or money and the consequence of not acting. "Improve intake quality" fails all of these; "add a replat check to Harris intake, ops lead, by 15 April, expected to remove about four SLA misses a month at a cost of two minutes per file" passes them. I limit myself to three, rank them by effect, and say which one I would keep if only one is approved, because that is the decision the reader is actually making.
+
+**Q: How much of the analysis should appear in the presentation?**
+As little as proves the point. Management needs to trust the conclusion, not repeat the work, so the body shows one chart per insight and one table for the recommendation, and everything else lives in an appendix or the underlying workbook. I include the sample size, period and source on every chart so that trust does not require the appendix. The test I use is whether a reader who sees only the first page could make the decision; if they would need page four, page four's content belongs on page one and something else should move out.
+
+## Analyst interview case studies & take-home tests
+
+Data and reporting analyst interviews test three things: can you clean and reason about messy data under time pressure, can you turn it into a decision, and can you explain your choices. This chapter covers the formats you will meet, a full worked case in the style of a take-home, and the rubric interviewers actually use, so that you know what is being scored.
+
+### The formats
+
+| Format | Time | What is scored |
+|---|---|---|
+| Take-home dataset | 2–6 hours over several days | Cleaning rigour, correctness, communication, code quality |
+| Live case (verbal) | 30–45 min | Structure, assumptions, arithmetic, handling ambiguity |
+| Live SQL/pandas exercise | 30–60 min | Correct joins, aggregation, edge cases, speaking while coding |
+| Excel/dashboard build | 60–90 min | Formulas, layout, validation, presentation |
+| Presentation of take-home | 20–30 min | Insight quality, defending choices, answering "what would you do next" |
+
+### A take-home, worked
+
+The brief: "Attached is a production log (12,400 rows) and a QA sheet. Tell us how the operation performed last quarter and what you would change. Two pages plus code." Here is how to spend the hours.
+
+**Hour 1 – profile before you analyse.** Shapes, types, nulls, duplicates, date ranges, and the implied grain. Write down every anomaly as you find it; the list becomes the "Data quality notes" section, which interviewers read first because it shows judgement.
+
+```python
+import pandas as pd
+
+log = pd.DataFrame({
+    "file_id": [1, 2, 2, 3, 4, 5],
+    "client": ["Stewart", "Stewart", "Stewart", "stewart ", "FirstAm", "Stewart"],
+    "received": ["2026-01-05", "2026-01-06", "2026-01-06", "2026-01-07", "2026-13-01", "2026-02-02"],
+    "delivered": ["2026-01-06", "2026-01-08", "2026-01-08", None, "2026-01-09", "2026-01-30"],
+})
+notes = []
+if log["file_id"].duplicated().any(): notes.append(f"{log['file_id'].duplicated().sum()} duplicate file_id rows (kept first)")
+log["client"] = log["client"].str.strip().str.title()
+rec = pd.to_datetime(log["received"], errors="coerce")
+if rec.isna().any(): notes.append(f"{rec.isna().sum()} unparseable received dates (excluded from TAT)")
+dlv = pd.to_datetime(log["delivered"], errors="coerce")
+if (dlv < rec).any(): notes.append(f"{(dlv < rec).sum()} delivered-before-received rows (excluded from TAT)")
+print("\n".join(notes))
+```
+
+**Hours 2–3 – answer the question asked.** Quarter-level KPIs with the definitions stated, then by month, then by client; a control chart or at least a trend; one stratification that finds something. Resist analysing everything; find one real insight and prove it.
+
+**Hour 4 – write.** Two pages: headline, scorecard, three insights, two recommendations, data-quality notes, and an "if I had more time" list. The code goes in a notebook or script with a README on how to run it.
+
+### What interviewers score
+
+```text
+Cleaning      Did they find the duplicates, the bad dates, the casing? Did they say what they excluded and why?
+Correctness   Are the KPIs right by a reasonable definition? Is the definition stated?
+Insight       Is there one finding that a manager would act on, with a number?
+Communication Can a non-analyst read page one? Are charts titled with messages?
+Code          Readable, re-runnable, no hard-coded paths; a function per stage
+Judgement     Assumptions listed; limitations honest; "next steps" realistic
+```
+
+A perfect analysis with no data-quality notes scores below a good analysis with an honest list of what was wrong with the data.
+
+### Live case: think aloud with structure
+
+"Accuracy fell from 98% to 94% last month. What do you do?" The interviewer wants the structure, not the answer. Say it before you start: "First I confirm the drop is real: sample size, checklist, auditors, population. Then I stratify failures by agent, client, county, error type and date. Then Pareto and five whys on the concentration. Then correction, corrective and preventive actions with a closure test." Then ask for data: "How many audits? Did anything change in measurement?" Each answer narrows the branch. Do the arithmetic out loud and round sensibly.
+
+### Live pandas or SQL
+
+Typical tasks: compute TAT per client with business days; find files delivered but never audited; rank agents by accuracy with a minimum sample; detect duplicate submissions. Speak while coding, name the edge cases (nulls in delivered date, ties in ranking, zero audits) before the interviewer does, and test with a three-row example. If you forget a function name, say what it does and keep going; nobody fails for `pd.to_datetime` versus `pd.Timestamp`.
+
+### Excel build
+
+You will be given a raw sheet and asked for a summary. Show the habits: convert to a Table (Ctrl+T), a clean-up sheet with `TRIM`, `PROPER`, `DATEVALUE` or Text to Columns, a `SUMIFS`/`COUNTIFS` scorecard, a control row that reconciles the scorecard total to the raw row count, and conditional formatting from a rule. Explain each choice in a sentence.
+
+> **Interview note:** The single most-asked follow-up is "what would you do with another day?". Have a real answer: a p-chart for accuracy, business-hour TAT, a second source to validate the QA sheet, or a per-county view. Vague answers ("more analysis") end the interview.
+
+### Try It Yourself
+
+```python
+import pandas as pd
+
+log = pd.DataFrame({
+    "file_id": [1,2,3,4,5,6,7,8,9,10],
+    "client": ["Stewart","Stewart","FirstAm","FirstAm","Stewart","Stewart","FirstAm","Stewart","Stewart","FirstAm"],
+    "agent": ["A","A","B","B","C","C","A","B","C","A"],
+    "received": pd.to_datetime(["2026-01-05","2026-01-05","2026-01-06","2026-01-06","2026-01-07",
+                                "2026-01-07","2026-01-08","2026-01-08","2026-01-09","2026-01-09"]),
+    "delivered": pd.to_datetime(["2026-01-06","2026-01-07","2026-01-06","2026-01-09","2026-01-08",
+                                 None,"2026-01-09","2026-01-12","2026-01-10","2026-01-10"]),
+})
+qa = pd.DataFrame({"file_id": [1,2,3,4,7,8,9], "result": ["pass","pass","fail","pass","pass","fail","pass"]})
+done = log.dropna(subset=["delivered"]).copy()
+done["tat_days"] = (done["delivered"] - done["received"]).dt.days
+scored = done.merge(qa, on="file_id", how="left")
+print("Delivered but not audited:", scored[scored["result"].isna()]["file_id"].tolist())
+acc = scored.dropna(subset=["result"]).groupby("agent")["result"].agg(n="size", acc=lambda s: (s == "pass").mean())
+print("\nAccuracy by agent (min n=2):\n", acc[acc["n"] >= 2].round(2))
+print("\nTAT by client:\n", done.groupby("client")["tat_days"].agg(["count", "median", "max"]))
+print("\nData notes: 1 file undelivered (excluded from TAT); 3 delivered files unaudited")
+```
+
+### Quiz
+
+1. What should the first hour of a take-home be spent on?
+- [ ] Building charts
+- [x] Profiling the data and listing anomalies
+- [ ] Writing the executive summary
+> The data-quality notes show judgement and prevent wrong KPIs later.
+
+2. In a live case, what should you do before answering "accuracy fell; what do you do?"
+- [x] State your structure, then ask for the data that narrows it
+- [ ] Guess the cause
+- [ ] Ask for a week to analyse
+> Interviewers score the structure and the questions more than the guess.
+
+3. Which scores higher: a flawless KPI table with no data notes, or a good table with honest notes on exclusions?
+- [ ] The flawless table
+- [x] The good table with notes
+- [ ] They score the same
+> Notes prove you saw the dirt; a clean table with no notes suggests you did not look.
+
+4. In a live pandas exercise you forget a function name. What do you do?
+- [ ] Stop and apologise
+- [x] Say what it does, keep going, and fix it when you test
+- [ ] Switch to Excel
+> Reasoning and edge-case handling are scored; exact recall is not.
+
+### Exercises
+
+1. **Two-page outline** — Write the section headings and one-line contents for a take-home on a quarter of production data.
+<details><summary>Solution</summary>
+
+```text
+1. Headline (2 lines): volume, SLA, accuracy, one sentence on the biggest finding
+2. Scorecard: 4 KPIs by month with definitions in a footnote
+3. Insight 1: Harris replat files 10 h slower; 4 of 6 misses (chart)
+4. Insight 2: accuracy stable on p-chart; the Feb "drop" was n=22 (chart)
+5. Insight 3: 14% of delivered files never audited; sampling rule not followed
+6. Recommendations (3): owner, date, expected effect
+7. Data-quality notes: duplicates removed, bad dates excluded, casing fixed, counts
+8. If I had more time: business-hour TAT, per-county view, second QA source
+Appendix: code README, full tables
+```
+
+</details>
+
+2. **Edge cases** — For "rank agents by accuracy", list the edge cases you would name aloud before coding.
+<details><summary>Solution</summary>
+
+Delivered files with no audit row (exclude, do not count as pass); agents with fewer than a minimum number of audits (show but do not rank, or mark n<30); ties in accuracy (rank by n as a secondary key, or share the rank); QA result values with inconsistent casing or trailing spaces ("Pass ", "PASS"); files audited twice (keep the latest audit); and agents who transferred mid-period (attribute by the agent on the file at delivery, not the current roster).
+
+</details>
+
+3. **Excel control row** — Write the formula that checks the scorecard's total delivered equals the raw row count of delivered files in `tblLog`.
+<details><summary>Solution</summary>
+
+```excel
+=IF(SUM(Scorecard!B2:B4)=COUNTIFS(tblLog[Status],"Delivered"),"OK","MISMATCH")
+```
+
+Place it under the scorecard and format red on "MISMATCH". Interviewers notice a reconciliation row immediately.
+
+</details>
+
+### Interview Questions
+
+**Q: Walk me through how you would approach this take-home dataset.**
+Profile first: shape, types, null share per column, duplicate keys, date ranges and any value that fails a sanity rule such as delivered before received; I write each anomaly into a data-quality notes list with the count and what I did about it. Then I define the KPIs in writing, compute them for the quarter and by month and client, and check a control chart before I call anything a trend. I look for one concentration by stratifying failures and slow files, and I prove it with a table. I write two pages top-down: headline, scorecard, three numbered insights, recommendations with owners and expected effect, the data notes, and what I would do with another day. The code is a script with a function per stage and a README. The whole thing is timeboxed at four hours because the brief asked for two pages, not a thesis.
+
+**Q: Tell me about a time your analysis was wrong.**
+A weekly report showed accuracy improving from 96% to 98.5% over two months and I presented it as the result of a checklist change. A team lead asked how many files were audited: the QA team had halved its sampling after a staff change, and the remaining audits were skewed to a client with simpler files. The improvement was mostly measurement. I withdrew the claim the same day, added sample size and client mix to the accuracy row, and built the p-chart so limits reflected the sample. The lesson I bring to interviews is that every accuracy number now travels with its n and its mix, and that being corrected quickly cost less credibility than defending the number would have.
+
+**Q: How do you decide which analysis not to do?**
+By the decision in the brief. A take-home asking "how did the operation perform and what would you change" needs the four KPIs, one trend check and one real insight with a recommendation; it does not need a regression, a forecast or twelve charts. I list the analyses I considered and did not do in the "with more time" section, which shows the interviewer I saw them and chose. In live cases I say the trade-off aloud: "I could stratify by six dimensions, but agent, client and error type will explain most of it, so I start there". Scope discipline is what separates an analyst who ships from one who explores.
+
+**Q: What questions do you ask at the end of an analyst interview?**
+Ones that reveal how the role works: what the current weekly report looks like and who reads it; where the data comes from and how clean it is; whether definitions are written down; what decision the last report changed; and what a strong first ninety days would produce. The answers tell me whether the job is analysis or firefighting, and asking them signals that I think about reports as decisions rather than tables. I avoid questions whose answers are on the website.

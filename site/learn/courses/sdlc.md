@@ -2491,3 +2491,584 @@ Because story points are a relative scale calibrated within one team against its
 
 **Q: Explain the critical path and how you use it.**
 The critical path is the longest sequence of dependent tasks from project start to finish; its total duration is the minimum time the project can take, and every task on it has zero float, so any delay on it delays delivery. I compute it with a forward pass for earliest start and finish and a backward pass for latest, and the tasks whose earliest and latest times coincide are critical. In practice I use it to decide where to add resources or reduce scope, to know which delays matter and which tasks can slip without consequence, and to explain to sponsors why adding people to a non-critical task will not bring the date forward. It changes as work progresses, so I recompute it whenever actuals diverge from plan.
+
+# LEVEL: Expert
+
+## Risk management & quality standards (ISO/CMMI)
+
+Every project carries uncertainty: a key developer may leave, a client may change the spec, a third-party API may be deprecated. **Risk management** is the discipline of finding those uncertainties early, sizing them, and deciding what to do before they become incidents. **Quality standards** such as ISO 9001, ISO/IEC 25010, ISO/IEC 12207 and CMMI are the frameworks that organisations use to show that risk, process and quality are managed systematically rather than by heroics. Final-year vivas and BPO client audits both ask about them.
+
+### Risk identification
+
+A risk is a future event with a probability and an impact; an issue is a risk that has already happened. Identify risks at project start and at every phase gate using:
+
+- **Checklists** by category: technical (unfamiliar stack, integration), schedule (optimistic estimates), resource (single points of knowledge), external (vendor, regulation), requirements (volatility, ambiguity).
+- **Assumption analysis**: every "we assume the client will provide sample files by week 2" is a risk.
+- **Lessons learned** from previous projects and post-mortems.
+
+### The risk register
+
+```text
+ID   Risk                                      P   I   Score  Owner    Response    Trigger / status
+R1   Client rate-card PDFs arrive late         4   3   12     PM       Mitigate    Not received by 10 Apr -> escalate
+R2   Only one dev knows the DOCX generator     3   5   15     Lead     Mitigate    Pairing + docs by sprint 3
+R3   openpyxl drops support for .xls source    1   4    4     Dev      Accept      Watch changelog
+R4   Client changes report layout after UAT    3   3    9     PM       Transfer    Change request with cost in contract
+R5   Pyodide runtime too slow for 700-page job 2   5   10     Dev      Avoid       Spike in sprint 1; fall back to server
+```
+
+Probability and impact are scored 1–5, the product ranks the register, and each risk has an owner and a **response**: avoid (change the plan), mitigate (reduce P or I), transfer (insurance, contract clause, vendor), or accept (monitor with a trigger). The register is reviewed at every sprint review or phase gate, not filed once.
+
+### Quantifying: exposure and EMV
+
+Risk exposure = probability × cost. If R2's key developer leaving has a 30% chance and would cost 6 weeks of rework (≈ PKR 1.2M), exposure is PKR 360k, which justifies spending two weeks of pairing time on mitigation. The **expected monetary value** of a decision tree sums the exposures of the branches; it is how you argue for a mitigation budget in numbers a sponsor accepts.
+
+### Quality standards
+
+| Standard | What it is | What it asks of you |
+|---|---|---|
+| ISO 9001:2015 | Quality management system (any industry) | Documented processes, records, corrective action, management review, continual improvement |
+| ISO/IEC 12207 | Software life-cycle processes | Defined processes for acquisition, development, operation, maintenance |
+| ISO/IEC 25010 | Product quality model | Eight characteristics: functional suitability, performance efficiency, compatibility, usability, reliability, security, maintainability, portability |
+| ISO/IEC 27001 | Information security management | Risk assessment, controls (Annex A), audits; common in BPO client contracts |
+| CMMI v2.0/v3.0 | Capability Maturity Model Integration | Five maturity levels; practices grouped by capability areas |
+
+**CMMI maturity levels**: 1 Initial (ad hoc, success depends on individuals), 2 Managed (projects planned, tracked, requirements managed), 3 Defined (organisation-wide standard processes, tailored per project), 4 Quantitatively Managed (process performance measured statistically), 5 Optimizing (continuous, data-driven improvement). Most BPO and outsourcing firms in Pakistan advertise CMMI Level 3; the difference between 2 and 3 is whether the good process is per-project or organisational.
+
+### Quality assurance vs quality control
+
+QA is process-oriented and preventive: standards, reviews, audits, training. QC is product-oriented and detective: testing, inspection, sampling. A QA checker in a data-processing team doing 10% sampling against a checklist is doing QC; the team lead who writes the checklist, trains agents on it and tracks error trends is doing QA. ISO 9001's "corrective action" clause is the RCA loop: find the cause, fix it, verify, record.
+
+### Cost of quality
+
+```text
+Prevention   training, standards, design reviews, static analysis        cheapest
+Appraisal    testing, inspection, QA sampling, audits
+Internal failure   rework, re-testing, scrap before delivery
+External failure   client-found defects, SLA penalties, reputation     most expensive
+```
+
+The argument for every quality practice is the same: money spent on prevention and appraisal reduces failure cost by more than it costs. A defect found in requirements costs roughly 1 unit to fix; the same defect found in production costs 30 to 100 units, which is the number to quote in a viva.
+
+> **Interview note:** Examiners ask "what is the difference between ISO 9001 and CMMI?". ISO 9001 is a pass/fail certification of a quality management system for any industry; CMMI is a software-and-services maturity model with five staged levels and a benchmark appraisal. A company can hold both.
+
+### Try It Yourself
+
+```python
+risks = [
+    ("R1", "Client rate-card PDFs arrive late", 4, 3, "mitigate"),
+    ("R2", "Only one dev knows the DOCX generator", 3, 5, "mitigate"),
+    ("R3", "openpyxl drops .xls support", 1, 4, "accept"),
+    ("R4", "Client changes report layout after UAT", 3, 3, "transfer"),
+    ("R5", "Pyodide too slow for 700-page job", 2, 5, "avoid"),
+]
+ranked = sorted(risks, key=lambda r: r[2] * r[3], reverse=True)
+print(f"{'ID':4}{'Risk':44}{'P':>3}{'I':>3}{'Score':>7}  Response")
+for rid, name, p, i, resp in ranked:
+    band = "HIGH" if p * i >= 12 else ("MED" if p * i >= 6 else "LOW")
+    print(f"{rid:4}{name:44}{p:>3}{i:>3}{p*i:>7}  {resp:9}{band}")
+# exposure in weeks: probability as fraction x rework weeks
+print("\nR2 exposure:", 0.30 * 6, "weeks -> justifies ~2 weeks of pairing")
+```
+
+### Quiz
+
+1. Which response changes the plan so the risk cannot occur?
+- [ ] Mitigate
+- [x] Avoid
+- [ ] Accept
+> Avoidance removes the cause; mitigation reduces probability or impact.
+
+2. What distinguishes CMMI Level 3 from Level 2?
+- [ ] Level 3 requires automated testing
+- [x] Processes are standardised organisation-wide, not just per project
+- [ ] Level 3 requires ISO 9001
+> Level 2 is "managed" per project; Level 3 is "defined" across the organisation.
+
+3. A QA checker sampling 10% of files against a checklist is doing:
+- [ ] Quality assurance
+- [x] Quality control
+- [ ] Risk transfer
+> QC inspects the product; QA improves the process that makes it.
+
+4. Which cost-of-quality category is most expensive?
+- [ ] Prevention
+- [ ] Appraisal
+- [x] External failure
+> Client-found defects carry rework, penalties and reputation cost.
+
+### Exercises
+
+1. **Register** — Write three risks for a Fiverr project delivering a 168-field fillable PDF form, each with P, I, response and trigger.
+<details><summary>Solution</summary>
+
+```text
+R1  Client's field list changes after layout is done   P4 I3  Mitigate: freeze field list in writing at milestone 1; changes billed as revision
+R2  Adobe Reader renders calculated fields differently  P3 I4  Mitigate: test in Reader, Preview and Chrome before delivery; trigger: any calc field fails
+R3  Client's source PDF is a scan with no text layer    P2 I3  Avoid: confirm text layer on day 1; if scan, quote OCR as a separate item
+```
+
+</details>
+
+2. **EMV** — A vendor API has a 20% chance of a breaking change costing 3 weeks; a wrapper layer costs 4 days to build. Should you build it?
+<details><summary>Solution</summary>
+
+Exposure = 0.2 × 15 working days = 3 days. The wrapper costs 4 days, so on pure EMV it is not justified. However, if the impact would land at delivery time when 3 weeks means missing a contractual date with penalties, the impact is larger than 15 days and the wrapper is justified; state the assumption either way.
+
+</details>
+
+3. **ISO 25010** — Map three non-functional requirements of a rate-calculator app to 25010 characteristics.
+<details><summary>Solution</summary>
+
+"Premium computed in under 200 ms" → performance efficiency (time behaviour). "Wrong rate table version cannot be selected" → reliability (fault tolerance) and functional suitability (correctness). "New state can be added by editing a CSV, no code change" → maintainability (modifiability).
+
+</details>
+
+### Interview Questions
+
+**Q: How do you manage risk on a software project?**
+I keep a living risk register from day one: each risk has a probability and impact score, an owner, a response of avoid, mitigate, transfer or accept, and a trigger that says when the response fires. I identify risks from category checklists, from every assumption in the plan, and from past post-mortems, and I review the register at each sprint review, retiring risks that passed and adding new ones. For the top few I quantify exposure as probability times cost so mitigation spending can be justified in numbers. On a report-automation project the highest risk was one developer holding all knowledge of the DOCX generator; two weeks of pairing and a runbook cut the impact, and when that developer did leave, delivery slipped three days rather than six weeks.
+
+**Q: Explain the CMMI levels and what Level 3 means in practice.**
+Level 1 is ad hoc, success depends on individuals; Level 2 is managed, meaning each project plans, tracks and controls requirements, configuration and quality; Level 3 is defined, meaning the organisation has standard processes with tailoring guidelines and every project uses them, with training and organisational process assets; Level 4 adds quantitative management, using statistical process control on process performance; Level 5 is optimising, with continuous data-driven improvement. In practice Level 3 means a new project does not invent its own way of doing estimation, reviews or release management; it tailors the organisational one, which is why outsourcing clients ask for it. It says nothing directly about product quality, which is why I would also ask what their defect rates are.
+
+**Q: What is the difference between quality assurance and quality control?**
+QA is about the process and is preventive: standards, checklists, training, reviews, audits and the corrective-action loop. QC is about the product and is detective: testing, inspection, sampling against acceptance criteria. When I was a quality checker on a data-processing team, sampling 10% of records against the checklist was QC; when I led the team and rewrote the checklist, tracked error types weekly and retrained on the top two, that was QA. Both are needed, and the cost-of-quality model says money moved from failure to prevention pays back several times, since a defect found in requirements costs a fraction of one found by the client.
+
+**Q: How does ISO 9001 apply to a software or BPO team?**
+ISO 9001 certifies that a quality management system exists: documented processes, records that show they were followed, defined responsibilities, measurement of quality objectives, corrective action on nonconformities, internal audits and management review. For a software team that maps to a defined SDLC with gate reviews, version control and change records, defect tracking with root-cause analysis, and KPIs reviewed by management; for a BPO team it is SOPs, QA sampling records, error trend reviews and client-audit evidence. It does not prescribe how to build software; Agile teams pass ISO 9001 audits by showing that their sprint reviews, retrospectives and definition of done are the documented process and that the records exist.
+
+## Maintenance & technical debt
+
+Most of a system's life and most of its cost is maintenance: studies since Lientz and Swanson in the 1980s put it at 60–80% of total lifecycle cost. **Technical debt**, Ward Cunningham's metaphor, is the future cost created by choosing a quicker solution now; like financial debt it carries interest, which is the extra effort every later change costs until it is repaid. Managing both is what separates a system that lasts ten years from one that is rewritten every three.
+
+### The four kinds of maintenance
+
+| Type | Trigger | Example | Share (typical) |
+|---|---|---|---|
+| Corrective | A defect | The weekly XLSX export drops the last row | ~20% |
+| Adaptive | Environment change | Python 3.13 removes a module; new Excel file format; client moves to SharePoint | ~25% |
+| Perfective | New or improved functionality | Add a per-county view to the report | ~50% |
+| Preventive | Reduce future failure | Refactor the 900-line report script into stages | ~5% |
+
+The surprise for most students is that perfective work dominates; a live system attracts requests. The tragedy is that preventive work is starved, which is how debt compounds.
+
+### Lehman's laws
+
+Two of Lehman's laws of software evolution explain most maintenance pain: **continuing change** (a system in use must change or become progressively less useful) and **increasing complexity** (as it changes, its structure degrades unless work is done to maintain it). The second law is the interest on technical debt stated as a law.
+
+### Kinds of technical debt
+
+Martin Fowler's quadrant separates debt by intent and by care:
+
+```text
+                 Reckless                          Prudent
+Deliberate   "No time for design"          "Ship now, refactor the parser next sprint"
+Inadvertent  "What is layering?"           "Now we know how we should have done it"
+```
+
+Prudent-deliberate debt is a legitimate tool: the DOCX generator shipped with a hard-coded template path to meet a client date, with a ticket to fix it. Reckless debt is the kind nobody tracked. Beyond code, debt lives in tests (missing coverage), architecture (a report script that is also the database layer), documentation (a runbook that no longer matches), and dependencies (pinned versions three majors behind).
+
+### Measuring it
+
+- **Code smells** and complexity: cyclomatic complexity per function, file length, duplication; `radon`, SonarQube, `pylint`.
+- **Change hotspots**: files that change most often and are largest are where debt costs most; `git log --format= --name-only | sort | uniq -c | sort -rn | head`.
+- **Lead time for a change** in a module compared with the rest of the system.
+- **Dependency age**: `pip list --outdated`, Dependabot alerts.
+- **Debt register**: a ticket per known item with the interest (hours per month it costs) and the principal (hours to fix).
+
+```text
+DEBT-12  build_report.py is 900 lines, no tests    interest ~6 h/month (every change needs manual re-run)
+         principal ~3 days (split into stages + tests)   payback ~4 months   priority HIGH
+DEBT-15  openpyxl pinned at 3.0.x                  interest ~0 now; risk at Python 3.13 upgrade
+         principal ~2 h                                  priority MEDIUM (do with next Python bump)
+```
+
+### Paying it down
+
+- **Boy Scout rule**: leave every file you touch a little cleaner; small, continuous repayment.
+- **Debt budget**: reserve 10–20% of each sprint for items from the debt register, chosen by interest-to-principal ratio.
+- **Strangler fig**: for large legacy pieces, build the replacement beside the old one and route work to it piece by piece rather than a big-bang rewrite.
+- **Refactor under test**: characterisation tests first (capture current behaviour, including the bugs), then restructure, then fix behaviour deliberately.
+- **Retire**: some debt should be written off; a report nobody reads is deleted, not refactored.
+
+### Making maintenance cheap
+
+Maintainability is designed in: small modules with one reason to change, dependency injection so the extract stage can be swapped for a test double, configuration outside code, structured logs, runbooks, and semantic versioning with a changelog so operators know what changed. The best measure of maintainability is how long a new team member takes to make a safe change; if it is more than a day for a one-line fix, the system is telling you something.
+
+> **Warning:** "We will rewrite it from scratch" is almost always the most expensive option. The old system encodes years of fixed edge cases that nobody remembers; a rewrite reintroduces them one client complaint at a time. Prefer strangling it piece by piece.
+
+### Try It Yourself
+
+```python
+# A tiny debt register with payback ranking: interest is hours/month the debt costs,
+# principal is hours to repay. Lower payback months = fix first.
+debts = [
+    ("DEBT-12", "build_report.py 900 lines, no tests", 6.0, 24),
+    ("DEBT-15", "openpyxl pinned at 3.0.x", 0.5, 2),
+    ("DEBT-18", "Rate table hard-coded in two places", 3.0, 8),
+    ("DEBT-21", "Runbook outdated (3 wrong steps)", 2.0, 3),
+]
+for did, name, interest, principal in sorted(debts, key=lambda d: d[3] / d[2]):
+    print(f"{did}  {name:40} interest {interest:4.1f} h/mo  principal {principal:3} h  payback {principal/interest:5.1f} mo")
+```
+
+### Quiz
+
+1. Which maintenance type usually takes the largest share of effort?
+- [ ] Corrective
+- [x] Perfective
+- [ ] Preventive
+> Live systems attract enhancement requests; perfective work is typically about half.
+
+2. "Ship now with a hard-coded path, ticket raised to fix next sprint" is which kind of debt?
+- [x] Prudent, deliberate
+- [ ] Reckless, deliberate
+- [ ] Reckless, inadvertent
+> A conscious trade-off with a plan to repay is prudent deliberate debt.
+
+3. What is the strangler fig pattern?
+- [ ] Deleting the legacy system on a fixed date
+- [x] Building the replacement alongside and routing functionality to it incrementally
+- [ ] Freezing the legacy system
+> Incremental replacement avoids the big-bang rewrite risk.
+
+4. Which metric best identifies where debt costs the most?
+- [ ] Total lines of code
+- [x] Files that are both large and frequently changed
+- [ ] Number of contributors
+> Hotspots combine complexity with change frequency; debt in never-touched code is cheap.
+
+### Exercises
+
+1. **Classify** — Label each as corrective, adaptive, perfective or preventive: (a) update the SharePoint connector after a Microsoft API change; (b) add a per-agent tab to the dashboard; (c) fix the TOC page numbers in the handbook generator; (d) split the monolith script into modules.
+<details><summary>Solution</summary>
+
+(a) adaptive, (b) perfective, (c) corrective, (d) preventive.
+
+</details>
+
+2. **Payback** — A debt item costs 6 hours a month and takes 24 hours to fix. Another costs 1 hour a month and takes 2 hours. Which first, and why might you still do the second one immediately?
+<details><summary>Solution</summary>
+
+Payback: 24/6 = 4 months versus 2/1 = 2 months, so the second pays back faster and goes first by the ratio. But the first has a much larger absolute interest, so it should be scheduled soon regardless; and the second is small enough to do under the Boy Scout rule the next time that file is touched, without needing a sprint slot.
+
+</details>
+
+3. **Characterisation test** — Describe how you would safely refactor a 900-line report script with no tests.
+<details><summary>Solution</summary>
+
+Freeze an input dataset and capture the script's current outputs (the workbook contents as CSV, the printed log) as golden files. Write a test that runs the script and diffs against the golden files, so any change in behaviour is detected. Then extract one stage at a time (extract, validate, transform, write) into functions, running the golden test after each step. Only after the structure is clean, fix known bugs deliberately, updating the golden files with an explanation in the commit.
+
+</details>
+
+### Interview Questions
+
+**Q: What is technical debt and how do you manage it?**
+Technical debt is the future cost of a shortcut taken now; the interest is the extra effort every later change costs until the shortcut is fixed. Some is prudent and deliberate, taken to meet a date with a ticket to repay it; the dangerous kind is untracked. I manage it with a debt register where each item records the interest in hours per month and the principal in hours to fix, and I rank by payback; the team reserves a share of each sprint for the top items and applies the Boy Scout rule for small ones. I watch hotspots, the files that are large and change often, because that is where interest is paid. On a reporting codebase, a 900-line script with no tests cost about six hours a month in manual re-runs; three days splitting it into tested stages paid back in four months and made the next three feature requests trivial.
+
+**Q: Why is maintenance the majority of software cost, and what reduces it?**
+Because a useful system lives for years and must keep changing: defects are found, environments change, users ask for more, and each change on a degrading structure costs more than the last, which Lehman's laws describe. What reduces it is designing for change: small modules with one reason to change, dependencies injected so pieces can be swapped and tested, configuration outside code, automated tests that make change safe, clear logs and runbooks so incidents are short, and continuous small refactoring so complexity does not accumulate. The measure I use is how long a new person needs to make a safe one-line change; when it exceeds a day, maintenance cost is about to climb.
+
+**Q: A stakeholder wants to rewrite a legacy system from scratch. What do you say?**
+I ask what problem the rewrite solves and whether it can be solved incrementally, because a full rewrite is usually the most expensive and riskiest option: it takes longer than estimated, the old system keeps changing meanwhile, and years of fixed edge cases are lost and rediscovered by users. I propose the strangler fig approach: put a facade in front, build the replacement for the most painful module first, route that traffic to it, and retire the old module; repeat. It delivers value early, keeps the old system as a fallback, and lets us stop if priorities change. The exceptions are when the platform itself is dead, such as an unsupported language runtime, or when the system is small enough that the rewrite is days rather than months.
+
+**Q: How do you decide whether to fix a bug or refactor the code around it?**
+By the cost of the next change. If the fix is one line in a module that is otherwise healthy, I fix it and add a test. If the bug is a symptom of structure, such as the third fix in the same tangled function this quarter, I add a characterisation test, refactor under it, then make the fix, because the fourth bug is coming. I keep the two commits separate so the refactor is reviewable as behaviour-preserving and the fix is reviewable as a behaviour change. The judgement is recorded in the debt register either way, so that the decision to defer is visible rather than forgotten.
+
+## Security in the SDLC
+
+Security is not a phase you bolt on before release; it is a concern woven through every phase of the software development life cycle. The industry name for this is "shifting left" — moving security work earlier, where defects are cheaper to fix. A vulnerability found in design costs a fraction of the same vulnerability found in production after a breach.
+
+### Security in each phase
+
+| SDLC phase | Security activity |
+|---|---|
+| Requirements | Security and privacy requirements; abuse cases alongside use cases |
+| Design | Threat modelling (STRIDE); least-privilege architecture; secure defaults |
+| Implementation | Secure coding standards; input validation; no secrets in code |
+| Testing | SAST, DAST, dependency scanning, penetration testing |
+| Deployment | Hardened config, secrets management, least-privilege infrastructure |
+| Maintenance | Patching, vulnerability monitoring, incident response |
+
+### Threat modelling with STRIDE
+
+In design, ask what can go wrong systematically. STRIDE is a checklist of threat categories:
+
+```text
+S - Spoofing        : can someone impersonate a user/service?      -> authentication
+T - Tampering       : can data be modified in transit/at rest?     -> integrity, signing
+R - Repudiation     : can someone deny an action?                  -> audit logging
+I - Info disclosure : can data leak?                               -> encryption, access control
+D - Denial of service: can it be overwhelmed?                      -> rate limits, quotas
+E - Elevation of priv: can a user gain more access than allowed?   -> authorization, least priv
+```
+
+### The OWASP Top 10 as a coding checklist
+
+The OWASP Top 10 lists the most common web-application risks — injection, broken authentication, broken access control, security misconfiguration, and so on. Treated as a checklist during implementation and review, it catches the majority of real-world vulnerabilities. Injection (SQL, command) and broken access control are perennially near the top, and both are prevented by disciplined input handling and authorization checks.
+
+### Automated security testing
+
+- **SAST** (static analysis) scans source code for vulnerable patterns before it runs.
+- **DAST** (dynamic analysis) attacks the running application.
+- **Dependency/SCA scanning** flags known-vulnerable third-party libraries — often the biggest real risk, since most code in a modern app is dependencies.
+- **Secrets scanning** blocks credentials committed to the repository.
+
+> **Warning:** The most common breach today is not a clever exploit but a known-vulnerable dependency or a leaked credential. Dependency scanning and secrets scanning in CI catch both cheaply, and skipping them is negligence, not a shortcut.
+
+### Try It Yourself
+
+```text
+Threat-model a login feature with STRIDE (fill in a control for each)
+
+Feature: user logs in with email + password to a reporting dashboard
+
+  Spoofing        -> ? (e.g. strong auth, MFA, no user enumeration on errors)
+  Tampering       -> ? (e.g. TLS in transit, integrity checks)
+  Repudiation     -> ? (e.g. audit log of logins with timestamp + IP)
+  Info disclosure -> ? (e.g. hash+salt passwords, generic error messages)
+  Denial of service -> ? (e.g. rate-limit login attempts, lockout/backoff)
+  Elevation of priv -> ? (e.g. role checks on every request, least privilege)
+```
+
+### Quiz
+
+1. "Shifting left" in security means:
+- [x] Moving security work earlier in the SDLC where defects are cheaper to fix
+- [ ] Moving the team to the left of the office
+- [ ] Testing only at release
+> Finding and fixing security defects earlier (requirements/design) costs far less than fixing them in production.
+
+2. STRIDE is used primarily during which phase?
+- [x] Design (threat modelling)
+- [ ] Deployment
+- [ ] Maintenance
+> STRIDE is a design-time threat-modelling checklist covering spoofing, tampering, repudiation, info disclosure, DoS and elevation.
+
+3. The most common real-world breach source today is often:
+- [x] Known-vulnerable dependencies and leaked credentials
+- [ ] Novel zero-day exploits
+- [ ] Slow databases
+> Most breaches trace to unpatched dependencies or committed secrets, which dependency and secrets scanning catch cheaply.
+
+4. SAST differs from DAST in that:
+- [x] SAST analyses source code statically; DAST attacks the running app
+- [ ] SAST is manual; DAST is automatic
+- [ ] They are the same
+> Static analysis inspects code without running it; dynamic analysis tests the live application.
+
+### Exercises
+
+1. **Apply STRIDE** — For a file-upload feature, name one threat in the "Elevation of privilege" and one in the "Denial of service" category, with a control for each.
+<details><summary>Solution</summary>
+
+Elevation of privilege: an uploaded file executed on the server could run with server privileges — control by never executing uploads, validating type, and storing outside the web root. Denial of service: a huge file or zip bomb exhausts resources — control by enforcing size limits and resource caps per upload.
+
+</details>
+
+2. **Place the checks** — Which CI checks would you add to catch (a) a committed AWS key and (b) a dependency with a known CVE?
+<details><summary>Solution</summary>
+
+(a) A secrets-scanning step (e.g. gitleaks/trufflehog) that fails the build on detected credentials. (b) A software-composition-analysis / dependency-scanning step (e.g. `npm audit`, Dependabot, Snyk) that flags or fails on known-vulnerable versions.
+
+</details>
+
+### Interview Questions
+
+**Q: What does it mean to "build security into the SDLC" rather than test for it at the end?**
+It means every phase has a security activity rather than treating security as a final gate. Requirements include security and privacy requirements and abuse cases; design includes threat modelling with something like STRIDE and least-privilege architecture; implementation follows secure coding standards and keeps secrets out of code; testing adds static analysis, dynamic analysis and dependency scanning; deployment hardens configuration and manages secrets; and maintenance patches and monitors. This is "shifting left", and the reason is economic: a flaw caught in design costs a tiny fraction of the same flaw exploited in production. Bolting security on at the end finds fewer issues, later, when they are most expensive.
+
+**Q: In your experience, where do most security problems actually come from, and how do you defend against that cheaply?**
+In practice most breaches are not exotic zero-days; they are known-vulnerable third-party dependencies and leaked credentials. Modern applications are mostly dependencies, so a library with a public CVE is a common and serious exposure, and secrets accidentally committed to a repository are a classic cause of compromise. The cheap, high-value defence is automation in CI: dependency/software-composition scanning that flags or fails on vulnerable versions, and secrets scanning that blocks credentials from being committed. Neither requires deep security expertise, both run on every commit, and together they eliminate the two most common real-world causes. Layering the OWASP Top 10 as a review checklist covers most of the rest.
+
+## DevOps & observability
+
+DevOps closes the gap between building software and running it. Where the classic SDLC often ended at "deploy", DevOps treats operation as part of the same continuous loop, and observability is how you know what the running system is actually doing. For a maintainable production system, these are as important as the code.
+
+### DevOps as a culture and a loop
+
+DevOps is often drawn as an infinity loop: plan, code, build, test, release, deploy, operate, monitor, and back to plan. The point is that the same team owns software from idea through production, with fast feedback at every step. Its practices include continuous integration and delivery, infrastructure as code, and automated monitoring.
+
+### Infrastructure as code
+
+Instead of configuring servers by hand, **infrastructure as code** (IaC) describes infrastructure in version-controlled files (Terraform, CloudFormation, Ansible). Benefits: environments are reproducible, changes are reviewed like code, and you can recreate production from a repository. It is the same discipline as templating a document suite — define once, generate consistently.
+
+### The three pillars of observability
+
+| Pillar | Answers | Example |
+|---|---|---|
+| **Logs** | What happened, in detail | "Conversion of file X failed: font missing" |
+| **Metrics** | How much / how fast, over time | requests/sec, error rate, p95 latency |
+| **Traces** | Where time went across services | a request spent 800 ms in the PDF step |
+
+Monitoring tells you *that* something is wrong; observability lets you ask *why* without shipping new code to find out.
+
+### SLIs, SLOs and error budgets
+
+- A **Service Level Indicator (SLI)** is a measured signal, e.g. the fraction of requests served under 500 ms.
+- A **Service Level Objective (SLO)** is the target, e.g. 99.9% of requests under 500 ms over 30 days.
+- The **error budget** is the allowed shortfall (0.1%): if you are within budget you can ship faster; if you have burned it, you slow down and stabilise.
+
+This is the same idea as an SLA in operations, made measurable and used to balance speed against reliability.
+
+> **Tip:** Alert on symptoms users feel (error rate, latency), not on causes (CPU is 80%). High CPU may be harmless; a rising error rate is always worth waking someone for. Alerting on causes produces noise and alert fatigue.
+
+### Try It Yourself
+
+```text
+Design an SLO and alert for a document-conversion API
+
+  SLI  : proportion of conversion requests that succeed AND finish < 10 s
+  SLO  : 99.5% over a rolling 28 days
+  Error budget : 0.5% of requests may fail or be slow
+
+  Observability:
+    Logs    -> every failed conversion with file id + reason (missing font, timeout)
+    Metrics -> requests/sec, success rate, p95 duration
+    Traces  -> time in queue vs time in LibreOffice vs time in QA checks
+
+  Alert (symptom-based):
+    Page if success rate < 99% over 15 min OR p95 duration > 20 s
+    (Do NOT page on "CPU > 80%" alone.)
+```
+
+### Quiz
+
+1. DevOps primarily aims to:
+- [x] Close the gap between building and running software with a continuous, fast-feedback loop
+- [ ] Replace developers with operations
+- [ ] Eliminate testing
+> DevOps unifies development and operations so the same team owns software through production with rapid feedback.
+
+2. Infrastructure as code gives you:
+- [x] Reproducible, version-controlled, reviewable environments
+- [ ] Faster CPUs
+- [ ] Smaller codebases
+> Describing infrastructure in code makes environments reproducible and changes reviewable, and lets you rebuild from a repo.
+
+3. The three pillars of observability are:
+- [x] Logs, metrics and traces
+- [ ] CPU, RAM and disk
+- [ ] Plan, build, deploy
+> Logs (what happened), metrics (how much/fast), and traces (where time went) together let you diagnose without new code.
+
+4. A good production alert fires on:
+- [x] User-visible symptoms like error rate and latency
+- [ ] CPU utilisation alone
+- [ ] Every log line
+> Alerting on symptoms users feel avoids the noise and fatigue caused by cause-based alerts like high CPU.
+
+### Exercises
+
+1. **Classify the signals** — For "the weekly report API is slow", say whether each helps: a log of one failed request, a p95-latency metric, a trace of a single slow request. What does each tell you?
+<details><summary>Solution</summary>
+
+The metric (p95 latency) tells you *that* it is slow and how widespread. The trace of a slow request tells you *where* the time went across steps (queue vs conversion vs QA). The single failed-request log gives detail on one failure but not the overall trend. You use the metric to detect, the trace to localise, and logs to get specifics.
+
+</details>
+
+2. **Write an SLO** — Define an SLI, SLO and error budget for a login service that should be fast and reliable.
+<details><summary>Solution</summary>
+
+SLI: proportion of login requests that succeed and complete under 1 s. SLO: 99.9% over 30 days. Error budget: 0.1% of requests may fail or exceed 1 s in that window; while within budget you can release features, and once it is burned you prioritise reliability work.
+
+</details>
+
+### Interview Questions
+
+**Q: What is the difference between monitoring and observability, and why does it matter?**
+Monitoring tells you *that* something is wrong — a dashboard shows the error rate rising or latency spiking. Observability is the property that lets you ask *why* it is wrong without shipping new code, using logs, metrics and traces together: metrics detect the problem and show its scale, traces show where time went across services, and logs give the specific detail. It matters because in production you cannot attach a debugger; when a conversion API slows down at 2 a.m., a trace that shows the time is spent in the LibreOffice step versus the queue lets you fix the right thing fast. Monitoring is necessary but insufficient; observability is what turns an alert into a diagnosis.
+
+**Q: How do SLOs and error budgets help a team balance shipping features against reliability?**
+An SLO is a measurable reliability target, like 99.9% of requests under 500 ms over 30 days, and the error budget is the allowed shortfall — the 0.1% you are permitted to miss. The budget turns reliability into a currency: while you are within budget, you have room to ship features quickly and take some risk; once you have burned the budget, the team's priority shifts to stabilising rather than adding features. It replaces arguments about "are we reliable enough?" with a number everyone agreed to in advance. It is the same idea as an operational SLA, but instrumented and used continuously to make the speed-versus-stability trade-off explicit rather than political.
+
+## Software engineering interview & viva questions
+
+The final-year viva and the software-engineering interview both test whether you can reason about the whole life cycle, not just write code. This chapter pulls together the models, principles and trade-offs from this course into the questions examiners and interviewers actually ask, with the way a strong candidate answers.
+
+### What they are really testing
+
+An examiner asking "what is the difference between verification and validation?" is not checking a definition; they are checking whether you understand that you can build the product right yet build the wrong product. Interviewers probe trade-offs (waterfall vs agile, monolith vs microservices) to see whether you choose based on context rather than fashion. The best answers name the trade-off and the deciding factor.
+
+### High-frequency concept questions
+
+| Question | The one-line anchor |
+|---|---|
+| Verification vs validation | "Building it right" vs "building the right thing" |
+| Functional vs non-functional requirements | What it does vs how well it does it |
+| Coupling vs cohesion | Low coupling, high cohesion is the goal |
+| Waterfall vs Agile | Predictable/fixed scope vs evolving/uncertain scope |
+| Cohesion example | A module that does one thing well |
+| Regression testing | Re-testing to confirm changes broke nothing |
+| Technical debt | Shortcuts that cost interest later |
+
+### How to answer a "which would you choose" question
+
+Do not pick a side unconditionally. State the trade-off, name the deciding factor, then decide for the given context. For "monolith or microservices?": a monolith is simpler to build, deploy and reason about; microservices help when independent teams must deploy and scale parts independently; for a small team and unproven product, start with a well-structured monolith and split later if scale demands. That structure — trade-off, factor, contextual decision — is what earns marks.
+
+> **Interview note:** When you do not know a term, do not bluff. Say what you do know, reason from principles, and state your assumption. Examiners reward "I would verify this, but based on X I would expect Y" far more than a confident wrong answer.
+
+### Try It Yourself
+
+```text
+Rehearse the trade-off structure on five prompts (answer: trade-off -> factor -> decision)
+
+1. Waterfall or Agile for a fixed-price government contract with locked requirements?
+2. Monolith or microservices for a two-person startup MVP?
+3. Write tests first (TDD) or after, for a well-understood utility function?
+4. Fix technical debt now or ship the feature and defer?
+5. Manual QA or automated tests for a report that changes format every week?
+
+For each: name the competing concerns, the factor that decides, then choose for THIS context.
+```
+
+### Quiz
+
+1. Verification vs validation:
+- [x] Verification = building it right; validation = building the right thing
+- [ ] They are synonyms
+- [ ] Verification is done by customers
+> Verification checks the product against its spec; validation checks the spec/product against the actual need.
+
+2. The goal for coupling and cohesion is:
+- [x] Low coupling, high cohesion
+- [ ] High coupling, low cohesion
+- [ ] High both
+> Modules should depend little on each other (low coupling) and each do one thing well (high cohesion).
+
+3. The best way to answer "waterfall or agile?" in an interview is:
+- [x] Name the trade-off and the deciding factor, then choose for the given context
+- [ ] Always say agile
+- [ ] Always say waterfall
+> Interviewers reward contextual reasoning: predictability/fixed scope favours waterfall, evolving/uncertain scope favours agile.
+
+4. When you do not know a term in a viva you should:
+- [x] Say what you do know, reason from principles, and state your assumption
+- [ ] Bluff confidently
+- [ ] Stay silent
+> Reasoning from principles and being honest about uncertainty is rewarded; a confident wrong answer is penalised.
+
+### Exercises
+
+1. **Answer the classic** — Give a strong two-sentence answer to "what is the difference between functional and non-functional requirements?" with an example of each.
+<details><summary>Solution</summary>
+
+Functional requirements say what the system does — e.g. "the report generator produces a weekly PDF per state." Non-functional requirements say how well it does it — e.g. "each report generates in under 10 seconds and is accessible (tagged PDF)." One is behaviour, the other is quality attributes like performance, security and usability.
+
+</details>
+
+2. **Structure a trade-off answer** — Answer "monolith or microservices for a small internal reporting tool?" using trade-off, factor, decision.
+<details><summary>Solution</summary>
+
+Trade-off: a monolith is simpler to build, deploy and debug; microservices allow independent scaling and deployment but add operational complexity. Factor: team size and whether parts must scale/deploy independently. Decision: for a small internal tool with one team, a well-structured monolith is the right choice, splitting out a service only if a specific part later needs independent scale.
+
+</details>
+
+### Interview Questions
+
+**Q: How would you decide between a waterfall and an agile approach for a project?**
+I start from the trade-off: waterfall gives predictability and a fixed, documented scope but resists change, while agile embraces changing requirements and delivers incrementally but is harder to fix-price. The deciding factor is how well-understood and stable the requirements are. For a project with locked, contractually fixed requirements — say a government system with a signed specification — a plan-driven, waterfall-leaning approach fits. For a product where the requirements will genuinely evolve as users react, agile with short iterations and frequent feedback fits. In reality many projects are hybrid, agile within a phased contract. The mark of a good answer is choosing based on requirement stability and risk, not on which methodology is fashionable.
+
+**Q: A viva examiner asks about a term you have not heard. What do you do?**
+I do not bluff, because a confident wrong answer is the worst outcome. I say honestly that I am not certain of that exact term, then I reason from what I do know and state my assumption explicitly — for example, "I have not used that specific tool, but from the name I would expect it to do X, and I would confirm that before relying on it." That shows the examiner how I think and that I am safe to work with, because I flag uncertainty rather than hide it. Often the reasoning gets me most of the way to the right answer anyway. The same honesty is what I would apply on the job, where pretending to know is far more dangerous than admitting a gap and checking.

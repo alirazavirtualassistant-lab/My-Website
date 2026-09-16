@@ -340,7 +340,7 @@
         if (!ch.exercises) warns.push(where + ': no exercises');
         if (!ch.tryit && m.runner !== 'none') warns.push(where + ': no Try It Yourself block');
         if (/lorem ipsum|\bTODO\b|\bTBD\b|\[insert /i.test(ch.body)) errs.push(where + ': placeholder text found');
-        if (/^\s*<h[1-6]/m.test(ch.body)) warns.push(where + ': raw HTML heading used');
+        if (/^\s*<h[1-6]/m.test(ch.body.replace(/```[\s\S]*?```/g, ''))) warns.push(where + ': raw HTML heading used');
       });
     });
     return { errors: errs, warnings: warns };

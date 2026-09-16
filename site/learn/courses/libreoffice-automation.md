@@ -2395,3 +2395,460 @@ Identical output is impossible across engines: different hyphenation dictionarie
 **Q: Where does a Word reference PDF come from in a Linux-only pipeline?**
 From outside the pipeline: the client saves as PDF from Word, a Windows build agent runs `docx2pdf` against Word, or Microsoft Graph converts the file from SharePoint. References are generated once per template revision, stored beside the source with the Word version noted, and used as fixtures for the comparison tests. Day-to-day conversions never need Word; only the reference set does.
 
+
+# LEVEL: Expert
+
+## Docker images & CI for document conversion
+
+Running LibreOffice headless on your own machine is fine for one file; running it reliably as a service or in a build pipeline needs a container. A Docker image pins the exact LibreOffice version, the fonts, and the dependencies, so a DOCX-to-PDF conversion produces byte-comparable output on your laptop, a CI runner, and production. This chapter builds that image and wires it into CI.
+
+### Why containerise conversion
+
+LibreOffice conversion fidelity depends on the version and, critically, the installed **fonts**. A conversion that looks perfect on your machine reflows on a server that lacks the brand fonts. A container freezes both, so the pipeline is reproducible.
+
+### A minimal conversion image
+
+```dockerfile
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      libreoffice-writer libreoffice-calc libreoffice-impress \
+      fonts-liberation fonts-dejavu \
+      && rm -rf /var/lib/apt/lists/*
+
+# Add the client's brand fonts so conversions match Word output
+COPY fonts/ /usr/share/fonts/truetype/brand/
+RUN fc-cache -f
+
+# Each container runs in its own profile dir so parallel jobs don't collide
+ENTRYPOINT ["soffice", "--headless", "--norestore", \
+            "-env:UserInstallation=file:///tmp/lo_profile"]
+```
+
+Build and convert:
+
+```bash
+docker build -t doc-convert .
+docker run --rm -v "$PWD/work:/work" doc-convert \
+  --convert-to pdf --outdir /work /work/proposal.docx
+```
+
+### Wiring it into CI
+
+A CI job can regenerate PDFs from source DOCX on every commit and fail if conversion errors. This keeps generated deliverables in sync with their sources.
+
+```yaml
+# .gitlab-ci.yml (or equivalent)
+convert:
+  image: doc-convert
+  script:
+    - soffice --headless -env:UserInstallation=file:///tmp/lo_ci
+        --convert-to pdf --outdir out/ src/*.docx
+    - test "$(ls out/*.pdf | wc -l)" -eq "$(ls src/*.docx | wc -l)"  # every file converted
+  artifacts:
+    paths: [out/]
+```
+
+> **Tip:** Pin the base image to a specific Debian release, not `latest`. A LibreOffice version bump can subtly change conversion output, and you want that to be a deliberate, tested upgrade, not a surprise on a Tuesday build.
+
+### Try It Yourself
+
+```bash
+# Build a reproducible conversion image and convert a folder of documents
+cat > Dockerfile <<'EOF'
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      libreoffice-writer fonts-liberation && rm -rf /var/lib/apt/lists/*
+COPY fonts/ /usr/share/fonts/truetype/brand/
+RUN fc-cache -f
+ENTRYPOINT ["soffice","--headless","--norestore","-env:UserInstallation=file:///tmp/lo"]
+EOF
+
+docker build -t doc-convert .
+# Convert every DOCX in ./work to PDF, output alongside:
+docker run --rm -v "$PWD/work:/work" doc-convert \
+  --convert-to pdf --outdir /work /work/*.docx
+ls work/*.pdf   # confirm one PDF per source
+```
+
+### Quiz
+
+1. The main reason to containerise LibreOffice conversion is:
+- [x] Reproducibility — pinning the version, fonts and dependencies
+- [ ] To make it faster
+- [ ] To avoid installing Python
+> A container freezes the LibreOffice version and installed fonts, so conversion output is identical across machines.
+
+2. Why copy brand fonts into the image?
+- [x] Missing fonts cause substitution and reflow, breaking fidelity
+- [ ] To reduce image size
+- [ ] LibreOffice will not start without them
+> Conversion fidelity depends on the fonts being present; without them text substitutes and the layout shifts.
+
+3. Why pin the base image instead of using `latest`?
+- [x] A LibreOffice version bump can change conversion output unexpectedly
+- [ ] `latest` does not exist for Debian
+- [ ] Pinning is faster to build
+> An uncontrolled version change can subtly alter rendering; pinning makes upgrades deliberate and testable.
+
+4. In CI, a good post-conversion check is:
+- [x] Assert the number of output PDFs equals the number of source DOCX files
+- [ ] Open each PDF by hand
+- [ ] Skip checking
+> A simple count assertion catches silent conversion failures where a file produced no output.
+
+### Exercises
+
+1. **Explain the fonts step** — Why does a Dockerfile for conversion include `COPY fonts/` and `fc-cache -f`?
+<details><summary>Solution</summary>
+
+`COPY fonts/` installs the brand (and any required) fonts into the image so conversions do not substitute; `fc-cache -f` rebuilds fontconfig's cache so LibreOffice can find the newly added fonts. Without both, headless conversion falls back to default fonts and the output reflows.
+
+</details>
+
+2. **Add a CI gate** — Write a shell check that fails the job if any DOCX in `src/` did not produce a PDF in `out/`.
+<details><summary>Solution</summary>
+
+`test "$(ls out/*.pdf 2>/dev/null | wc -l)" -eq "$(ls src/*.docx | wc -l)"` — compare the counts and let a non-zero exit fail the job. A more precise version loops over each `src/*.docx` and asserts the matching `out/<name>.pdf` exists.
+
+</details>
+
+### Interview Questions
+
+**Q: Why would you run LibreOffice conversion in Docker rather than installing it on the server directly?**
+Because conversion fidelity depends on the exact LibreOffice version and the installed fonts, and a container freezes both so the output is reproducible across my laptop, CI and production. If I install directly on a server, a package update can silently change rendering, and a missing brand font makes the PDF reflow without any error. The image copies the brand fonts and runs `fc-cache`, pins the base image to a specific release, and gives each run its own profile directory so parallel jobs do not collide. The result is that a DOCX-to-PDF conversion is deterministic, which is exactly what you need when the PDF is a client deliverable.
+
+**Q: How do you keep generated PDFs in sync with their source documents in a team setting?**
+I put the conversion in CI. On every commit, the pipeline runs the containerised LibreOffice to regenerate the PDFs from the source DOCX and fails if the output count does not match the input, so a broken or missing conversion blocks the merge. The generated PDFs are published as build artifacts rather than committed by hand, which prevents the classic drift where someone edits the DOCX but forgets to re-export the PDF. Because the image is version-pinned, the regenerated PDFs are byte-stable unless the source actually changed, so diffs are meaningful. This turns "remember to re-export" into an enforced, automated step.
+
+## Concurrency, profiles & locking
+
+A single LibreOffice process is essentially single-user: it holds a user profile and does not expect two conversions at once. Run several conversions in parallel against the same profile and they collide, hang, or corrupt output. The expert-level skill is running conversions concurrently and safely, which comes down to profile isolation and process management.
+
+### The user profile is the shared resource
+
+LibreOffice stores settings, caches and a lock in a **user profile** directory. By default every invocation uses the same one, so two simultaneous `soffice` processes fight over it. The fix is to give each process its own profile via `-env:UserInstallation`:
+
+```bash
+soffice --headless \
+  -env:UserInstallation=file:///tmp/lo_$$ \
+  --convert-to pdf --outdir out/ input.docx
+# $$ is the shell PID, so each job gets a unique profile dir
+```
+
+### Patterns for parallel conversion
+
+| Pattern | How | Trade-off |
+|---|---|---|
+| Isolated profiles | Unique `UserInstallation` per job | Simple, robust; slight startup cost per job |
+| One long-running server | `unoserver` accepts jobs over a socket | Fast (no per-job startup); one process to manage |
+| Container per job | Docker run per file | Total isolation; heaviest |
+
+### unoserver for throughput
+
+Starting LibreOffice per file is slow because of startup time. **unoserver** keeps one LibreOffice instance running and converts documents sent to it, giving much higher throughput for a batch:
+
+```bash
+unoserver &                       # start the persistent server
+unoconvert input.docx output.pdf  # convert via the running server (fast)
+```
+
+The trade-off is that a single server serialises jobs; for real parallelism you run a small pool of servers on different ports.
+
+> **Warning:** Never point two `soffice` processes at the same `UserInstallation`. The second either refuses to start (profile locked) or, worse, produces truncated output. Every parallel job must have its own profile directory, and you should clean those temp directories up afterwards.
+
+### Try It Yourself
+
+```bash
+# Convert many DOCX in parallel, each with an isolated profile
+ls src/*.docx | xargs -P 4 -I{} bash -c '
+  f="{}"; base=$(basename "$f" .docx)
+  soffice --headless --norestore \
+    -env:UserInstallation=file:///tmp/lo_$$_$RANDOM \
+    --convert-to pdf --outdir out/ "$f"
+'
+# -P 4 runs four at a time; each gets a unique profile dir so they do not collide.
+ls out/*.pdf | wc -l   # should equal the number of source files
+```
+
+### Quiz
+
+1. Why do two simultaneous `soffice` conversions collide by default?
+- [x] They share one user profile directory (and its lock)
+- [ ] They use the same port
+- [ ] They need a GUI
+> LibreOffice uses a single user profile by default; two processes fight over it unless each gets its own via UserInstallation.
+
+2. The fix for parallel conversions is:
+- [x] A unique `-env:UserInstallation` per process
+- [ ] Running as root
+- [ ] Disabling fonts
+> Isolating the profile directory per job lets multiple conversions run without contention.
+
+3. unoserver improves throughput by:
+- [x] Keeping one LibreOffice instance running so jobs skip startup time
+- [ ] Converting files in the browser
+- [ ] Compressing the PDFs
+> A persistent server avoids per-file startup cost, though a single server serialises jobs.
+
+4. Pointing two processes at the same UserInstallation risks:
+- [x] A locked profile or truncated/corrupt output
+- [ ] Faster conversion
+- [ ] Smaller files
+> The shared profile lock causes the second process to fail or produce bad output; each job needs its own.
+
+### Exercises
+
+1. **Make it parallel-safe** — A batch script runs four `soffice` conversions at once and they intermittently hang. What is the cause and the one-line fix?
+<details><summary>Solution</summary>
+
+They share the default user profile and contend on its lock. Give each invocation a unique profile: add `-env:UserInstallation=file:///tmp/lo_$$_$RANDOM` (or a per-job unique path) so no two processes touch the same profile directory.
+
+</details>
+
+2. **Choose an architecture** — You must convert 5,000 documents as fast as possible on one server. Isolated per-job processes, or a pool of unoservers? Justify.
+<details><summary>Solution</summary>
+
+A small pool of unoservers on different ports, because per-job `soffice` startup dominates the time for thousands of files; persistent servers amortise startup and a pool gives real parallelism. You still isolate each server's profile and manage the pool size to the server's CPU/RAM.
+
+</details>
+
+### Interview Questions
+
+**Q: You need to convert thousands of documents and want to parallelise. What are the pitfalls and how do you handle them?**
+The core pitfall is the shared user profile: LibreOffice uses one profile directory by default, so running several `soffice` processes at once makes them contend on the profile lock, and they hang or emit truncated output. I fix that by giving every job a unique `-env:UserInstallation` directory and cleaning those temp dirs up afterwards. For throughput I avoid paying LibreOffice's startup cost per file by using a pool of unoservers, each a persistent instance on its own port with its own profile, and I size the pool to the server's CPU and memory. I also add a post-check that the output count matches the input, because parallel batches are exactly where silent failures hide.
+
+**Q: When would you use unoserver versus spawning soffice per file?**
+Spawning `soffice` per file is simplest and fine for small batches or occasional conversions, and with isolated profiles it is robust. But each spawn pays LibreOffice's startup time, which dominates when you have thousands of files, so there I use unoserver, which keeps an instance running and converts documents sent to it, giving far higher throughput. A single unoserver serialises jobs, so for real parallelism I run a small pool on different ports. The decision is about batch size and latency: per-file spawning for a handful, a unoserver pool for high volume, and I keep profile isolation in both cases.
+
+## Security with untrusted input
+
+The moment you convert documents that came from outside — client uploads, email attachments, a public form — LibreOffice becomes a security boundary. Office documents can carry macros, external references, and malformed structures designed to exploit the parser. Running conversion safely on untrusted input is a genuine expert responsibility, not an afterthought.
+
+### The threats
+
+| Threat | Vector | Mitigation |
+|---|---|---|
+| Macro execution | VBA/Basic macros in the document | Disable macros entirely for conversion |
+| Data exfiltration | External links, IMPORTHTML, linked images fetching URLs | Block network access in the sandbox |
+| Parser exploits | Malformed file crafted to crash/exploit LibreOffice | Sandbox, resource limits, keep LO patched |
+| Resource exhaustion | "Zip bomb" / huge documents | CPU, memory and time limits per job |
+
+### Disable macros for headless conversion
+
+Headless conversion should never run macros. Set the macro security to the highest level and confirm no document triggers code:
+
+```bash
+# Run with a profile that has macro security = Very High (macros disabled)
+soffice --headless --norestore \
+  -env:UserInstallation=file:///tmp/lo_safe \
+  --convert-to pdf --outdir out/ untrusted.docx
+```
+
+Configure the profile's `Security.Scripting.MacroSecurityLevel` to 3 (Very High) so no macro runs, or strip macros before conversion.
+
+### Sandbox the process
+
+Because the parser itself can be a target, run conversion in a locked-down container:
+
+```bash
+docker run --rm \
+  --network none \                # no network: blocks exfiltration and remote fetches
+  --memory 512m --cpus 1 \        # resource caps: contain zip bombs / runaway jobs
+  --read-only \                   # read-only root filesystem
+  --tmpfs /tmp \                  # writable temp only
+  -v "$PWD/in:/in:ro" -v "$PWD/out:/out" \
+  doc-convert --convert-to pdf --outdir /out /in/untrusted.docx
+```
+
+`--network none` is the single highest-value control: it neutralises external references and any attempt to phone home.
+
+> **Warning:** Never convert untrusted documents on a machine with access to sensitive systems or credentials. A crafted document that exploits the parser runs with the converter's privileges. Isolation (container, no network, resource limits, minimal privileges) assumes the parser *will* be compromised and contains the blast radius.
+
+### Try It Yourself
+
+```bash
+# Safely convert an untrusted upload: no network, capped resources, macros off
+docker run --rm \
+  --network none --memory 512m --cpus 1 --read-only --tmpfs /tmp \
+  -v "$PWD/in:/in:ro" -v "$PWD/out:/out" \
+  doc-convert \
+  -env:UserInstallation=file:///tmp/lo \
+  --convert-to pdf --outdir /out /in/untrusted.docx
+
+# Then, before trusting the output, sanity-check it:
+#   - file size is reasonable (not 0, not gigabytes)
+#   - page count within expected bounds
+#   - text extractable (pdftotext) if a text document was expected
+```
+
+### Quiz
+
+1. The single highest-value control when converting untrusted documents is:
+- [x] Blocking network access (`--network none`)
+- [ ] A faster CPU
+- [ ] A larger memory limit
+> No network neutralises external references and exfiltration attempts, the most common document-borne data risk.
+
+2. For headless conversion, macros should be:
+- [x] Disabled entirely (highest security level)
+- [ ] Enabled so the document renders fully
+- [ ] Enabled only for trusted extensions
+> Conversion never needs to run macros; disabling them removes the macro execution threat outright.
+
+3. Why apply CPU, memory and time limits per conversion job?
+- [x] To contain zip bombs and malformed documents that exhaust resources
+- [ ] To make PDFs smaller
+- [ ] To improve font rendering
+> Resource caps stop a crafted or huge document from exhausting the host; without them one job can take down the service.
+
+4. The security model for untrusted conversion assumes:
+- [x] The parser may be compromised, so the process is isolated to contain the blast radius
+- [ ] LibreOffice is immune to malformed input
+- [ ] Antivirus alone is sufficient
+> You isolate (container, no network, limits, low privilege) precisely because a crafted file could exploit the parser.
+
+### Exercises
+
+1. **List the controls** — Name four controls you apply when converting a document uploaded by an anonymous user.
+<details><summary>Solution</summary>
+
+Disable macros (highest security level); run in a container with no network access; cap CPU, memory and wall-clock time per job; use a read-only filesystem with only a writable temp, minimal privileges, and mount the input read-only. Sanity-check the output before trusting it.
+
+</details>
+
+2. **Explain the risk** — Why is `--network none` more important than antivirus for this workload?
+<details><summary>Solution</summary>
+
+Antivirus only catches known-bad signatures, while a crafted document may use novel exploits or benign-looking external references. Cutting network access structurally prevents exfiltration and remote fetches regardless of the specific technique, so it defends against unknown threats rather than only known ones. It is a control on capability, not on signature.
+
+</details>
+
+### Interview Questions
+
+**Q: You are building a service that converts documents uploaded by the public to PDF. How do you do it safely?**
+I treat LibreOffice as a security boundary and assume the parser can be exploited by a crafted file. Each conversion runs in a container with no network access, capped CPU, memory and wall-clock time, a read-only root filesystem with only a writable temp, minimal privileges, and the input mounted read-only. Macros are disabled at the highest security level because conversion never needs them. The container has no access to credentials or sensitive systems, so even a successful exploit is contained. After conversion I sanity-check the output — non-zero, sane size, expected page count — before trusting it. The `--network none` control is the one I would never drop, because it structurally blocks exfiltration and remote references regardless of the exploit technique.
+
+**Q: Why isn't "we scan uploads with antivirus" a sufficient answer for document conversion security?**
+Because antivirus matches known signatures, and the risks here include novel parser exploits and legitimate-looking external references that no signature covers. A document can be perfectly benign to a scanner yet still fetch a tracking URL, carry a macro, or be malformed to crash the parser. So I rely on structural controls that limit capability rather than detect badness: no network, resource limits, isolation, disabled macros, and least privilege. Antivirus can be one layer, but the security comes from assuming the file is hostile and containing what it can do, not from hoping to recognise it in advance.
+
+## Automating QA of conversions
+
+Converting a document is only half the job; proving the conversion is correct is the other half. At scale you cannot open every PDF, so you automate the quality checks: page counts, text presence, and content diffs against a reference. This closes the loop and lets a pipeline fail loudly when a conversion silently goes wrong.
+
+### What can silently go wrong
+
+A conversion can "succeed" (exit 0, produce a PDF) yet be wrong: a missing font dropped a glyph, a table overflowed, a field did not update, or the document was truncated. Automated QA catches these without human eyes.
+
+### Layered automated checks
+
+```python
+import subprocess, sys
+from pathlib import Path
+
+def check_conversion(docx: Path, pdf: Path, min_pages=1, must_contain=None):
+    problems = []
+    # 1. The PDF exists and is not empty
+    if not pdf.exists() or pdf.stat().st_size < 1000:
+        problems.append("PDF missing or too small")
+        return problems
+    # 2. Page count is sane (needs pikepdf or pdfinfo)
+    import pikepdf
+    with pikepdf.open(pdf) as p:
+        if len(p.pages) < min_pages:
+            problems.append(f"only {len(p.pages)} pages (< {min_pages})")
+    # 3. Expected text is present (needs pdftotext or pdfplumber)
+    text = subprocess.run(["pdftotext", str(pdf), "-"],
+                          capture_output=True, text=True).stdout
+    for needle in (must_contain or []):
+        if needle not in text:
+            problems.append(f"missing expected text: {needle!r}")
+    return problems
+```
+
+### Regression testing conversions
+
+Keep a set of **reference documents** whose correct PDF output is known. On every LibreOffice or image upgrade, re-convert them and compare: page count, extracted text (via pdfplumber), and optionally a rendered-image diff. If a diff appears, the upgrade changed rendering and you decide whether it is acceptable before rolling it out.
+
+| Check | Tool | Catches |
+|---|---|---|
+| Page count | pikepdf / pdfinfo | Overflow, truncation, blank pages |
+| Text presence/equality | pdftotext / pdfplumber | Dropped glyphs, missing content, field failures |
+| Visual diff | render to PNG + image compare | Layout shifts a text diff misses |
+| Font embedding | pikepdf / pdffonts | Fonts that failed to embed |
+
+> **Tip:** Text extraction is the highest-value cheap check. If a document that should contain "Total premium" no longer does after conversion, something dropped it, and you find out in CI rather than from the client.
+
+### Try It Yourself
+
+```python
+# Automated QA gate for a batch of conversions (run after converting)
+from pathlib import Path
+import subprocess, pikepdf
+
+def qa(pdf, min_pages, needles):
+    issues = []
+    if not Path(pdf).exists() or Path(pdf).stat().st_size < 1000:
+        return ["missing/empty"]
+    with pikepdf.open(pdf) as p:
+        if len(p.pages) < min_pages:
+            issues.append(f"pages={len(p.pages)}<{min_pages}")
+    txt = subprocess.run(["pdftotext", pdf, "-"], capture_output=True, text=True).stdout
+    issues += [f"missing:{n!r}" for n in needles if n not in txt]
+    return issues
+
+# Example: a weekly report PDF must have >=3 pages and name the states covered
+result = qa("out/weekly_report.pdf", min_pages=3,
+            needles=["Wyoming", "Tennessee", "Total"])
+print("PASS" if not result else "FAIL: " + "; ".join(result))
+```
+
+### Quiz
+
+1. A conversion that exits 0 and produces a PDF is:
+- [x] Not guaranteed correct — it may have dropped glyphs, overflowed, or truncated
+- [ ] Always correct
+- [ ] Corrupt
+> Exit success only means the process ran; fidelity failures like missing fonts or overflow produce a "successful" but wrong PDF.
+
+2. The cheapest high-value automated check is:
+- [x] Extracting text and asserting expected strings are present
+- [ ] Opening each PDF by hand
+- [ ] Re-installing LibreOffice
+> Text extraction quickly catches dropped or missing content that a size or page-count check would miss.
+
+3. Reference documents with known-good output are used to:
+- [x] Regression-test conversions across LibreOffice/image upgrades
+- [ ] Speed up conversion
+- [ ] Reduce file size
+> Re-converting references after an upgrade reveals rendering changes before they reach production.
+
+4. A visual (rendered-image) diff catches problems that:
+- [x] A text diff misses, like layout shifts and overflow
+- [ ] Are only about file size
+- [ ] Only affect fonts
+> Image comparison detects positional/layout changes that extracted text, being position-agnostic, would not reveal.
+
+### Exercises
+
+1. **Design the gate** — A weekly production report is converted to PDF nightly. List three automated checks that would catch a bad conversion.
+<details><summary>Solution</summary>
+
+Assert the PDF exists and exceeds a minimum size; assert the page count is at least the expected minimum (via pikepdf/pdfinfo); extract text and assert required strings are present (e.g. the state names and "Total"). Optionally a rendered-image diff against last week's layout to catch shifts.
+
+</details>
+
+2. **Catch a font failure** — After a server change, converted PDFs look wrong but still convert. Which automated check would flag a font that failed to embed, and how?
+<details><summary>Solution</summary>
+
+A font-embedding check with `pdffonts` (or pikepdf) that asserts every font used is embedded; a non-embedded or substituted font shows up as "not embedded" or as an unexpected substitute name. Pair it with a text-presence check, since substitution can also drop glyphs the text extraction would then miss.
+
+</details>
+
+### Interview Questions
+
+**Q: A conversion pipeline reports success but clients still receive broken PDFs. How do you close that gap?**
+The gap is that process success is not output correctness: a PDF can be produced while a missing font dropped glyphs, a table overflowed, or a field never updated. I add automated QA after conversion. Cheap, high-value checks first: the file exists and has a sane size, the page count meets a minimum, and text extraction confirms expected strings like state names or "Total" are present. Then font-embedding checks with pdffonts, and for layout-sensitive documents a rendered-image diff against a reference to catch shifts that text checks miss. These run in the pipeline and fail the job loudly, so a bad conversion is caught in CI instead of by the client. I also keep reference documents to regression-test whenever LibreOffice or the image is upgraded.
+
+**Q: How do you make sure a LibreOffice upgrade does not silently change your conversion output?**
+I keep a suite of reference documents whose correct PDF output is known, and I re-convert them whenever I change the LibreOffice version or the container image. The comparison is layered: page count, extracted text via pdfplumber, and a rendered-image diff for layout. If any reference changes, the upgrade altered rendering, and I review whether that change is acceptable before rolling it out to production rather than discovering it on a live deliverable. Because the image is version-pinned, upgrades are deliberate events that pass through this regression gate. That turns a risky, invisible change into a tested, reversible one.

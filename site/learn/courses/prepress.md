@@ -1888,3 +1888,420 @@ Multiply the first twelve digits alternately by 1 and 3, sum, and the check digi
 **Q: How do you handle QR codes on printed marketing material?**
 As vector art at least 20 mm square, error correction M or Q so scuffs and folds do not defeat it, quiet zone of four modules, high contrast (dark on light; K100 is safest), never over an image, and I test the code from the CMYK PDF and again from the printed proof with more than one phone. I also make the URL short and trackable so the client can measure scans.
 
+
+# LEVEL: Expert
+
+## Overprint, trapping & knockout
+
+Overprint, knockout and trapping are the prepress concepts that separate a file that prints cleanly from one that shows white gaps or muddy overlaps on press. They matter most on offset jobs with spot colours and on any job where coloured elements butt against each other. Getting them wrong is invisible on screen and expensive on paper.
+
+### Knockout vs overprint
+
+When one coloured object sits on top of another, the press must decide what happens underneath. **Knockout** (the default) removes the background where the top object sits, so each ink prints on bare paper. **Overprint** prints the top ink directly on top of the background ink, mixing them.
+
+| Situation | Want | Why |
+|---|---|---|
+| Cyan text on a yellow field | Usually knockout | So the cyan is true cyan, not green |
+| Small black text on colour | **Overprint black** | Avoids white gaps if registration drifts |
+| A white object on colour | Knockout (never overprint) | Overprinting white makes it *disappear* |
+
+> **Warning:** Overprinting white is the classic catastrophe: white has no ink, so an overprinting white object prints nothing and vanishes into whatever is beneath it. Preflight profiles specifically flag white overprint.
+
+### Why black usually overprints
+
+Small black text is set to overprint by default in most workflows because black is opaque and printing it on top of a colour hides any slight misregistration. If black text instead knocked out, a fraction-of-a-millimetre registration error would show a white halo around every letter. This is why "overprint black" is a near-universal setting.
+
+### Trapping
+
+**Trapping** slightly overlaps adjacent colours so that if the paper shifts on press (misregistration), no white gap appears at the boundary. A **spread** expands the lighter colour into the darker; a **choke** shrinks the darker into the lighter. Modern RIPs and print shops usually apply trapping automatically (in-RIP trapping), so a designer's job is mainly not to fight it: keep to the shop's spec and let their RIP trap.
+
+```text
+Registration failure without trapping:
+   [magenta] | white gap | [cyan]     <- paper shifted, no ink in the gap
+
+With a trap (magenta spread into cyan by ~0.2 pt):
+   [magenta][overlap][cyan]           <- overlap hides any shift
+```
+
+### Try It Yourself
+
+```text
+Overprint/knockout decision checklist for a two-colour job
+
+For each element where two colours meet, decide:
+  [ ] Small/thin BLACK on colour?        -> overprint black (avoid white halos)
+  [ ] WHITE object on colour?            -> knockout ALWAYS (overprinting white = invisible)
+  [ ] Large solid on solid, no black?    -> knockout, and let the shop's RIP trap the edge
+  [ ] Spot varnish or spot white ink?    -> set overprint/knockout per the shop's spec sheet
+
+Then in Acrobat Pro: View > Tools > Print Production > Output Preview >
+  turn on "Simulate Overprinting" to SEE what the press will actually do.
+```
+
+### Quiz
+
+1. What happens if you set a white object to overprint?
+- [x] It prints no ink and effectively disappears
+- [ ] It prints brighter white
+- [ ] It traps automatically
+> White carries no ink; overprinting it prints nothing, so the object vanishes into the background. Preflight flags this.
+
+2. Why is small black text usually set to overprint?
+- [x] It hides slight misregistration that would otherwise show white halos
+- [ ] It saves ink
+- [ ] It prints faster
+> Overprinting opaque black on top of colour means a small paper shift shows no white gap around the letters.
+
+3. Trapping exists to compensate for:
+- [x] Misregistration (paper shifting between ink layers on press)
+- [ ] Low resolution
+- [ ] Wrong colour profile
+> A slight overlap of adjacent colours prevents white gaps if the sheet shifts between colour passes.
+
+4. Who usually applies trapping on a modern job?
+- [x] The print shop's RIP (in-RIP trapping)
+- [ ] The client by hand
+- [ ] Nobody, it is automatic in Word
+> Most shops trap in-RIP; the designer's job is to follow the spec and not fight the automated trapping.
+
+### Exercises
+
+1. **Call the settings** — A two-colour flyer has black body text and a solid orange headline bar with white reversed text. State the overprint/knockout choice for the black text and the white text.
+<details><summary>Solution</summary>
+
+Black body text: overprint (opaque black on top hides any misregistration). White reversed text on the orange bar: knockout — never overprint white, or it would print no ink and disappear into the orange.
+
+</details>
+
+2. **Explain a defect** — A printed piece shows thin white halos around dark text on a coloured background. What went wrong and what is the fix?
+<details><summary>Solution</summary>
+
+The dark text was set to knock out and the press misregistered, leaving unprinted paper (white) at the edges. The fix is to overprint the dark/black text (and rely on the shop's trapping), so a slight shift no longer exposes bare paper.
+
+</details>
+
+### Interview Questions
+
+**Q: Explain overprint versus knockout and give one case where each is correct.**
+Knockout removes the background ink where a top object sits, so each colour prints on bare paper; it is the default and is correct for, say, cyan text on a yellow field where you want true cyan rather than a mixed green. Overprint prints the top ink directly over the background so they mix; it is correct for small black text on a coloured background, because opaque black on top hides any misregistration that would otherwise show white halos. The one absolute rule is never to overprint white, because white has no ink and an overprinting white object simply disappears. On screen none of this is visible, which is why I check with Simulate Overprinting in Acrobat's Output Preview.
+
+**Q: What is trapping, and how much of it is your responsibility as the person preparing the file?**
+Trapping is a deliberate slight overlap of adjacent colours so that if the sheet shifts on press, no white gap appears at the boundary; a spread expands the lighter colour, a choke shrinks the darker. On modern jobs the print shop's RIP applies trapping automatically to their own spec, so my responsibility is mostly to follow their guidance and not to hand-trap in a way that fights the RIP. What I do own is setting overprint correctly (black overprints, white knocks out), keeping to their required colour space and PDF/X standard, and asking the shop whether they want me to trap or leave it to them. Communicating with the shop about who traps is part of the job.
+
+## Imposition & booklets
+
+Imposition is the arrangement of pages on a press sheet so that, after printing, folding and trimming, they read in the right order. A document producer rarely does full imposition by hand, but understanding it prevents the classic booklet disasters: pages out of order, a spine that does not align, or a page count that is not a multiple of four.
+
+### Reader spreads vs printer spreads
+
+The pages as the reader sees them (1–2, 3–4) are **reader spreads**. The pages as they must sit on the press sheet (for a saddle-stitched booklet, page 1 pairs with the last page, 2 with second-to-last) are **printer spreads**. Imposition converts one to the other.
+
+```text
+8-page saddle-stitched booklet, printer spreads (front/back of two sheets):
+  Sheet 1 outside:  [ 8 | 1 ]      Sheet 1 inside:  [ 2 | 7 ]
+  Sheet 2 outside:  [ 6 | 3 ]      Sheet 2 inside:  [ 4 | 5 ]
+Fold both sheets together, staple the spine -> pages read 1..8 in order.
+```
+
+### The multiple-of-four rule
+
+A saddle-stitched booklet is made of folded sheets, each carrying four pages (two per side). So the total page count **must be a multiple of four**. A 30-page booklet cannot be saddle-stitched; you pad to 32 with blank or content pages. Perfect-bound books are more flexible but still work in signatures (often 8, 16 or 32 pages).
+
+### Binding methods and their constraints
+
+| Binding | Page-count rule | Notes |
+|---|---|---|
+| Saddle stitch (staple) | Multiple of 4 | Cheap; limited thickness (~64pp before creep) |
+| Perfect bound (glued spine) | Signatures (8/16/32) | Needs a flat spine; min ~40pp; spine width matters |
+| Case wrap (hardcover) | Signatures | Spine width from page count and paper (earlier chapter) |
+| Spiral/wire-o | Any | Any page count; lies flat |
+
+### Creep (shingling)
+
+In a thick saddle-stitched booklet, inner pages stick out further than outer pages because of the folded paper's thickness; after trimming, the inner margins appear to shift inward. This is **creep** or **shingling**, and imposition software compensates by nudging inner pages outward before trimming. For thin booklets it is negligible; for thick ones, let the shop's imposition handle it.
+
+### Try It Yourself
+
+```text
+Booklet-readiness check before sending to the printer
+
+[ ] Page count is a multiple of 4 (saddle stitch) — pad with blanks if not
+[ ] File is supplied as SINGLE pages in reading order 1..N (let the SHOP impose),
+      UNLESS they explicitly ask for printer spreads
+[ ] Bleed on all four sides (0.125") including on pages that will be trimmed at the spine
+[ ] Safe margin pulled in extra on the binding edge for perfect-bound jobs
+[ ] For a thick saddle-stitch job, ask the shop if they compensate for creep (they usually do)
+[ ] Cover supplied per the shop's cover template (spine width for perfect bound/case wrap)
+```
+
+### Quiz
+
+1. A saddle-stitched booklet's page count must be:
+- [x] A multiple of 4
+- [ ] A multiple of 2
+- [ ] Any number
+> Each folded sheet carries four pages, so saddle-stitched booklets come in multiples of four; odd counts are padded with blanks.
+
+2. "Printer spreads" for an 8-page booklet pair page 1 with:
+- [x] Page 8
+- [ ] Page 2
+- [ ] Page 4
+> On the press sheet, page 1 sits next to the last page (8); imposition converts reader order into these printer pairs.
+
+3. Creep (shingling) is:
+- [x] Inner pages projecting further out, shifting inner margins after trim
+- [ ] Ink spreading on wet paper
+- [ ] Colour drift across a run
+> Folded paper thickness pushes inner pages outward; imposition nudges them inward so margins stay consistent after trimming.
+
+4. In most workflows, who should impose the booklet?
+- [x] The print shop — supply single pages in reading order
+- [ ] The designer, always as printer spreads
+- [ ] Nobody
+> Unless the shop asks otherwise, supply single pages 1..N in reading order and let their imposition (and creep compensation) do the work.
+
+### Exercises
+
+1. **Fix the page count** — A client's saddle-stitched programme is 26 pages. What do you tell them?
+<details><summary>Solution</summary>
+
+Saddle stitch needs a multiple of four, so 26 will not work; pad to 28 (add two pages, e.g. a notes page and a back matter page, or blanks) or cut to 24. Confirm which pages to add or remove and where, then re-export.
+
+</details>
+
+2. **Impose by hand** — Write the printer spreads for a 4-page saddle-stitched leaflet (one folded sheet).
+<details><summary>Solution</summary>
+
+One sheet, printed both sides: outside is pages 4 and 1 (`[4 | 1]`), inside is pages 2 and 3 (`[2 | 3]`). Folded once, it reads 1, 2, 3, 4.
+
+</details>
+
+### Interview Questions
+
+**Q: A client wants a 30-page saddle-stitched booklet. What do you tell them, and how do you prepare the file?**
+I explain that saddle stitching folds four-page sheets, so the count must be a multiple of four; 30 will not bind, so we pad to 32 (or trim to 28), and I confirm with them which pages to add and where. I prepare the file as single pages in reading order 1 to 32 with bleed on all sides, and let the print shop impose it into printer spreads, because their imposition also compensates for creep on the inner pages. I supply the cover per their template. The key professional habit is catching the page-count problem before it reaches the press, because a non-multiple-of-four booklet is a guaranteed reprint.
+
+**Q: When do you hand the printer imposed spreads versus single reading-order pages?**
+Almost always I supply single pages in reading order and let the shop impose, because their RIP handles printer spreads, creep compensation and trapping correctly for their specific press and folding, and hand-imposed files are a common source of out-of-order pages. The exception is when the shop explicitly asks for printer spreads or when I am producing something like a simple fold-over leaflet where the imposition is trivial and fixed. Either way I confirm the requirement on their spec sheet first, because guessing at imposition is how pages end up upside down or in the wrong order on the finished piece.
+
+## Large-format & folding
+
+Large-format work (banners, posters, roll-up stands) and folded pieces (brochures, gate folds) each have prepress rules that differ from a flat page. The failures here are practical: text sliced by a fold, a banner that pixelates at viewing distance, or panels sized so the piece will not fold flat.
+
+### Resolution at viewing distance
+
+Large-format does not need 300 DPI, because it is viewed from metres away. Resolution is chosen for the viewing distance:
+
+| Piece | Typical resolution | Viewing distance |
+|---|---|---|
+| A3 poster (close) | 300 DPI | Arm's length |
+| Roll-up banner | 100–150 DPI | 1–2 m |
+| Building/vehicle wrap | 72 DPI or less | Many metres |
+| Billboard | 10–30 DPI | Far |
+
+Supplying a billboard at 300 DPI produces an enormous, unusable file; matching resolution to distance is the skill.
+
+### Folding: panel-size maths
+
+The trap in folded pieces is that panels are **not all the same width**. On a tri-fold (letter-fold) brochure, the panel that folds **inside** must be slightly narrower, or it buckles against the fold.
+
+```text
+Tri-fold (roll fold) on a 297 mm wide sheet, 3 panels:
+  Outer panel (front)      : 99.5 mm
+  Middle panel (back)      : 99.5 mm
+  INNER panel (folds in)   : 98.0 mm   <- ~1.5 mm narrower so it tucks in cleanly
+  (exact reduction depends on paper thickness; ask the shop)
+```
+
+A **gate fold**, **Z-fold** and **roll fold** each have their own panel-width rules. Always get the folding template from the shop.
+
+### Keep content off the folds
+
+Text and important imagery must not sit on a fold line, where the crease cracks ink and slices letters. Pull content in from every fold with a safe margin, and treat each panel as its own layout with its own margins.
+
+### Try It Yourself
+
+```text
+Folded-brochure and large-format preflight
+
+Large format:
+  [ ] Resolution matches viewing distance (don't send a billboard at 300 DPI)
+  [ ] Bleed per the shop (large-format bleed is often BIGGER, e.g. 10-25 mm)
+  [ ] For roll-ups: leave dead space at the bottom that rolls into the base cassette
+  [ ] Colour: large solids can band — ask about the shop's profile
+
+Folding:
+  [ ] Get the fold template from the shop; panels are NOT equal width
+  [ ] Inner (tuck-in) panel made ~1-2 mm narrower
+  [ ] No text or key image crosses a fold line (pull in a safe margin per panel)
+  [ ] Fold a paper dummy at final size and read it to confirm the panel order
+```
+
+### Quiz
+
+1. A billboard viewed from far away should be supplied at roughly:
+- [x] 10–30 DPI
+- [ ] 300 DPI
+- [ ] 600 DPI
+> Resolution matches viewing distance; a billboard at 300 DPI is an unusable multi-gigabyte file, and low DPI looks sharp at distance.
+
+2. On a tri-fold brochure, the inner (tuck-in) panel should be:
+- [x] Slightly narrower than the others
+- [ ] Slightly wider
+- [ ] Exactly the same width
+> The panel that folds inside must be a millimetre or two narrower, or it buckles against the fold.
+
+3. Why keep text off fold lines?
+- [x] The crease cracks ink and the fold slices/obscures the text
+- [ ] It costs more
+- [ ] Folds cannot print
+> Content on a fold is cut and cracked by the crease; pull text and key images in from every fold with a safe margin.
+
+4. Roll-up banners need extra dead space where?
+- [x] At the bottom, which rolls into the base cassette
+- [ ] At the top
+- [ ] On both sides only
+> The bottom of a roll-up disappears into the mechanism, so keep content above that hidden zone.
+
+### Exercises
+
+1. **Size the panels** — A 210 mm tall, 297 mm wide sheet becomes a 3-panel roll-fold brochure. Give approximate panel widths and say which is narrowest and why.
+<details><summary>Solution</summary>
+
+Roughly 99.5 / 99.5 / 98.0 mm, with the inner tuck-in panel the narrowest (about 1.5 mm less) so it folds inside the other two without buckling. The exact reduction depends on paper thickness, so confirm with the shop's template.
+
+</details>
+
+2. **Choose a resolution** — A client asks for a 3 m roll-up banner and sends a 300 DPI file. What do you advise?
+<details><summary>Solution</summary>
+
+At a roll-up's 1–2 m viewing distance, 100–150 DPI at final size is plenty; a 3 m file at 300 DPI is enormous and unnecessary. Advise resampling to about 100–150 DPI at final size, keep the bottom dead-space for the cassette, and use the shop's large-format bleed.
+
+</details>
+
+### Interview Questions
+
+**Q: How do you decide the resolution for a large-format piece, and why is more not better?**
+Resolution is chosen for the viewing distance, not by a fixed 300 DPI rule. A close-viewed poster wants 300 DPI, a roll-up banner viewed from a metre or two wants 100–150, a vehicle wrap far less, and a billboard maybe 10–30. More is not better because a billboard at 300 DPI is a multi-gigabyte file the RIP may not even process, and it buys no visible sharpness at that distance. The professional move is to match resolution to distance at final size, which keeps the file workable and still looks crisp to the actual viewer. I confirm the shop's preferred resolution and bleed, which for large format is often much larger than a page's 0.125 inch.
+
+**Q: What are the folding pitfalls in a brochure, and how do you avoid them?**
+The two big ones are equal-width panels and content on the folds. Panels are not equal: the panel that tucks inside must be a millimetre or two narrower or it buckles, so I always work from the shop's fold template rather than dividing the width evenly. And no text or key image can cross a fold line, because the crease cracks the ink and slices the content, so I treat each panel as its own layout with its own safe margins. Before sending, I fold a paper dummy at final size and actually read it, which catches panel-order mistakes that are invisible on a flat screen. Those two habits prevent almost every folding reprint.
+
+## QA checklist & printer communication
+
+The final expert skill in prepress is not a technique but a discipline: a repeatable preflight checklist and clear communication with the print shop. Most reprints are not caused by exotic colour science; they are caused by a missing bleed, an unembedded font, or an assumption the designer and printer did not confirm. This chapter is the checklist and the conversation.
+
+### The master preflight checklist
+
+```text
+PREFLIGHT (run before every send)
+  Size/bleed
+    [ ] Document size = final trim size
+    [ ] Bleed 0.125" (page) / per-shop (large format) on all four sides
+    [ ] Safe margin: no key content within ~0.125-0.25" of trim
+    [ ] Crop marks present if the shop asks (offset by the bleed amount)
+  Colour
+    [ ] CMYK (or spot as specified); no stray RGB or unexpected spot plates
+    [ ] Rich black only on large areas; small text is 100% K
+    [ ] Total ink coverage within the shop's limit (e.g. <= 300%)
+    [ ] Overprint checked (black overprints, white knocks out) via Output Preview
+  Fonts/images
+    [ ] All fonts embedded or outlined
+    [ ] Images CMYK, adequate resolution for viewing distance, embedded/linked correctly
+  Output
+    [ ] Correct PDF/X standard (X-1a or X-4 per shop)
+    [ ] Transparency handled (flattened for X-1a)
+    [ ] Right page count; multiple of 4 for saddle stitch
+    [ ] Preflight profile run in Acrobat Pro (Print Production > Preflight) - zero errors
+```
+
+### What to send the printer
+
+Send the shop: the print-ready PDF, a note of the trim size and bleed, the binding/finishing spec, the paper stock, the quantity, and any colour target (a proof or Pantone references). Ask for a **proof** — a soft proof at minimum, a hard proof or press proof for colour-critical work — and check it with more than one person.
+
+### The questions to ask before you start
+
+- What PDF/X standard and colour profile do you want?
+- What is your maximum total ink coverage?
+- Do you want crop marks and how much bleed?
+- Do you trap in-RIP, or should I?
+- Do you have a template for the cover / fold / imposition?
+- How do you want spot colours and any varnish/white ink supplied?
+
+> **Tip:** The cheapest insurance in prepress is a five-minute conversation with the shop before you export. Almost every reprint I have seen traces back to a question that was never asked.
+
+### Try It Yourself
+
+```text
+Printer hand-off email template
+
+Subject: Print-ready file - <job name>
+
+Hi <shop>,
+
+Attached is the print-ready PDF for <job>. Details:
+  Trim size    : <e.g. 6 x 9 in>
+  Bleed        : 0.125" all sides, crop marks included
+  Colour       : CMYK, profile <e.g. GRACoL 2013>, total ink <= 300%
+  Fonts        : all embedded
+  Pages        : <N> (multiple of 4, saddle stitch)
+  Stock        : <e.g. 150 gsm silk text, 300 gsm cover>
+  Finishing    : <saddle stitch / perfect bind / fold>
+  Quantity     : <N>
+  PDF standard : PDF/X-4 (or X-1a if you prefer flattened)
+
+Please send a proof before running. Let me know if you need anything adjusted
+to fit your workflow.
+
+Thanks, <name>
+```
+
+### Quiz
+
+1. Most reprints are caused by:
+- [x] Basic omissions like missing bleed, unembedded fonts, or unconfirmed assumptions
+- [ ] Exotic colour science
+- [ ] The printer's machinery
+> The common failures are mundane and preventable with a checklist and a short conversation, not advanced colour theory.
+
+2. Before starting a colour-critical job you should ask the shop for:
+- [x] Their PDF/X standard, colour profile, ink limit and whether they trap
+- [ ] Nothing; just export defaults
+- [ ] Only the price
+> Confirming standard, profile, ink limit and trapping responsibility up front prevents most redeliveries.
+
+3. A hard or press proof is most important for:
+- [x] Colour-critical work
+- [ ] Every internal draft
+- [ ] Text-only documents
+> Colour-critical jobs justify a physical proof; a soft proof may suffice for less critical work.
+
+4. Total ink coverage limits matter because:
+- [x] Too much ink (e.g. a 4-colour rich black everywhere) won't dry and can offset/smear
+- [ ] They change the trim size
+- [ ] They affect fonts
+> Exceeding the shop's ink limit causes drying and setoff problems on press; small text should be 100% K, not rich black.
+
+### Exercises
+
+1. **Build the email** — Draft the key lines you would send a printer with a 32-page saddle-stitched booklet.
+<details><summary>Solution</summary>
+
+State trim size, 0.125" bleed with crop marks, CMYK with the shop's profile and an ink limit under about 300%, all fonts embedded, 32 pages (multiple of four for saddle stitch), stock, saddle-stitch finishing, quantity, and the PDF/X standard. Ask for a proof before the run.
+
+</details>
+
+2. **Catch the errors** — A file arrives with RGB images, no bleed, and small text set as rich black. List the three fixes.
+<details><summary>Solution</summary>
+
+Convert images to CMYK with the shop's profile; add 0.125" bleed on all sides (extend backgrounds, re-check safe margins); set the small text to 100% K instead of rich black so it stays sharp and within ink limits. Then run the shop's preflight profile to confirm zero errors before sending.
+
+</details>
+
+### Interview Questions
+
+**Q: Walk me through your preflight checklist before sending a file to a commercial printer.**
+I check four groups. Size and bleed: the document is at final trim size with 0.125 inch bleed on all sides, safe margins respected, and crop marks if the shop wants them. Colour: everything is CMYK or the specified spot, small text is 100% K rather than rich black, total ink is within the shop's limit, and overprint is correct with black overprinting and white knocking out, which I verify in Acrobat's Output Preview. Fonts and images: all fonts embedded or outlined, images CMYK at the right resolution for the viewing distance. Output: the correct PDF/X standard, transparency handled, the right page count including multiple-of-four for saddle stitch, and a clean run of the shop's preflight profile. I treat it as a fixed checklist because the failures are always the same mundane omissions.
+
+**Q: How much of a clean print job is communication versus file preparation?**
+A large part is communication, because most reprints trace to an assumption that was never confirmed rather than a technical mistake in the file. Before I export I ask the shop which PDF/X standard and colour profile they want, their maximum ink coverage, how much bleed and whether they want crop marks, whether they trap in-RIP or expect me to, and whether they have templates for the cover, fold or imposition. Then I hand off the PDF with an explicit spec sheet — trim size, bleed, colour, stock, finishing, quantity — and I ask for a proof that more than one person checks. The file preparation is necessary, but the five-minute conversation is the cheapest insurance against an expensive reprint, so I never skip it.

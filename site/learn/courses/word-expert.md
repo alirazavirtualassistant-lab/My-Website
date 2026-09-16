@@ -1983,3 +1983,626 @@ Ctrl+A, F9 (Update entire table for TOCs), then open headers/footers and F9 ther
 Insert every cross-reference with "Insert as hyperlink" and with a page number ("see 4.2, page 37"). Keep the Hyperlink character style in body colour with no underline for the print master. For the interactive PDF, modify the Hyperlink style to blue underlined (Design > Style Set could switch this) or accept body-coloured links that still click. Export once for each variant with Save As PDF, bookmarks from headings on.
 
 </details>
+
+### Interview Questions
+
+**Q: Why do you use cross-reference fields instead of typing "see section 4.2 on page 37" by hand?**
+Because typed references rot the moment the document changes. A cross-reference field pulls the live heading text, number and page, so when a section is inserted or the document repaginates, Ctrl+A then F9 updates every reference at once and nothing points to the wrong place. Typing them by hand in a long document guarantees that some will be wrong by delivery, and finding a stale "see page 37" that is now page 41 is exactly the kind of error a client notices and a QA pass should never let through. Fields turn cross-references into something that maintains itself, which is essential in a 700-page manual with hundreds of them.
+
+**Q: A client's cross-references show "Error! Reference source not found." on their machine. What happened and how do you prevent it?**
+That error means a cross-reference points to a bookmark that no longer exists — usually the target heading or bookmarked text was deleted, or content was pasted in a way that dropped the hidden bookmark Word uses under the hood. To fix it I locate the broken references, re-insert them against the current targets, and update fields. To prevent it, I avoid deleting bookmarked targets, I am careful when cutting and pasting across documents (which can strip bookmarks), and before delivery I update all fields and scan for the error text so a broken reference is caught by me, not the client. For a truly final deliverable that will not be edited, converting fields to static text or exporting to PDF removes the risk entirely.
+
+**Q: When would you unlink cross-reference and hyperlink fields, converting them to plain text?**
+I unlink them only for a final, frozen deliverable that no one will edit further and where I want to guarantee nothing can shift or error — for example a signed-off PDF master or a document leaving my control where the recipient lacks the source structure. Unlinking (Ctrl+6 / Ctrl+Shift+F9 on the selection) bakes the current text in, so "see page 37" stays literally that even if the file is later edited, which is both the benefit and the danger. I never unlink a working document, because it destroys the automatic maintenance that makes fields valuable. The rule is: keep fields live throughout production, and only consider unlinking as a deliberate final step, ideally on a copy, with the live version retained.
+
+## Fonts, embedding & brand typography
+
+A branded document falls apart the moment it opens on a machine that does not have the brand fonts. The screen substitutes Calibri, line breaks shift, a 40-page proposal becomes 43 pages, and the client thinks you delivered a broken file. Font embedding and disciplined font choice are what keep a Word deliverable looking identical everywhere.
+
+### Why fonts substitute
+
+Word stores only the font *name* in the document, not the font itself. When the reader's machine lacks that font, Word picks a substitute using the font's metric hints, and everything reflows. The three defences are: embed the fonts, use fonts the client already has, or convert the risky parts to images or PDF.
+
+### Embedding fonts in Word
+
+File > Options > Save > **Embed fonts in the file**. Two sub-options matter:
+
+| Option | Effect |
+|---|---|
+| Embed only the characters used | Smaller file, but the client cannot edit text in that font without the font installed |
+| Do not embed common system fonts | Skips Arial, Times, etc. to save space |
+
+> **Warning:** Embedding only works if the font's embedding permission (a flag inside the font file) allows it. Many commercial fonts are "Preview & Print" only or "Restricted", and Word silently refuses to embed them. Check the font's licence before you promise a client an embedded-font DOCX.
+
+### Choosing brand typography that survives
+
+For a deliverable the client will edit, the safest choice is a font that ships with Microsoft 365 (Aptos, Calibri, Georgia, Cambria) or one the client licenses organisation-wide. For a fixed deliverable (a proposal that will be read, not edited), embed the brand font, or export to PDF where the font is always embedded and subset.
+
+### Theme fonts vs direct fonts
+
+Set the brand's heading and body fonts as the **theme fonts** (Design > Fonts > Customize Fonts), so styles reference "+Headings" and "+Body" rather than a hard-coded name. Rebranding then becomes a one-click theme-font swap instead of a find-and-replace across every style. This is the same theme mechanism EPUB and PowerPoint use, and it is the backbone of a maintainable template suite.
+
+```text
+Font-safety decision tree
+  Will the client EDIT the file?
+    Yes -> use a font they own org-wide, OR embed (if licence allows), OR deliver DOCX + install the font
+    No  -> embed fonts, OR deliver PDF (fonts always embedded/subset)
+  Multilingual (Urdu/Arabic)?
+    -> set the font for that script separately (Font dialog > Complex scripts),
+       e.g. Latin = Merriweather, Arabic = "Jameel Noori Nastaleeq"
+```
+
+### Try It Yourself
+
+```text
+Task: make a proposal render identically on a client machine that has no brand fonts.
+
+1. Design > Fonts > Customize Fonts:
+     Heading font = Merriweather   Body font = Source Sans Pro
+2. Confirm every style uses "+Headings"/"+Body", not a hard-coded font name
+     (Home > Styles pane > Modify > Format > Font should read the theme font).
+3. File > Options > Save > tick "Embed fonts in the file",
+     tick "Do not embed common system fonts", LEAVE "Embed only characters used" UNTICKED
+     (so the client can still edit).
+4. Save, then open on a machine without the fonts (or in LibreOffice with the fonts
+     uninstalled) and confirm the page count and line breaks are unchanged.
+```
+
+### Quiz
+
+1. Where does Word store the actual font glyphs by default?
+- [ ] Inside the .docx as embedded font parts
+- [x] Nowhere — only the font *name* is stored, unless you enable embedding
+- [ ] In Normal.dotm
+> By default a DOCX records only the font name; the reader's machine supplies the glyphs, which is why documents reflow when a font is missing.
+
+2. Why might Word refuse to embed a commercial font?
+- [ ] The font is too large
+- [x] The font's embedding-permission flag is "Restricted" or print-only
+- [ ] DOCX does not support embedding
+> Every font file carries an fsType embedding permission; Word honours it and silently skips fonts that disallow editable embedding.
+
+3. What is the advantage of setting brand fonts as *theme* fonts?
+- [x] Rebranding is a one-click swap instead of editing every style
+- [ ] The file becomes smaller
+- [ ] It embeds the fonts automatically
+> Styles that reference "+Headings"/"+Body" all follow the theme font, so changing the theme font re-typesets the whole document at once.
+
+4. A proposal must look identical to the client but will not be edited. Best option?
+- [ ] Send the DOCX and hope they have the font
+- [x] Export to PDF (fonts are always embedded/subset) or embed the fonts
+- [ ] Convert all text to Calibri
+> A read-only deliverable is safest as PDF, where fonts are embedded and subset automatically regardless of the reader's machine.
+
+### Exercises
+
+1. **Diagnose a reflow** — A client says your 20-page DOCX is 22 pages on their screen. List the two most likely causes and the fix for each.
+<details><summary>Solution</summary>
+
+Most likely a missing brand font substituting to a wider font, or a different default printer changing page metrics. Fix: embed the fonts (or deliver PDF) for the font issue; set a consistent page size and avoid printer-dependent layout for the metrics issue.
+
+</details>
+
+2. **Set up multilingual fonts** — Describe how to make English body text use Source Sans Pro and Urdu text use Jameel Noori Nastaleeq in the same paragraph style.
+<details><summary>Solution</summary>
+
+In the style's Font dialog, set the Latin text font to Source Sans Pro and the Complex scripts font to Jameel Noori Nastaleeq. Word applies the complex-scripts font to Arabic-script runs automatically, so a mixed paragraph renders each script in the correct face.
+
+</details>
+
+### Interview Questions
+
+**Q: A client needs a Word template their whole team will edit, using a licensed brand font. How do you make sure it renders correctly for everyone?**
+The cleanest answer is that the font must be installed on every editor's machine, deployed through the organisation's device management, because embedding a font the team will edit is fragile and may be blocked by the licence. I set the brand font as the theme font so styles follow it, and I confirm the licence covers embedding as a fallback for external readers. For anyone outside the org, I deliver a PDF where the font is embedded and subset. I never rely on "it looks fine on my machine", because the font is the single most common cause of a deliverable reflowing.
+
+**Q: What is the difference between embedding fonts and outlining text, and when would you outline?**
+Embedding stores the font inside the file so text stays editable and selectable. Outlining converts glyphs to vector shapes, so the text is no longer editable or searchable but needs no font at all. In Word you rarely outline; it is a prepress technique used in CorelDRAW or Illustrator for a cover or logo where you must guarantee the exact shapes at the print shop. For a Word body document you always prefer embedding or PDF, because outlined body text destroys accessibility and searchability.
+
+**Q: How do theme fonts make a rebrand faster, and where can that break?**
+If every style references the theme heading/body fonts, changing the theme font in Design > Fonts re-typesets the entire document instantly, which is how I rebrand a 21-template suite quickly. It breaks when someone has applied a direct font override on top of a style, because direct formatting wins over the theme; those runs keep the old font. Part of QA before delivery is clearing manual font overrides (select all, then reset character formatting where appropriate) so the theme actually controls the typography.
+
+# LEVEL: Expert
+
+## Long-document engineering: the 767-page handbook workflow
+
+A 767-page financial handbook is not just a big document; it is a different discipline. Everything that is merely tedious at 20 pages becomes a genuine risk at 767: a single corrupt style can crash Word, a manual TOC becomes impossible to maintain, and one wrong section break can renumber 300 pages. This is the workflow I use to rebuild and maintain documents at that scale.
+
+### Decide: one file or a master document?
+
+Word's **Master Document** feature (Outline view > Show Document > Insert subdocuments) lets you split a huge document into linked subdocuments. It is tempting but notorious for corruption. My rule:
+
+| Situation | Choice |
+|---|---|
+| One author, one machine, needs a single continuous TOC/page numbering | **One file** — modern Word handles 700+ pages if styles are clean |
+| Multiple authors editing different chapters simultaneously | Separate files, combined only at the end (not live master/subdocuments) |
+| History of corruption or crashes | One file, and fix the root cause (styles/numbering), never master documents |
+
+I have rebuilt 700-page documents as a single clean file more reliably than any master-document setup.
+
+### The rebuild pipeline
+
+1. **Extract the content** clean: paste into a fresh document as unformatted text, or open in a text-only view, to shed the inconsistent formatting the client's file carried.
+2. **Build the style tree first** in a blank template, then apply styles top-down (headings, then body, then special paragraphs).
+3. **Rebuild numbering** with list styles tied to heading styles, never manual numbers.
+4. **Insert fields**: TOC, table of figures, cross-references, STYLEREF running headers.
+5. **Multi-pass QA** (below).
+6. **Update all fields** (Ctrl+A, F9) and repaginate before every delivery.
+
+> **Tip:** Work with Draft view and the Navigation pane for speed; switch to Print Layout only to check pagination. Rendering 767 pages in Print Layout on every keystroke is what makes big documents feel slow.
+
+### Performance and stability at scale
+
+- Turn off background repagination and grammar checking while editing (Options > Advanced / Proofing).
+- Keep images **linked or compressed**; hundreds of full-resolution images bloat the file and slow saves. Picture Format > Compress Pictures.
+- Save as `.docx` (zipped XML), not `.doc`; the compressed format is smaller and more robust.
+- Periodically **maggie** the file — copy everything except the final paragraph mark into a new document based on the same template — to shed accumulated corruption.
+
+### Try It Yourself
+
+```text
+767-page handbook: delivery-day checklist
+
+[ ] All content uses named styles (Home > Styles > Options > "Show: In use" — no "Default Paragraph Font" surprises)
+[ ] Numbering comes from list styles tied to headings, zero manual numbers
+[ ] Ctrl+A then F9: TOC, table of figures, all cross-references and PAGE fields updated
+[ ] Section breaks verified (Draft view shows them inline) — no accidental Next Page vs Continuous
+[ ] Running headers via STYLEREF pull the current chapter/section title
+[ ] Compress Pictures applied; file saved as .docx
+[ ] Document Inspector run (remove comments, hidden text, metadata)
+[ ] Final PDF exported with "Create bookmarks using: Headings" and reviewed page-count vs DOCX
+```
+
+### Quiz
+
+1. Why are Word Master Documents generally avoided for large deliverables?
+- [ ] They cannot hold more than 100 pages
+- [x] They are prone to corruption
+- [ ] They do not support styles
+> Master/subdocuments have a long history of corrupting; a single clean file, or files combined only at the end, is more reliable.
+
+2. What is the fastest editing view for a 700-page document?
+- [x] Draft view with the Navigation pane
+- [ ] Print Layout
+- [ ] Web Layout
+> Draft view skips rendering page layout on every keystroke; Print Layout re-flows all pages and feels slow at scale.
+
+3. Before every delivery of a long document you should:
+- [x] Select all and press F9 to update every field, then repaginate
+- [ ] Retype the table of contents
+- [ ] Convert it to .doc
+> Ctrl+A then F9 updates the TOC, figures, cross-references and page fields so nothing is stale.
+
+4. "Maggie-ing" a document (copy all but the final paragraph mark into a new file) is done to:
+- [x] Shed accumulated file corruption
+- [ ] Reduce the page count
+- [ ] Remove images
+> The final paragraph mark stores document-level corruption; copying everything except it into a fresh file based on the same template clears many stability problems.
+
+### Exercises
+
+1. **Plan a rebuild** — A client sends a 300-page manual with manual numbering and a hand-typed TOC. List the first four steps of your rebuild in order.
+<details><summary>Solution</summary>
+
+1) Extract content as clean/unformatted text into a fresh template. 2) Build the style tree and apply heading and body styles. 3) Rebuild numbering with list styles tied to the heading styles. 4) Insert a TOC field and STYLEREF running headers. Manual QA and field updates follow.
+
+</details>
+
+2. **Choose an architecture** — Three authors must edit chapters 1, 2 and 3 of a 400-page report at the same time, and it needs one continuous TOC on delivery. One file or master document? Justify.
+<details><summary>Solution</summary>
+
+Neither a single shared file nor live master/subdocuments. Have each author work in a separate file for their chapter, then combine the three into one clean file at the end (Insert > Object > Text from File, or paste with "Keep Source Formatting" onto a shared template) and build the single TOC there. This avoids simultaneous-edit conflicts and master-document corruption.
+
+</details>
+
+### Interview Questions
+
+**Q: Walk me through how you would rebuild a 767-page handbook that arrives with inconsistent formatting and a broken table of contents.**
+I start by deciding it stays one clean file, not a master document, because a single file with disciplined styles is more stable at that size. I extract the content stripped of its inherited formatting, build the style tree in a fresh branded template, and apply styles top-down. Numbering is rebuilt with list styles tied to the heading styles so nothing is typed by hand, and the TOC, table of figures and running headers are all fields. Then I do multi-pass QA — a styles pass, a numbering pass, a cross-reference pass — update every field with Ctrl+A F9, and export a bookmarked PDF that I check page-for-page against the DOCX. I have delivered exactly this kind of rebuild on time by treating it as an engineering pipeline rather than manual editing.
+
+**Q: What are the specific performance and stability risks in very large Word documents, and how do you mitigate them?**
+The main risks are corruption from accumulated edits, slowness from live repagination, and bloat from uncompressed images. I mitigate corruption by keeping the document based on a clean template, avoiding master documents, and occasionally copying the content minus the final paragraph mark into a fresh file. I mitigate slowness by editing in Draft view, turning off background repagination and grammar checking, and using the Navigation pane to move around. I mitigate bloat by compressing pictures and saving as .docx. The underlying principle is that everything is styles and fields, because manual formatting is what makes a large document fragile.
+
+## Legacy & content-control forms
+
+Word can build fillable forms two ways, and choosing the wrong one costs you a redelivery. Legacy form fields are the old Developer-tab controls locked with form protection; content controls are the modern controls with data binding. For investigative, legal and automotive clients I have built both, and the choice depends on how the data will be used.
+
+### The Developer tab
+
+Both mechanisms live on the **Developer** tab (File > Options > Customize Ribbon > tick Developer). It exposes:
+
+| Control type | Use |
+|---|---|
+| Legacy form fields | Text field, check box, drop-down; require document protection ("Filling in forms") to work |
+| Content controls | Rich/plain text, check box, combo/drop-down, date picker, picture, repeating section |
+| ActiveX controls | Avoid — poor compatibility, security prompts |
+
+### Legacy fields vs content controls
+
+**Legacy form fields** are simple and universally compatible, but the document must be protected for "Filling in forms", which disables most editing. They are right for a straightforward printed-or-filled form where you want the tab-through-fields experience.
+
+**Content controls** are richer: date pickers, drop-downs bound to data, repeating sections, and placeholder text. They can be bound to document custom XML so the same value appears in multiple places. They are right when the form feeds a data process or needs modern controls, and they can be protected individually (cannot be deleted / cannot be edited) rather than locking the whole document.
+
+> **Warning:** Legacy fields and content controls behave differently in Word for Mac, Word Online and LibreOffice. Always test the form in the environment the client actually uses; a date picker that works in Word for Windows is inert in Word Online.
+
+### Protecting the form
+
+Developer > Restrict Editing > Allow only "Filling in forms" > Yes, Start Enforcing Protection (optionally with a password). For content-control forms you can instead set each control's "Contents cannot be edited" and leave the surrounding document open, or use Restrict Editing with the "No changes (Read only)" plus exceptions approach.
+
+### Try It Yourself
+
+```text
+Build a protected legacy-field intake form
+
+1. Developer tab > (Legacy Tools dropdown) insert:
+     - Text Form Field for "Client Name"
+     - Drop-Down Form Field for "Policy Type" (double-click > add: Owner, Lender, Both)
+     - Check Box Form Field for "Rush order"
+2. Double-click each field > set Bookmark name (e.g. ClientName) for later reference.
+3. Add help text (double-click > Add Help Text) shown on the status bar.
+4. Developer > Restrict Editing > Editing restrictions:
+     "Allow only this type of editing: Filling in forms" > Yes, Start Enforcing Protection.
+5. Test: press Tab to jump field-to-field; confirm body text cannot be changed.
+```
+
+### Quiz
+
+1. Legacy form fields require what in order to be fillable?
+- [x] Document protection set to "Filling in forms"
+- [ ] A macro
+- [ ] ActiveX
+> Legacy fields only accept input once the document is protected for filling in forms; without protection they behave like static text.
+
+2. Which control type supports a date picker and binding to custom XML?
+- [ ] Legacy form field
+- [x] Content control
+- [ ] ActiveX label
+> Content controls are the modern mechanism and include date pickers, drop-downs and data binding via custom XML.
+
+3. Why must you test a form in the client's actual environment?
+- [x] Controls behave differently in Word for Mac, Word Online and LibreOffice
+- [ ] Fonts change
+- [ ] The file size changes
+> A control that works in Word for Windows may be inert or rendered differently in Word Online, Mac Word or LibreOffice.
+
+4. To lock only the fields but keep the rest of a content-control form editable, you:
+- [x] Set each control's "cannot be edited" property instead of whole-document form protection
+- [ ] Password-protect the file
+- [ ] Convert to PDF
+> Content controls can be individually protected, so the surrounding document stays editable while the control contents are locked.
+
+### Exercises
+
+1. **Choose the mechanism** — A client needs a 40-field intake form whose answers must later be pulled into a database. Legacy fields or content controls? Why?
+<details><summary>Solution</summary>
+
+Content controls, because they can be bound to custom XML and carry structured data that a downstream process can read reliably, whereas legacy fields are keyed by bookmark and are clumsier to extract at scale. If the same value must appear in several places (e.g. client name in header and body), content-control binding keeps them in sync automatically.
+
+</details>
+
+2. **Protect correctly** — Describe how to let users fill a legacy-field form but prevent them from altering the questions.
+<details><summary>Solution</summary>
+
+Developer > Restrict Editing > Allow only "Filling in forms" > Start Enforcing Protection (optionally with a password). Users can then only type into the form fields and tab between them; the surrounding question text and layout are locked.
+
+</details>
+
+### Interview Questions
+
+**Q: When do you choose legacy form fields over content controls, and vice versa?**
+I choose legacy form fields for a simple form that just needs the tab-through-fields fill-in experience and maximum compatibility, accepting that the whole document must be protected for filling in forms. I choose content controls when the form needs modern controls like date pickers or drop-downs, when the data must be structured for a downstream process, or when the same value must appear in several places via custom-XML binding. The deciding question is what happens to the data after the form is filled: if a human just reads it, legacy is fine; if a system consumes it, content controls win. I also weigh where the client opens the form, because both behave differently in Word Online and LibreOffice.
+
+**Q: A client reports that your Word form "doesn't work" — fields won't accept input. What are the first things you check?**
+For a legacy-field form the usual cause is that protection is not enforced, so the fields are inert; I check Developer > Restrict Editing and enable "Filling in forms". If it is a content-control form, I check whether the controls were accidentally deleted or set to "cannot be edited", and whether the client is opening it in an environment (Word Online, Mac, LibreOffice) that does not support the control type I used. I reproduce the problem in the client's exact application rather than trusting my own Windows Word, because "doesn't work" almost always means an environment or protection mismatch, not a corrupt file.
+
+## Branding & rebranding a template suite
+
+Rebranding a suite of 21 templates is where the theme mechanism pays off or punishes you. If the templates were built on hard-coded colours and fonts, a rebrand is a multi-day find-and-replace nightmare. If they were built on theme colours and fonts with a disciplined style tree, it is a controlled, testable operation. This chapter is the production workflow for both building and re-skinning a suite.
+
+### The single source of truth: the theme
+
+A Word **theme** (`.thmx`) holds twelve theme colours, a heading font and a body font, and effect styles. Every style, table and shape should reference theme colours ("Accent 1", "Text 1") and theme fonts ("+Headings", "+Body"), never a raw hex or font name. Then a rebrand is: build a new theme, apply it, done.
+
+```text
+Theme colour slots (map the brand to these once)
+  Text/Background - Dark 1   -> primary text (near-black)
+  Text/Background - Light 1  -> page background (white)
+  Text/Background - Dark 2   -> secondary text
+  Text/Background - Light 2  -> subtle fills
+  Accent 1..6                -> brand palette (headings, rules, table headers, callouts)
+  Hyperlink / Followed       -> link colours
+```
+
+### Building the suite so it can be rebranded
+
+1. Create the theme first (Design > Colors > Customize; Design > Fonts > Customize; Save Current Theme).
+2. Build one **base template** with the full style tree referencing only theme colours/fonts.
+3. Derive the 21 templates from the base so they share the style definitions.
+4. Store shared assets (logo, callout boxes) as **Building Blocks** in the base template.
+5. Document the mapping (which Accent slot is which brand colour) in a spec the client signs off.
+
+### The rebrand operation
+
+To re-skin the suite: build the new `.thmx`, then for each template apply Design > Themes > Browse for Themes and select it, update fields, and run QA. Because styles reference theme slots, headings, table headers, rules and callouts all recolour at once. The only manual work is anything that was incorrectly hard-coded — which the QA pass below is designed to catch.
+
+> **Tip:** Keep the logo as a vector (EMF/SVG) placed in the header, and swap the file during a rebrand rather than re-inserting into every template. A raster logo forces you to re-place and re-scale in 21 files.
+
+### Try It Yourself
+
+```text
+Rebrand-readiness audit for one template (repeat per template)
+
+[ ] Design > Colors shows a CUSTOM theme palette, not "Office"
+[ ] Design > Fonts shows the brand heading/body fonts as the theme fonts
+[ ] Spot-check 5 styles (Modify > Format > Font/Border): colours read "Accent n"/"Text n",
+      fonts read "+Headings"/"+Body" — NOT a hex value or font name
+[ ] Table styles use theme colours for header fill and borders
+[ ] Callout Building Blocks use theme colours
+[ ] Logo is a single placed vector in the header, swappable in one step
+[ ] Apply a test theme (different colours) and confirm the WHOLE document recolours;
+      anything that stays the old colour is hard-coded and must be fixed
+```
+
+### Quiz
+
+1. What is the single source of truth for a rebrandable Word suite?
+- [x] The theme (theme colours + theme fonts) that styles reference
+- [ ] The Normal template
+- [ ] A find-and-replace macro
+> When styles reference theme slots, re-skinning is a theme swap; hard-coded colours/fonts defeat the whole approach.
+
+2. A heading style set to a raw hex colour instead of "Accent 1" will:
+- [x] Keep its old colour when the theme changes, breaking the rebrand
+- [ ] Recolour automatically
+- [ ] Cause an error
+> Direct/hard-coded colour overrides ignore the theme, so those elements must be fixed manually during a rebrand.
+
+3. The best way to handle the logo across 21 templates during a rebrand is:
+- [x] Place a single vector logo in the header and swap the file once
+- [ ] Re-insert a raster logo into each template
+- [ ] Convert the logo to text
+> A placed vector can be swapped in one step; a raster logo forces re-placement and re-scaling in every file.
+
+4. Theme colours are addressed by:
+- [x] Named slots like Accent 1 and Text 1
+- [ ] Hex values only
+- [ ] Style names
+> Themes expose named slots (Text/Background 1–2, Accent 1–6, Hyperlink) that styles bind to, so remapping the slots recolours everything.
+
+### Exercises
+
+1. **Audit a template** — You inherit a "branded" template and must confirm it can be rebranded in one operation. List three checks.
+<details><summary>Solution</summary>
+
+Confirm Design > Colors and Design > Fonts show a custom theme (not Office defaults); spot-check several styles to verify colours read "Accent n" and fonts read "+Headings/+Body" rather than raw values; apply a different test theme and confirm the entire document recolours with nothing left on the old colours.
+
+</details>
+
+2. **Plan a rebrand** — A client acquires a new brand palette and font. Outline the steps to rebrand a 21-template suite built correctly on themes.
+<details><summary>Solution</summary>
+
+Build the new theme (custom colours mapped to the same Accent slots, new heading/body fonts) and save it as a .thmx. For each template, apply the new theme via Design > Themes > Browse for Themes, swap the placed vector logo, update all fields (Ctrl+A, F9), and run the rebrand-readiness QA to catch any hard-coded overrides. Deliver after a visual spot-check of each template.
+
+</details>
+
+### Interview Questions
+
+**Q: How do you build a template suite so that a future rebrand takes hours, not days?**
+Everything references the theme. I define twelve theme colours and the heading/body theme fonts once, then build every style, table style and shape to use theme slots ("Accent 1", "+Headings") rather than raw hex or font names. The logo goes in as a single placed vector so it can be swapped as one file. When the rebrand comes, I build a new theme, apply it to each template, swap the logo, update fields and QA. The rebrand is fast precisely because I refused to hard-code anything during the build; the discipline is front-loaded.
+
+**Q: During a rebrand, some headings kept the old colour. What happened and how do you prevent it?**
+Those headings had a direct colour override applied on top of the style, and direct formatting beats the theme, so the theme swap didn't touch them. To fix it I clear the manual override so the style (and therefore the theme) controls the colour again. To prevent it in the first place, the build standard is zero direct formatting: all colour and font come from styles that reference theme slots, and the QA pass includes applying a contrasting test theme to reveal anything that doesn't recolour. That test is the single most useful rebrand-readiness check.
+
+## QA, consistency checks & the Accessibility Checker
+
+The difference between an amateur and a professional Word deliverable is the QA pass. At 767 pages you cannot eyeball everything, so you use Word's own tools — wildcard Find, Document Inspector, the Accessibility Checker, and Compare — as a systematic checklist. This is what I run before any long document leaves my hands.
+
+### Wildcard Find & Replace
+
+Turn on **Use wildcards** (Find and Replace > More) to catch systematic errors regex-style:
+
+| Find (wildcards on) | Catches |
+|---|---|
+| `  ` (two spaces) | Double spaces after sentences |
+| `^13{2,}` | Multiple consecutive paragraph marks (empty paragraphs used as spacing) |
+| `[0-9]{1,}\)` | Manually typed list numbers like "1)" that should be list styles |
+| `<[A-Z]{2,}>` | Stray all-caps acronyms to check for consistency |
+| `[!^13]^13[!^13]` | Single paragraph marks used where a real break is needed |
+
+> **Tip:** Replacing empty paragraphs with proper "space before/after" paragraph spacing is one of the highest-value cleanups: it removes the manual spacing that shifts as content reflows.
+
+### Document Inspector
+
+File > Info > Check for Issues > **Inspect Document** removes comments, tracked changes, hidden text, document properties, custom XML and headers/footers you did not intend to ship. Always run it before delivering to an external client, because comments and metadata are a confidentiality risk.
+
+### The Accessibility Checker
+
+Review > **Check Accessibility** flags missing alt text on images, tables without header rows, low-contrast text, links with non-descriptive text, and improper heading structure (a jump from Heading 1 to Heading 3). Fixing these is both an accessibility requirement and a proxy for structural correctness: a document that passes the checker almost always has clean styles.
+
+### Compare and Combine
+
+Review > Compare produces a redline between two versions — essential when a client says "what changed?" between drafts, and far more reliable than eyeballing. Combine merges tracked changes from multiple reviewers into one document.
+
+### Try It Yourself
+
+```text
+Pre-delivery QA sequence (run in order)
+
+1. Wildcard Find/Replace cleanups:
+     "  " -> " "                 (double spaces)
+     ^13{2,} -> ^p               (collapse empty paragraphs; then apply paragraph spacing)
+     manual "N)" list numbers    -> reapply list styles
+2. Ctrl+A, F9                    (update TOC, figures, cross-references, page fields)
+3. Review > Check Accessibility  (fix alt text, table headers, heading order, link text)
+4. File > Info > Inspect Document (remove comments, tracked changes, hidden text, metadata)
+5. Export PDF with "Create bookmarks using: Headings"; verify bookmarks and page count
+6. Open the PDF and the DOCX side by side; spot-check first/last page of each chapter
+```
+
+### Quiz
+
+1. Which tool removes comments, hidden text and metadata before delivery?
+- [x] Document Inspector (File > Info > Check for Issues)
+- [ ] The Accessibility Checker
+- [ ] Wildcard Find
+> Document Inspector strips comments, tracked changes, hidden text, properties and custom XML that you should not ship externally.
+
+2. Wildcard Find with `^13{2,}` locates:
+- [x] Multiple consecutive paragraph marks (empty spacing paragraphs)
+- [ ] Double spaces
+- [ ] Manual page breaks
+> `^13` is a paragraph mark; `{2,}` finds two or more in a row, i.e. empty paragraphs used for spacing.
+
+3. The Accessibility Checker flags a jump from Heading 1 to Heading 3 because:
+- [x] Skipped heading levels break document structure and screen-reader navigation
+- [ ] Heading 3 is a smaller font
+- [ ] It is a spelling error
+> Proper heading order (1 then 2 then 3) is both an accessibility rule and a sign of clean structure; skips are flagged.
+
+4. To show a client exactly what changed between two drafts, use:
+- [x] Review > Compare (redline)
+- [ ] Document Inspector
+- [ ] Save As
+> Compare generates a tracked-changes redline between two versions, which is precise and reproducible.
+
+### Exercises
+
+1. **Write the cleanups** — Give three wildcard Find/Replace operations you would run on a client file full of manual formatting, and what each fixes.
+<details><summary>Solution</summary>
+
+`  ` → ` ` removes double spaces; `^13{2,}` → `^p` collapses empty spacing paragraphs (then apply real paragraph spacing); a pattern like `[0-9]{1,}\)` locates manually typed list numbers to be replaced with list styles. Each removes a class of manual formatting that would otherwise reflow.
+
+</details>
+
+2. **Sequence the QA** — Put these in the correct order: export PDF, update fields, Inspect Document, run Accessibility Checker. Explain why.
+<details><summary>Solution</summary>
+
+Update fields first (so the TOC/page numbers are correct), then run the Accessibility Checker and fix structure, then Inspect Document to strip comments/metadata, then export the PDF last so it reflects the cleaned, updated, inspected document. Exporting before cleaning would bake stale fields or leaked metadata into the PDF.
+
+</details>
+
+### Interview Questions
+
+**Q: Describe your QA process for a long Word document before it goes to a client.**
+I run a fixed sequence. First, wildcard Find/Replace cleanups to remove double spaces, empty spacing paragraphs and any manually typed numbering. Then Ctrl+A and F9 to update the TOC, table of figures, cross-references and page fields so nothing is stale. Then the Accessibility Checker to fix alt text, table headers, heading order and link text, which also confirms the structure is clean. Then Document Inspector to strip comments, tracked changes, hidden text and metadata, because leaking those to an external client is a confidentiality failure. Finally I export a bookmarked PDF and spot-check it against the DOCX page by page at chapter boundaries. It is a checklist precisely because at scale you cannot rely on eyeballing.
+
+**Q: Why do you treat the Accessibility Checker as a quality tool and not just a compliance box?**
+Because the things it flags — missing alt text, tables without header rows, skipped heading levels, non-descriptive link text — are exactly the structural defects that also cause reflow problems, broken TOCs and fragile documents. A document that passes the checker almost always has a clean style tree and proper heading hierarchy, which is what makes it maintainable. So I use it as a fast proxy for structural health, and fixing its findings improves both accessibility and robustness at the same time. It is one of the highest-value five-minute checks in Word.
+
+## Word macros, VBA basics & interview questions
+
+Even a document specialist who is not a developer benefits from a working knowledge of VBA, because a ten-line macro can do in seconds what would take an hour by hand across a template suite. This chapter covers enough VBA to be useful and safe, and the automation questions that come up when a document role touches code.
+
+### When a macro earns its place
+
+Reach for a macro when a task is repetitive, mechanical and spans many documents or many places in one document: applying a style to every table, inserting a standard header into 21 templates, fixing a systematic formatting error, or generating boilerplate. For one-off edits, wildcard Find/Replace is usually faster than writing code.
+
+### The VBA basics
+
+Open the editor with **Alt+F11**. Macros live in modules; a document that contains macros must be saved as `.docm` or a template as `.dotm` (a `.dotx` cannot hold code).
+
+```vba
+Sub ApplyTableGridToAll()
+    ' Apply the "Table Grid" style to every table in the document
+    Dim t As Table
+    For Each t In ActiveDocument.Tables
+        t.Style = "Table Grid"
+    Next t
+End Sub
+
+Sub InsertConfidentialFooter()
+    ' Put a STYLEREF-free confidential note in the primary footer of every section
+    Dim s As Section
+    For Each s In ActiveDocument.Sections
+        s.Footers(wdHeaderFooterPrimary).Range.Text = "Confidential - " & _
+            ActiveDocument.BuiltInDocumentProperties("Company")
+    Next s
+End Sub
+```
+
+### The object model you actually use
+
+| Object | What it is |
+|---|---|
+| `ActiveDocument` | The open document |
+| `.Paragraphs`, `.Tables`, `.Sections`, `.Fields` | Collections you loop over |
+| `.Range` | A span of content you read or rewrite |
+| `.Content` | The whole document body as a Range |
+| `Selection` | The current cursor/selection (avoid in favour of Range for reliability) |
+
+> **Warning:** Macros are a security surface. Enable macros only from documents you trust, keep macro settings at "Disable with notification", and never ship a `.docm` to a client without telling them it contains code and why. Many organisations block macro-enabled files at the mail gateway.
+
+### Recording vs writing
+
+The macro recorder (View > Macros > Record Macro) writes verbose Selection-based code, but it is the fastest way to discover which object and method a UI action maps to. Record it, then refactor the recording to use Range instead of Selection and to loop where the recorder hard-coded a single action.
+
+### Try It Yourself
+
+```vba
+' Standardise a template suite: run on each open document
+Sub StandardiseDocument()
+    Dim t As Table, f As Field
+    ' 1. Normalise all tables to the brand table style
+    For Each t In ActiveDocument.Tables
+        t.Style = "Brand Table"
+        t.Rows(1).HeadingFormat = True   ' repeat header row across pages
+    Next t
+    ' 2. Update every field (TOC, figures, cross-refs, page numbers)
+    For Each f In ActiveDocument.Fields
+        f.Update
+    Next f
+    ' 3. Turn on "update fields on print" as a safety net
+    ActiveDocument.Fields.ToggleShowCodes = False
+    MsgBox "Standardised " & ActiveDocument.Tables.Count & " tables and " & _
+           ActiveDocument.Fields.Count & " fields."
+End Sub
+```
+
+### Quiz
+
+1. A document containing a macro must be saved as:
+- [x] .docm (or .dotm for a template)
+- [ ] .docx
+- [ ] .dotx
+> Only macro-enabled formats (.docm/.dotm) can store VBA code; .docx and .dotx cannot.
+
+2. Which is more reliable in VBA for editing content?
+- [x] Range
+- [ ] Selection
+- [ ] The macro recorder's output unedited
+> Range operates directly on content without depending on the cursor, so it is more robust than Selection, which the recorder overuses.
+
+3. When is a macro the wrong tool?
+- [x] For a single one-off edit better done with wildcard Find/Replace
+- [ ] For applying a style to every table
+- [ ] For inserting boilerplate into 21 templates
+> Macros pay off on repetitive, multi-place or multi-document tasks; a one-off edit is faster by hand or with Find/Replace.
+
+4. The recommended macro security setting is:
+- [x] Disable with notification
+- [ ] Enable all macros
+- [ ] Disable all without notification (so you never know)
+> "Disable with notification" lets you run trusted macros while blocking untrusted code by default.
+
+### Exercises
+
+1. **Read the macro** — What does a loop `For Each t In ActiveDocument.Tables: t.Style = "Table Grid": Next t` do, and when would you use it?
+<details><summary>Solution</summary>
+
+It applies the "Table Grid" style to every table in the document. You would use it to standardise a document (or, run per file, a whole suite) where tables were formatted inconsistently, in one action instead of restyling each table by hand.
+
+</details>
+
+2. **Decide** — A client wants a confidential footer added to 21 template files. Macro or manual? Justify and name the risk.
+<details><summary>Solution</summary>
+
+A macro that loops the sections and sets the primary footer text is far faster across 21 files. The risk is that macro-enabled delivery files (.dotm) may be blocked by the client's mail gateway and are a security surface, so you run the macro to produce the templates but deliver clean .dotx files, and you tell the client if any delivered file is macro-enabled and why.
+
+</details>
+
+### Interview Questions
+
+**Q: You are not a full-time developer, so why should a document-production role know VBA?**
+Because a small macro turns an hour of mechanical work into seconds and makes a template suite consistent in a way manual editing cannot guarantee. Applying a table style to every table, inserting a standard footer across 21 files, or fixing a systematic formatting error are all a few lines of VBA. I know enough to record an action, refactor the recording to use Range and a loop, and run it safely. I also know the limits: macros are a security surface, macro-enabled files get blocked by mail gateways, and for one-off edits wildcard Find/Replace is faster. The value is judgement about when automation pays off, not writing large programs.
+
+**Q: What are the security considerations when a Word deliverable involves macros?**
+Macros execute code, so they are a genuine risk vector; I keep macro settings at "disable with notification" and only enable code from sources I trust. I never ship a macro-enabled file to a client without telling them it contains code and why, because unexpected .docm files erode trust and are often quarantined by mail systems. Where possible I use the macro to *produce* clean, code-free .docx/.dotx deliverables rather than shipping the macro itself. And I keep any VBA minimal and readable, because a macro a client cannot audit is one they are right to distrust.
