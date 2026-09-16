@@ -1755,3 +1755,2184 @@ Use an ABC when you want the missing-method error at instantiation rather than a
 **Q: What is abstraction and how is it different from encapsulation?**
 Abstraction is about the outside view: presenting a simplified model that exposes only the operations a user needs (`export()`) and hides how they are done. Encapsulation is about the inside: bundling data with the methods that maintain it and restricting direct access so invariants hold. They reinforce each other, since a well-abstracted interface is only stable if the internals are encapsulated, but they answer different questions: abstraction asks "what can I do with this?", encapsulation asks "who is allowed to change this and how?". An `Exporter` ABC is abstraction; the `_buffer` attribute inside `PdfExporter` protected by methods is encapsulation.
 
+
+# LEVEL: Advanced
+
+## Composition vs inheritance
+
+Inheritance answers "what *is* this object?"; composition answers "what does this object *have* and *use*?". Both reuse code, but they fail in different ways, and "favour composition over inheritance" is one of the most quoted design rules in software engineering. This chapter shows why, when the rule applies, and when inheritance is still the right call.
+
+### The problem with deep hierarchies
+
+Suppose a document pipeline starts with `Document` and grows:
+
+```python
+class Document: ...
+class PdfDocument(Document): ...
+class SignedPdfDocument(PdfDocument): ...
+class EncryptedSignedPdfDocument(SignedPdfDocument): ...
+```
+
+Now a client wants an encrypted but unsigned PDF, and then a signed EPUB. Every combination of features needs a new class, the tree explodes, and a change in `Document.__init__` ripples through everything below it. This is the **fragile base class** problem: subclasses depend on implementation details of their parents, so parents cannot change safely.
+
+### Composition: has-a instead of is-a
+
+Model the features as separate objects and plug them in:
+
+```python
+class Encryptor:
+    def __init__(self, password): self.password = password
+    def apply(self, data): return b"ENC(" + data + b")"
+
+class Signer:
+    def __init__(self, cert): self.cert = cert
+    def apply(self, data): return data + b" [signed:" + self.cert.encode() + b"]"
+
+class Document:
+    def __init__(self, title, processors=()):
+        self.title = title
+        self.processors = list(processors)       # has-a list of behaviours
+    def render(self):
+        data = self.title.encode()
+        for p in self.processors:
+            data = p.apply(data)
+        return data
+
+doc = Document("Handbook", [Signer("ali-cert"), Encryptor("s3cret")])
+print(doc.render())     # b'ENC(Handbook [signed:ali-cert])'
+```
+
+Any combination is a list, order is explicit, and each processor is testable alone. The `Document` never needs to know how signing works.
+
+### Delegation
+
+Composition usually comes with **delegation**: the outer object forwards calls to the inner one. In Python this can be explicit methods or `__getattr__`:
+
+```python
+class LoggedList:
+    def __init__(self): self._items = []; self.log = []
+    def append(self, x):
+        self.log.append(f"append {x!r}")
+        self._items.append(x)
+    def __getattr__(self, name):            # forward everything else to the list
+        return getattr(self._items, name)
+```
+
+Contrast with `class LoggedList(list)`: subclassing `list` looks shorter, but `extend`, `+=` and `__init__` bypass your `append`, so logging silently misses items. The standard library's `collections.UserList` exists precisely because subclassing built-ins is unreliable.
+
+### Strategy: swapping behaviour at runtime
+
+Composition allows behaviour to change after construction:
+
+```python
+class Report:
+    def __init__(self, exporter): self.exporter = exporter
+    def save(self, rows): return self.exporter.export(rows)
+
+report = Report(CsvExporter())
+report.exporter = ExcelExporter()      # same object, new behaviour
+```
+
+An inherited behaviour is fixed at class-definition time; a composed one is a field you can assign. This is the Strategy pattern, covered in the Expert level.
+
+### Mixins: inheritance used like composition
+
+A **mixin** is a small class with one capability, designed to be combined through multiple inheritance:
+
+```python
+class JsonMixin:
+    def to_json(self):
+        import json
+        return json.dumps(self.__dict__)
+
+class ReprMixin:
+    def __repr__(self):
+        return f"{type(self).__name__}({self.__dict__})"
+
+class Invoice(JsonMixin, ReprMixin):
+    def __init__(self, number, total): self.number, self.total = number, total
+```
+
+Mixins are fine when they hold no state and make no assumptions beyond a documented attribute. Django's class-based views and Python's `socketserver` are built this way. They become a problem when they call each other's methods and the MRO decides who wins.
+
+### When inheritance is right
+
+- The relationship is genuinely **is-a** and the Liskov Substitution Principle holds: any `PdfExporter` can be used wherever an `Exporter` is expected.
+- A framework requires it: `unittest.TestCase`, `Exception` subclasses, Django models, `abc.ABC` contracts.
+- The base class is designed for extension: abstract methods, template methods, documented hooks.
+- The hierarchy is shallow (two or three levels) and stable.
+
+| Question | Inheritance | Composition |
+|---|---|---|
+| Relationship | is-a | has-a / uses-a |
+| Reuse | inherits all public methods, wanted or not | exposes only what you delegate |
+| Change behaviour | at class definition | at runtime |
+| Coupling | tight to base implementation | to an interface |
+| Combining features | one class per combination | list or fields of parts |
+| Testing | subclass needs base | parts tested alone with fakes |
+
+> **Interview note:** Quote the rule, then immediately qualify it. "Favour composition" does not mean "never inherit"; it means do not inherit *just to reuse code*. Inherit for substitutability and framework contracts, compose for capabilities.
+
+### Try It Yourself
+
+```python
+# The same feature set two ways: inheritance explodes, composition composes.
+
+# 1. Inheritance: one class per combination
+class Doc:
+    def __init__(self, title): self.title = title
+    def render(self): return self.title
+
+class SignedDoc(Doc):
+    def render(self): return super().render() + " [signed]"
+
+class EncryptedDoc(Doc):
+    def render(self): return "ENC(" + super().render() + ")"
+
+class SignedEncryptedDoc(SignedDoc, EncryptedDoc):   # MRO: Signed -> Encrypted -> Doc
+    pass
+
+print(SignedEncryptedDoc("Handbook").render())
+print([c.__name__ for c in SignedEncryptedDoc.__mro__])
+
+# 2. Composition: behaviours are objects, order is explicit
+class Signer:
+    def apply(self, s): return s + " [signed]"
+
+class Encryptor:
+    def apply(self, s): return "ENC(" + s + ")"
+
+class Watermark:
+    def __init__(self, text): self.text = text
+    def apply(self, s): return f"{s} {{{self.text}}}"
+
+class Document:
+    def __init__(self, title, steps=()):
+        self.title, self.steps = title, list(steps)
+    def render(self):
+        out = self.title
+        for step in self.steps:
+            out = step.apply(out)
+        return out
+
+print(Document("Handbook", [Signer(), Encryptor()]).render())
+print(Document("Handbook", [Encryptor(), Signer()]).render())         # order changed, no new class
+d = Document("Handbook", [Watermark("DRAFT")])
+d.steps.append(Signer())                                               # behaviour changed at runtime
+print(d.render())
+
+# 3. Delegation beats subclassing built-ins
+class BadLog(list):
+    def append(self, x):
+        print("logged", x); super().append(x)
+
+b = BadLog(); b.extend([1, 2])            # nothing logged: extend bypasses append
+print("BadLog contents:", b)
+
+class GoodLog:
+    def __init__(self): self._items = []
+    def append(self, x):
+        print("logged", x); self._items.append(x)
+    def extend(self, xs):
+        for x in xs: self.append(x)
+    def __len__(self): return len(self._items)
+    def __getattr__(self, name): return getattr(self._items, name)
+
+g = GoodLog(); g.extend([1, 2]); print("GoodLog length:", len(g), "index of 2:", g.index(2))
+```
+
+### Quiz
+
+1. "Favour composition over inheritance" mainly warns against…
+- [ ] using classes at all
+- [x] inheriting only to reuse code when there is no true is-a relationship
+- [ ] using more than one object
+> Inheritance for substitutability is fine; inheritance for convenience couples you to the base implementation.
+
+2. Which is a sign that composition would be better?
+- [x] You need many combinations of optional features
+- [ ] The framework requires a base class
+- [ ] There are exactly two classes
+> Combinations multiply subclasses; composed parts combine freely.
+
+3. Why is subclassing `list` to log appends unreliable?
+- [ ] `list` cannot be subclassed
+- [x] Methods like `extend` and `+=` do not call your overridden `append`
+- [ ] Subclasses of built-ins cannot have new methods
+> CPython's built-in methods call the C implementation directly.
+
+4. A mixin should ideally…
+- [ ] hold most of the object's state
+- [x] add one capability and have no state or few documented requirements
+- [ ] override `__init__`
+> Stateless single-purpose mixins combine predictably.
+
+### Exercises
+
+1. **Notifier** — Build a `Report` class that can notify by email, SMS, or both, using composition rather than `EmailReport`/`SmsReport` subclasses.
+<details><summary>Solution</summary>
+
+```python
+class Email:
+    def send(self, msg): return f"email: {msg}"
+class Sms:
+    def send(self, msg): return f"sms: {msg}"
+class Report:
+    def __init__(self, channels): self.channels = list(channels)
+    def publish(self, msg): return [c.send(msg) for c in self.channels]
+print(Report([Email(), Sms()]).publish("Weekly report ready"))
+```
+
+</details>
+
+2. **Delegating wrapper** — Write `ReadOnlyDict` that wraps a dict, forwards reads, and raises `TypeError` on `__setitem__` and `__delitem__`.
+<details><summary>Solution</summary>
+
+```python
+class ReadOnlyDict:
+    def __init__(self, data): self._d = dict(data)
+    def __getitem__(self, k): return self._d[k]
+    def __len__(self): return len(self._d)
+    def __iter__(self): return iter(self._d)
+    def __contains__(self, k): return k in self._d
+    def __setitem__(self, k, v): raise TypeError("read-only")
+    def __delitem__(self, k): raise TypeError("read-only")
+    def __getattr__(self, name): return getattr(self._d, name)
+r = ReadOnlyDict({"state": "WY"}); print(r["state"], "state" in r, r.get("x", 0))
+```
+
+</details>
+
+3. **Refactor a hierarchy** — Given `Vehicle -> Car -> ElectricCar` where `ElectricCar` only adds a battery, decide whether to keep inheritance and justify in a comment.
+<details><summary>Solution</summary>
+
+```python
+# Keep inheritance: an ElectricCar is-a Car (LSP holds: it drives, parks, has wheels).
+# Compose the power source instead of a third level for hybrids:
+class Battery:
+    def __init__(self, kwh): self.kwh = kwh
+class Car:
+    def __init__(self, make, power): self.make, self.power = make, power
+car = Car("Tesla", Battery(75))
+```
+
+</details>
+
+### Interview Questions
+
+**Q: Explain "favour composition over inheritance" with an example where it matters.**
+Inheritance couples a subclass to its parent's implementation and fixes behaviour at class-definition time, so using it merely to reuse code creates fragile, combinatorial hierarchies. Composition builds an object from parts it holds and delegates to, so features combine freely and can change at runtime. A document pipeline needing signing, encryption and watermarking in any order would require seven subclasses with inheritance; with composition it is one `Document` with a list of processor objects, each unit-tested alone with fakes. Inheritance remains correct for true is-a relationships where substitutability holds and for framework contracts like `Exception` or `TestCase`. The mature answer is: inherit for polymorphic substitution, compose for capabilities.
+
+**Q: What is the fragile base class problem?**
+It is the situation where a seemingly safe change to a base class breaks subclasses because they depended on details of how the base was implemented, not just on its interface. A classic example is a base `Collection.add_all()` that calls `self.add()` for each item; a subclass overriding `add()` to count items double-counts if the base later changes `add_all()` to insert directly, or vice versa. Python's built-ins show it concretely: `list.extend` does not call an overridden `append`. Mitigations are documenting which methods are hooks, using template methods with explicit abstract steps, marking classes `final` in typed code, and preferring composition so the outer object depends only on the inner one's public interface.
+
+**Q: What is a mixin and how does it differ from a base class or an interface?**
+A mixin is a class that provides one reusable capability, such as `to_json()` or `__repr__`, meant to be combined with other classes through multiple inheritance rather than instantiated or used as a primary parent. Unlike a base class it does not define what the object is, and unlike an interface it carries an implementation. Good mixins are stateless or document the attributes they expect, avoid `__init__`, and do not call each other, so their position in the MRO does not matter. Django's `LoginRequiredMixin` and Python's `socketserver.ThreadingMixIn` are the canonical examples; the alternative when a mixin starts needing state is to turn it into a composed helper object.
+
+## Dunder methods & operator overloading
+
+Python's syntax is a thin layer over **dunder methods** (double-underscore, also called magic or special methods). `a + b` calls `a.__add__(b)`, `len(x)` calls `x.__len__()`, `for item in x` calls `x.__iter__()`. Implementing them makes your classes feel like built-in types: printable, comparable, iterable, usable with `in`, `with` and `[]`. This is how `pathlib.Path` supports `/`, and how `Decimal` supports arithmetic.
+
+### Representation
+
+```python
+class Money:
+    def __init__(self, amount, currency="USD"):
+        self.amount, self.currency = round(amount, 2), currency
+    def __repr__(self):                      # unambiguous, for developers
+        return f"Money({self.amount!r}, {self.currency!r})"
+    def __str__(self):                       # readable, for users
+        return f"{self.amount:,.2f} {self.currency}"
+    def __format__(self, spec):              # f"{m:>12}" support
+        return format(str(self), spec)
+
+m = Money(1118, "USD")
+print(repr(m), str(m), f"[{m:>14}]")
+```
+
+`repr` should ideally be valid code that recreates the object; `str` falls back to `repr` if undefined. Containers always use `repr` for their items, which is why a list of `Money` shows the constructor form.
+
+### Comparison and hashing
+
+```python
+from functools import total_ordering
+
+@total_ordering
+class Money:
+    ...
+    def __eq__(self, other):
+        if not isinstance(other, Money): return NotImplemented
+        return (self.amount, self.currency) == (other.amount, other.currency)
+    def __lt__(self, other):
+        if not isinstance(other, Money) or other.currency != self.currency: return NotImplemented
+        return self.amount < other.amount
+    def __hash__(self):
+        return hash((self.amount, self.currency))
+```
+
+Return `NotImplemented` (not `False`) for unsupported types so Python can try the reflected operation on the other operand. Defining `__eq__` sets `__hash__` to `None` automatically, making instances unhashable, so define `__hash__` on the same fields whenever objects are immutable and you want them in sets or as dict keys. `@total_ordering` fills in `__le__`, `__gt__`, `__ge__` from `__eq__` and one ordering method.
+
+### Arithmetic operators
+
+| Expression | Method | Reflected | In-place |
+|---|---|---|---|
+| `a + b` | `__add__` | `__radd__` | `__iadd__` |
+| `a - b` | `__sub__` | `__rsub__` | `__isub__` |
+| `a * b` | `__mul__` | `__rmul__` | `__imul__` |
+| `a / b` | `__truediv__` | `__rtruediv__` | `__itruediv__` |
+| `a // b` | `__floordiv__` | | |
+| `a % b` | `__mod__` | | |
+| `a @ b` | `__matmul__` | | |
+| `-a`, `abs(a)` | `__neg__`, `__abs__` | | |
+
+```python
+def __add__(self, other):
+    if not isinstance(other, Money) or other.currency != self.currency: return NotImplemented
+    return Money(self.amount + other.amount, self.currency)
+def __mul__(self, factor):
+    if not isinstance(factor, (int, float)): return NotImplemented
+    return Money(self.amount * factor, self.currency)
+__rmul__ = __mul__                      # so 3 * money works too
+```
+
+When `3 * m` runs, `int.__mul__` returns `NotImplemented`, so Python tries `m.__rmul__(3)`. `sum(list_of_money)` starts with `0 + Money`, which needs `__radd__` to accept `0`; a common idiom is `def __radd__(self, other): return self if other == 0 else self.__add__(other)`.
+
+### Container protocol
+
+```python
+class RateMatrix:
+    def __init__(self, rows): self._rows = list(rows)          # [(coverage, rate), ...]
+    def __len__(self): return len(self._rows)
+    def __getitem__(self, i): return self._rows[i]             # enables indexing, slicing and iteration
+    def __contains__(self, coverage): return any(c == coverage for c, _ in self._rows)
+    def __iter__(self): return iter(self._rows)
+    def __reversed__(self): return reversed(self._rows)
+```
+
+`__getitem__` alone makes an object iterable (Python tries indices 0, 1, 2… until `IndexError`), but define `__iter__` for clarity and speed. `__bool__` decides truthiness; without it, `__len__` is used, so an empty matrix is falsy.
+
+### Callables, context managers and attribute access
+
+```python
+class Formatter:
+    def __init__(self, spec): self.spec = spec
+    def __call__(self, value): return format(value, self.spec)   # instance behaves like a function
+
+class Timer:
+    def __enter__(self):
+        import time; self.start = time.perf_counter(); return self
+    def __exit__(self, exc_type, exc, tb):
+        import time; self.elapsed = time.perf_counter() - self.start
+        return False                                              # do not swallow exceptions
+
+with Timer() as t:
+    sum(range(10**5))
+print(round(t.elapsed, 4))
+```
+
+`__getattr__` is called only when normal lookup fails (good for delegation); `__getattribute__` is called for every access (rarely needed, easy to recurse). `__setattr__` and `__delattr__` intercept assignment, and `__slots__` replaces the per-instance `__dict__` with fixed slots, saving memory and blocking typos.
+
+### The full picture
+
+Other useful hooks: `__enter__`/`__exit__` (with), `__iter__`/`__next__` (iterators), `__index__` (use as list index), `__round__`, `__int__`, `__float__`, `__copy__`/`__deepcopy__`, `__getstate__`/`__setstate__` (pickling), `__class_getitem__` (`Matrix[int]`), `__init_subclass__` (hook when subclassed), `__set_name__` (descriptors).
+
+> **Warning:** Overload operators only when the meaning is obvious to a reader. `Money + Money` is clear; `Report + Report` is not (append pages? merge data?). `pathlib` chose `/` for joining because paths already look that way. When in doubt, write a named method.
+
+### Try It Yourself
+
+```python
+from functools import total_ordering
+
+@total_ordering
+class Money:
+    __slots__ = ("amount", "currency")
+    def __init__(self, amount, currency="USD"):
+        object.__setattr__(self, "amount", round(float(amount), 2))
+        object.__setattr__(self, "currency", currency)
+    def __setattr__(self, name, value):
+        raise AttributeError("Money is immutable")
+    def __repr__(self): return f"Money({self.amount!r}, {self.currency!r})"
+    def __str__(self): return f"{self.amount:,.2f} {self.currency}"
+    def __format__(self, spec): return format(str(self), spec)
+    def _check(self, other):
+        return isinstance(other, Money) and other.currency == self.currency
+    def __eq__(self, other):
+        return (self.amount, self.currency) == (other.amount, other.currency) if isinstance(other, Money) else NotImplemented
+    def __lt__(self, other):
+        return self.amount < other.amount if self._check(other) else NotImplemented
+    def __hash__(self): return hash((self.amount, self.currency))
+    def __add__(self, other):
+        return Money(self.amount + other.amount, self.currency) if self._check(other) else NotImplemented
+    def __radd__(self, other):                       # lets sum() start from 0
+        return self if other == 0 else NotImplemented
+    def __mul__(self, k):
+        return Money(self.amount * k, self.currency) if isinstance(k, (int, float)) else NotImplemented
+    __rmul__ = __mul__
+    def __neg__(self): return Money(-self.amount, self.currency)
+    def __bool__(self): return self.amount != 0
+
+class RateMatrix:
+    def __init__(self, rows): self._rows = sorted(rows)
+    def __len__(self): return len(self._rows)
+    def __getitem__(self, i): return self._rows[i]
+    def __contains__(self, coverage): return any(c == coverage for c, _ in self._rows)
+    def __call__(self, coverage):                    # matrix(amount) -> premium for that bracket
+        for limit, rate in self._rows:
+            if coverage <= limit: return rate
+        raise ValueError("coverage exceeds matrix")
+
+premiums = [Money(575), Money(1118), Money(1830)]
+print(sum(premiums), max(premiums), sorted(premiums, reverse=True)[0])
+print(f"{3 * Money(100):>16}|", -Money(5), bool(Money(0)))
+print(Money(575) == Money(575.00), len({Money(1), Money(1.0), Money(2)}))
+try:
+    Money(1) + 5
+except TypeError as e:
+    print("TypeError:", e)
+try:
+    Money(1).amount = 2
+except AttributeError as e:
+    print("AttributeError:", e)
+
+matrix = RateMatrix([(500_000, Money(1830)), (100_000, Money(575)), (250_000, Money(1118))])
+print(len(matrix), matrix[0], 250_000 in matrix, matrix(180_000))
+for limit, rate in matrix:
+    print(f"up to {limit:>9,}: {rate}")
+```
+
+### Quiz
+
+1. `3 * money` works because…
+- [ ] `int.__mul__` understands Money
+- [x] `int.__mul__` returns `NotImplemented`, so Python calls `money.__rmul__(3)`
+- [ ] Python swaps operands automatically for all types
+> Reflected methods are tried when the left operand declines.
+
+2. Defining `__eq__` without `__hash__` makes instances…
+- [x] unhashable (`__hash__` becomes `None`)
+- [ ] hashable by id
+- [ ] hashable by `__eq__`
+> Equal objects must hash equally, so Python disables the default identity hash.
+
+3. Which method lets an object be used in a `with` statement?
+- [ ] `__call__`
+- [x] `__enter__` and `__exit__`
+- [ ] `__iter__`
+> The context manager protocol; `__exit__` returning `True` suppresses the exception.
+
+4. What should an operator method return for an unsupported operand type?
+- [ ] `None`
+- [ ] `False`
+- [x] `NotImplemented`
+> Returning `NotImplemented` lets Python try the other operand and finally raise `TypeError`.
+
+### Exercises
+
+1. **Vector** — Implement `Vector(x, y)` with `+`, `-`, scalar `*` (both sides), `abs()`, `==` and a readable `repr`.
+<details><summary>Solution</summary>
+
+```python
+import math
+class Vector:
+    def __init__(self, x, y): self.x, self.y = x, y
+    def __repr__(self): return f"Vector({self.x}, {self.y})"
+    def __eq__(self, o): return isinstance(o, Vector) and (self.x, self.y) == (o.x, o.y)
+    def __add__(self, o): return Vector(self.x + o.x, self.y + o.y)
+    def __sub__(self, o): return Vector(self.x - o.x, self.y - o.y)
+    def __mul__(self, k): return Vector(self.x * k, self.y * k) if isinstance(k, (int, float)) else NotImplemented
+    __rmul__ = __mul__
+    def __abs__(self): return math.hypot(self.x, self.y)
+print(2 * Vector(3, 4), abs(Vector(3, 4)), Vector(1, 1) + Vector(2, 2) == Vector(3, 3))
+```
+
+</details>
+
+2. **Page range** — Write `Pages(start, end)` supporting `len`, iteration, `in`, and `str` giving "12-20".
+<details><summary>Solution</summary>
+
+```python
+class Pages:
+    def __init__(self, start, end): self.start, self.end = start, end
+    def __len__(self): return self.end - self.start + 1
+    def __iter__(self): return iter(range(self.start, self.end + 1))
+    def __contains__(self, p): return self.start <= p <= self.end
+    def __str__(self): return f"{self.start}-{self.end}"
+p = Pages(12, 20); print(len(p), 15 in p, list(p)[:3], str(p))
+```
+
+</details>
+
+3. **Temporary directory context** — Write a context manager class `Workdir` that creates a temp directory on enter and removes it on exit, even when an exception occurs.
+<details><summary>Solution</summary>
+
+```python
+import tempfile, shutil, os
+class Workdir:
+    def __enter__(self):
+        self.path = tempfile.mkdtemp(); return self.path
+    def __exit__(self, et, ev, tb):
+        shutil.rmtree(self.path, ignore_errors=True); return False
+with Workdir() as d:
+    open(os.path.join(d, "x.txt"), "w").write("hi"); print(os.listdir(d))
+print(os.path.exists(d))
+```
+
+</details>
+
+### Interview Questions
+
+**Q: What is the difference between `__str__` and `__repr__`, and which should you always implement?**
+`__repr__` is the unambiguous developer representation, used by the REPL, debuggers, logging and containers, and ideally looks like the constructor call that recreates the object. `__str__` is the user-facing text used by `print` and `str()`, and falls back to `__repr__` when missing. Always implement `__repr__` because it is what you see when something goes wrong in a log or a list of objects; add `__str__` only when a friendlier form is genuinely different, such as `1,118.00 USD` versus `Money(1118.0, 'USD')`. A good `__repr__` includes the fields that define identity and uses `!r` so strings are quoted.
+
+**Q: How does Python evaluate `a + b` when the types differ?**
+It first calls `type(a).__add__(a, b)`; if that returns `NotImplemented`, it calls `type(b).__radd__(b, a)`; if that also returns `NotImplemented`, it raises `TypeError`. One exception: if `b` is an instance of a subclass of `type(a)` and overrides the reflected method, the reflected method is tried first, so subclasses can refine behaviour. This is why operator methods should return `NotImplemented` rather than raising for unknown types, and why `sum()` over custom objects needs `__radd__` to accept the integer 0 start value. In-place operators like `+=` try `__iadd__` first and fall back to `__add__` followed by assignment.
+
+**Q: When would you use `__slots__`, and what are the trade-offs?**
+`__slots__` declares a fixed set of attribute names so instances store them in a compact array instead of a per-instance `__dict__`, cutting memory per object by roughly half and making attribute access slightly faster. It suits classes instantiated in the millions, such as a row object for every record in a production log, and it also prevents typo attributes from being silently created. Costs: no dynamic attributes, no `__dict__` unless you add it to slots, `__weakref__` must be listed to allow weak references, multiple inheritance with two slotted bases fails, and pickling and some ORM or mocking libraries need care. Dataclasses support `slots=True` since Python 3.10, which gives the benefit with less boilerplate.
+
+## Class methods, static methods & class attributes
+
+Not everything belongs to an instance. Some data is shared by every object of a class (a counter, a registry, a default setting) and some behaviour needs the class rather than an object (alternative constructors, validators, helpers). Python provides **class attributes**, `@classmethod` and `@staticmethod` for these, and understanding how they differ from instance attributes and methods is a standard interview check.
+
+### Class attributes vs instance attributes
+
+```python
+class Document:
+    count = 0                       # class attribute: one copy, shared
+    default_font = "Calibri"
+
+    def __init__(self, title):
+        self.title = title          # instance attribute: one per object
+        Document.count += 1
+
+a, b = Document("SOP"), Document("Handbook")
+print(Document.count, a.count, b.count)     # 2 2 2
+a.default_font = "Arial"                     # creates an INSTANCE attribute that shadows the class one
+print(a.default_font, b.default_font)        # Arial Calibri
+```
+
+Reading `a.count` looks in `a.__dict__` first, then `type(a).__dict__`, then the MRO. Writing `a.x = …` always writes to the instance, which is why `self.count += 1` would silently create an instance copy instead of updating the shared value; use `Document.count` or `type(self).count`.
+
+### The mutable default trap
+
+```python
+class Report:
+    sections = []                   # shared by every report!
+    def add(self, s): self.sections.append(s)
+
+r1, r2 = Report(), Report()
+r1.add("Summary")
+print(r2.sections)                  # ['Summary']
+```
+
+Mutable class attributes are shared state. Initialise per-instance containers in `__init__`. The same trap applies to mutable default arguments (`def __init__(self, sections=[])`).
+
+### Instance methods
+
+A normal method receives the instance as `self`. Accessing it through the class gives the plain function; through an instance gives a **bound method** with `self` filled in:
+
+```python
+Document.rename            # <function Document.rename>
+a.rename                   # <bound method Document.rename of Document('SOP')>
+a.rename("New") == Document.rename(a, "New")
+```
+
+### @classmethod
+
+A class method receives the class as `cls` instead of an instance. Its main jobs are **alternative constructors** and access to class-level state, and it respects subclasses because `cls` is whatever class the call went through:
+
+```python
+class Document:
+    def __init__(self, title, pages): self.title, self.pages = title, pages
+
+    @classmethod
+    def from_dict(cls, d):
+        return cls(d["title"], int(d.get("pages", 0)))
+
+    @classmethod
+    def from_json(cls, text):
+        import json
+        return cls.from_dict(json.loads(text))
+
+class Handbook(Document): pass
+
+h = Handbook.from_json('{"title": "Employee Handbook", "pages": 767}')
+print(type(h).__name__)     # Handbook, not Document
+```
+
+`dict.fromkeys`, `datetime.fromtimestamp`, `int.from_bytes` and `Path.home()` are standard-library class methods. Class methods also make good registries:
+
+```python
+class Exporter:
+    _registry = {}
+    @classmethod
+    def register(cls, name):
+        def deco(sub): cls._registry[name] = sub; return sub
+        return deco
+    @classmethod
+    def create(cls, name, *args): return cls._registry[name](*args)
+
+@Exporter.register("pdf")
+class PdfExporter(Exporter): ...
+```
+
+### @staticmethod
+
+A static method receives neither `self` nor `cls`. It is a plain function stored in the class namespace because it belongs there conceptually:
+
+```python
+class Document:
+    @staticmethod
+    def is_valid_title(title):
+        return bool(title) and len(title) <= 120 and title == title.strip()
+```
+
+Call it as `Document.is_valid_title(t)` or `doc.is_valid_title(t)`. If a static method starts needing the class, convert it to a class method; if it needs nothing from the class at all, consider making it a module-level function, which is more idiomatic in Python than in Java.
+
+| Kind | First parameter | Can access instance state | Can access class state | Typical use |
+|---|---|---|---|---|
+| instance method | `self` | yes | yes (via `type(self)`) | behaviour of one object |
+| `@classmethod` | `cls` | no | yes | alternative constructors, registries, subclass-aware factories |
+| `@staticmethod` | none | no | no (except by name) | validators, pure helpers grouped with the class |
+
+### Class-level configuration and `__init_subclass__`
+
+Class attributes are a clean way to configure subclasses declaratively, and `__init_subclass__` runs when a subclass is defined:
+
+```python
+class Exporter:
+    extension = None
+    def __init_subclass__(cls, **kw):
+        super().__init_subclass__(**kw)
+        if cls.extension is None:
+            raise TypeError(f"{cls.__name__} must set extension")
+
+class PdfExporter(Exporter):
+    extension = "pdf"
+```
+
+Django models and ORMs use the same idea: fields declared as class attributes, collected by machinery at class-creation time.
+
+### Properties and class attributes together
+
+A `@property` on the class combined with a class attribute default is the standard way to give a computed or validated attribute a fallback:
+
+```python
+class Page:
+    dpi = 300
+    @property
+    def pixel_width(self): return int(self.width_inches * self.dpi)
+```
+
+Change `Page.dpi = 150` and every page recomputes; set `page.dpi = 600` and only that page changes.
+
+> **Tip:** When a method does not use `self`, linters (pylint `no-self-use`, Ruff `PLR6301`) will flag it. That is your prompt to decide between `@staticmethod`, `@classmethod` or a module function. Interviewers like hearing that you make that choice deliberately.
+
+### Try It Yourself
+
+```python
+import json
+
+class Document:
+    count = 0                       # class attribute shared by all documents
+    default_font = "Calibri"
+    _registry = {}
+
+    def __init__(self, title, pages=0):
+        self.title, self.pages = title, pages
+        self.sections = []          # per-instance container, NOT a class attribute
+        type(self).count += 1       # updates the shared counter, works for subclasses too
+
+    def __repr__(self): return f"{type(self).__name__}({self.title!r}, {self.pages})"
+
+    @classmethod
+    def from_dict(cls, d): return cls(d["title"], int(d.get("pages", 0)))
+
+    @classmethod
+    def from_json(cls, text): return cls.from_dict(json.loads(text))
+
+    @classmethod
+    def register(cls, kind):
+        def deco(sub): cls._registry[kind] = sub; return sub
+        return deco
+
+    @classmethod
+    def create(cls, kind, *a, **kw): return cls._registry[kind](*a, **kw)
+
+    @staticmethod
+    def is_valid_title(t): return bool(t) and len(t) <= 120 and t == t.strip()
+
+    def __init_subclass__(cls, **kw):
+        super().__init_subclass__(**kw)
+        cls.count = 0               # each subclass gets its own counter
+
+@Document.register("handbook")
+class Handbook(Document):
+    default_font = "Georgia"
+
+@Document.register("sop")
+class SOP(Document): pass
+
+d = Document.from_json('{"title": "Rate Matrix Guide", "pages": 12}')
+h = Handbook.from_dict({"title": "Employee Handbook", "pages": 767})
+s = Document.create("sop", "Escrow SOP", 9)
+print(d, h, s)
+print("counts:", Document.count, Handbook.count, SOP.count)
+print("fonts:", d.default_font, h.default_font)
+h.default_font = "Arial"                        # shadows on this instance only
+print("after shadow:", h.default_font, Handbook.default_font, "instance dict:", h.__dict__.keys())
+d.sections.append("Intro"); print("sections isolated:", d.sections, s.sections)
+print("valid titles:", Document.is_valid_title("SOP"), d.is_valid_title(" SOP "))
+print(Document.from_dict, "|", d.from_dict)     # both bound to the class
+print(Document.is_valid_title, "|", d.is_valid_title)   # plain function either way
+```
+
+### Quiz
+
+1. `self.count += 1` inside a method, where `count` is a class attribute, does what?
+- [ ] Increments the shared class attribute
+- [x] Creates an instance attribute `count` that shadows the class attribute
+- [ ] Raises `AttributeError`
+> Augmented assignment reads from the class but writes to the instance; use `type(self).count += 1`.
+
+2. Why prefer `cls(...)` over `Document(...)` inside a class method constructor?
+- [x] So subclasses calling the method get instances of the subclass
+- [ ] `Document(...)` is a syntax error there
+- [ ] `cls` is faster
+> `Handbook.from_json(...)` should return a `Handbook`.
+
+3. A method that uses neither `self` nor `cls` is best declared as…
+- [ ] an instance method
+- [x] a `@staticmethod` (or a module-level function)
+- [ ] a `@property`
+> Static methods signal that no instance or class state is involved.
+
+4. Which class attribute definition is a bug waiting to happen?
+- [ ] `dpi = 300`
+- [x] `sections = []`
+- [ ] `default_font = "Calibri"`
+> A mutable class attribute is shared by every instance.
+
+### Exercises
+
+1. **Alternative constructor** — Add `Temperature.from_fahrenheit(f)` to a class that stores Celsius, and verify it works for a subclass.
+<details><summary>Solution</summary>
+
+```python
+class Temperature:
+    def __init__(self, c): self.c = c
+    @classmethod
+    def from_fahrenheit(cls, f): return cls((f - 32) * 5 / 9)
+class Reading(Temperature): pass
+r = Reading.from_fahrenheit(212); print(type(r).__name__, round(r.c, 1))
+```
+
+</details>
+
+2. **Instance counter with reset** — Track how many `Ticket` objects exist, with a class method `reset()` and a static method `is_valid_id(s)` that checks the pattern `TCK-` plus digits.
+<details><summary>Solution</summary>
+
+```python
+import re
+class Ticket:
+    total = 0
+    def __init__(self, tid):
+        if not self.is_valid_id(tid): raise ValueError(tid)
+        self.tid = tid; Ticket.total += 1
+    @classmethod
+    def reset(cls): cls.total = 0
+    @staticmethod
+    def is_valid_id(s): return re.fullmatch(r"TCK-\d+", s) is not None
+Ticket("TCK-1"); Ticket("TCK-2"); print(Ticket.total); Ticket.reset(); print(Ticket.total)
+```
+
+</details>
+
+3. **Plugin registry** — Use `__init_subclass__` to register every subclass of `Plugin` under its `name` attribute automatically.
+<details><summary>Solution</summary>
+
+```python
+class Plugin:
+    registry = {}
+    name = None
+    def __init_subclass__(cls, **kw):
+        super().__init_subclass__(**kw)
+        if cls.name: Plugin.registry[cls.name] = cls
+class Pdf(Plugin): name = "pdf"
+class Epub(Plugin): name = "epub"
+print(sorted(Plugin.registry))
+```
+
+</details>
+
+### Interview Questions
+
+**Q: Explain the difference between instance methods, class methods and static methods.**
+An instance method receives the object as `self` and works with per-object state. A class method, marked `@classmethod`, receives the class as `cls`; it is used for alternative constructors (`Document.from_json`), factories that must return the right subclass, and access to class-level state such as registries or counters. A static method, marked `@staticmethod`, receives nothing implicit and is a plain function namespaced under the class for discoverability, typical for validators and conversions. The decision rule is what the code needs: instance state, class identity, or neither. In Python the last category is often better as a module-level function, unlike Java where everything must live in a class.
+
+**Q: How does attribute lookup work for `obj.x` and why does `self.count += 1` behave unexpectedly?**
+Lookup checks data descriptors on the type first (such as properties), then the instance `__dict__`, then non-data descriptors and plain attributes on the class and its MRO, and finally `__getattr__` if defined. Assignment through `obj.x = v` writes to the instance `__dict__` (unless a data descriptor or `__setattr__` intercepts). `self.count += 1` therefore reads the class value through the lookup chain, adds one, and stores the result on the instance, leaving the class attribute unchanged and shadowed for that object only. To update shared state you write `type(self).count += 1` or `Document.count += 1`, and mutable class attributes such as lists are shared unless replaced per instance in `__init__`.
+
+**Q: When would you use `__init_subclass__` instead of a metaclass?**
+`__init_subclass__` (Python 3.6+) is a hook on the base class that runs whenever a subclass is created, with the new class as `cls` and any keyword arguments from the class statement. It covers most reasons people once wrote metaclasses: validating that subclasses define required attributes, registering plugins automatically, or injecting defaults. It is simpler, composes with other bases without metaclass conflicts, and is easier to read. A metaclass is still needed when you must change how the class object itself is built, such as customising the namespace before the body executes (`__prepare__`), altering `isinstance` behaviour, or making classes callable in unusual ways, which is what `abc.ABCMeta` and `enum.EnumMeta` do.
+
+## OOP in JavaScript (prototypes, classes, this)
+
+JavaScript is object-oriented, but not class-based at heart: objects inherit directly from other objects through a **prototype chain**, and the `class` keyword added in ES2015 is syntax over that mechanism. Interviewers for full-stack roles ask about prototypes, the meaning of `this`, and how JavaScript's model differs from Python's. This chapter explains the model with JavaScript in the text and, because this course runs Python, a Python simulation of the prototype chain in the Try It block.
+
+### Objects and prototypes
+
+Every object has a hidden link to another object, its prototype. Property lookup walks that chain until it finds the name or reaches `null`:
+
+```js
+const document = { title: "Handbook", describe() { return `${this.title}, ${this.pages} pages`; } };
+const handbook = Object.create(document);   // handbook's prototype is document
+handbook.pages = 767;
+console.log(handbook.describe());            // "Handbook, 767 pages"
+console.log(Object.getPrototypeOf(handbook) === document);   // true
+console.log(handbook.hasOwnProperty("title"));                // false: inherited
+```
+
+`handbook` has one own property (`pages`); `title` and `describe` are found on `document`. Assigning `handbook.title = "SOP"` creates an own property that shadows the prototype's, exactly like a Python instance attribute shadowing a class attribute.
+
+### Constructor functions (pre-2015)
+
+```js
+function Document(title, pages) { this.title = title; this.pages = pages; }
+Document.prototype.describe = function () { return `${this.title}, ${this.pages} pages`; };
+const d = new Document("SOP", 12);
+```
+
+`new` creates an empty object, sets its prototype to `Document.prototype`, runs the function with `this` bound to that object, and returns it. Methods live on `Document.prototype`, shared by all instances, which is why `d.describe === Document.prototype.describe`.
+
+### ES2015 classes
+
+```js
+class Document {
+  #status = "draft";                       // private field (ES2022)
+  static count = 0;                        // class (static) field
+  constructor(title, pages = 0) { this.title = title; this.pages = pages; Document.count++; }
+  describe() { return `${this.title}, ${this.pages} pages`; }
+  get isLong() { return this.pages > 100; }
+  set status(v) { if (!["draft", "approved"].includes(v)) throw new Error(v); this.#status = v; }
+  get status() { return this.#status; }
+  static fromJSON(text) { const o = JSON.parse(text); return new this(o.title, o.pages); }
+}
+class Handbook extends Document {
+  constructor(title, pages) { super(title, pages); this.kind = "handbook"; }
+  describe() { return "Handbook: " + super.describe(); }
+}
+```
+
+Under the hood this is the constructor-function pattern: `Handbook.prototype` inherits from `Document.prototype`, and `new this(...)` in a static method creates a subclass instance when called as `Handbook.fromJSON(...)`. Private fields `#status` are genuinely inaccessible from outside (unlike Python's `_name` convention). Classes are not hoisted and run in strict mode.
+
+### this
+
+`this` is not the instance the method was defined on; it is determined by *how the function is called*:
+
+| Call form | `this` is |
+|---|---|
+| `obj.method()` | `obj` |
+| `fn()` | `undefined` in strict mode (`window` in sloppy mode) |
+| `new Fn()` | the new object |
+| `fn.call(x)`, `fn.apply(x)`, `fn.bind(x)()` | `x` |
+| arrow function | inherited from the enclosing scope (lexical) |
+
+The classic bug:
+
+```js
+const d = new Document("SOP", 12);
+const f = d.describe;
+f();                                  // TypeError: cannot read 'title' of undefined
+setTimeout(d.describe, 0);            // same problem: the method is detached
+setTimeout(() => d.describe(), 0);    // fine: arrow keeps the call form obj.method()
+const bound = d.describe.bind(d);     // or bind once
+```
+
+Arrow functions do not have their own `this`, which makes them right for callbacks inside methods and wrong for methods themselves (an arrow method on the prototype would capture the module's `this`). Class field arrows (`handleClick = () => {...}`) create a bound copy per instance, which is why React components used them.
+
+### Comparing with Python
+
+| Concept | Python | JavaScript |
+|---|---|---|
+| Inheritance mechanism | classes with MRO (C3) | prototype chain, single parent per object |
+| Instance reference | explicit `self` parameter | implicit `this`, decided at call time |
+| Private members | `_name` convention, `__name` mangling | `#name` real privacy |
+| Class attribute | `count = 0` in class body | `static count = 0` |
+| Alternative constructor | `@classmethod` | `static` method using `new this()` |
+| Dunder methods | `__add__`, `__len__`, `__iter__` | `Symbol.iterator`, `toString`, `valueOf`; no operator overloading |
+| Multiple inheritance | supported | not supported; use mixins via `Object.assign` or class factories |
+| Bound methods | created automatically on access | must bind manually or use arrows |
+
+JavaScript has no operator overloading and no multiple inheritance; mixins are implemented by copying methods (`Object.assign(Target.prototype, mixin)`) or by functions returning classes (`const Serializable = Base => class extends Base { … }`).
+
+### Duck typing and structural interfaces
+
+JavaScript is dynamically typed like Python and uses duck typing everywhere: anything with a `then` method is treated as a promise, anything with `Symbol.iterator` works in `for…of`. TypeScript adds structural interfaces that resemble Python's `Protocol`.
+
+> **Interview note:** The three-part JavaScript OOP question is almost always: what is the prototype chain, what does `class` compile to, and what is `this` in a detached method. Answer with `Object.create`, "syntactic sugar over prototypes with real differences: strict mode, no hoisting, `#private`", and the call-site table.
+
+### Try It Yourself
+
+```python
+# A tiny simulation of JavaScript's prototype chain and `this` binding, in Python.
+# JsObject.get walks the chain like JS property lookup; call() shows why `this` depends on the call site.
+
+class JsObject:
+    def __init__(self, proto=None, **own):
+        self.proto = proto                  # like [[Prototype]]
+        self.own = dict(own)                # own properties
+
+    def get(self, name):
+        obj = self
+        while obj is not None:
+            if name in obj.own:
+                return obj.own[name]
+            obj = obj.proto
+        return None                         # JS returns undefined
+
+    def set(self, name, value):             # assignment always creates an OWN property (shadowing)
+        self.own[name] = value
+
+    def has_own(self, name): return name in self.own
+
+    def call(self, name, *args):            # obj.method(...) : `this` is obj
+        fn = self.get(name)
+        return fn(self, *args)
+
+def describe(this):
+    return f"{this.get('title')}, {this.get('pages')} pages"
+
+# Object.create(document) in JS
+document = JsObject(title="Handbook", describe=describe)
+handbook = JsObject(proto=document, pages=767)
+print(handbook.call("describe"))                       # "Handbook, 767 pages"
+print("own title?", handbook.has_own("title"), "| own pages?", handbook.has_own("pages"))
+handbook.set("title", "SOP")                           # shadows the prototype's title
+print(handbook.call("describe"), "| prototype still:", document.get("title"))
+
+# class Document { constructor(...) {...} describe() {...} }  ->  methods live on Document.prototype
+Document_prototype = JsObject(describe=describe)
+def new_Document(title, pages):                        # what `new Document(title, pages)` does
+    obj = JsObject(proto=Document_prototype)
+    obj.set("title", title); obj.set("pages", pages)
+    return obj
+
+# class Handbook extends Document: Handbook.prototype's prototype is Document.prototype
+Handbook_prototype = JsObject(proto=Document_prototype,
+                              describe=lambda this: "Handbook: " + describe(this))
+def new_Handbook(title, pages):
+    obj = JsObject(proto=Handbook_prototype)
+    obj.set("title", title); obj.set("pages", pages)
+    return obj
+
+d, h = new_Document("Rate Guide", 12), new_Handbook("Employee Handbook", 767)
+print(d.call("describe")); print(h.call("describe"))
+print("shared method:", d.get("describe") is Document_prototype.get("describe"))
+
+# The detached-method bug: const f = d.describe; f()  ->  `this` is undefined
+f = d.get("describe")
+try:
+    f(None)
+except AttributeError:
+    print("TypeError-like: cannot read 'title' of undefined")
+bound = lambda *a: f(d, *a)                            # d.describe.bind(d)
+print("bound:", bound())
+```
+
+### Quiz
+
+1. In JavaScript, where are methods defined with `class` syntax stored?
+- [ ] On each instance
+- [x] On the class's `prototype` object, shared by all instances
+- [ ] In a hidden static table
+> `d.describe === Document.prototype.describe` is `true`.
+
+2. `const f = obj.method; f();` fails because…
+- [ ] functions cannot be assigned to variables
+- [x] `this` is determined by the call site, and a plain call has `this` undefined in strict mode
+- [ ] `obj` was garbage collected
+> Use `obj.method()`, `bind`, or an arrow wrapper.
+
+3. Arrow functions differ from regular functions in that they…
+- [x] have no own `this` and take it from the enclosing scope
+- [ ] cannot take arguments
+- [ ] always return objects
+> That is why arrows suit callbacks inside methods but not prototype methods.
+
+4. Which is true of JavaScript compared with Python?
+- [ ] JavaScript supports multiple inheritance with `extends A, B`
+- [x] JavaScript `#fields` are truly private, while Python's `__name` is only name-mangled
+- [ ] JavaScript supports operator overloading via `Symbol.add`
+> Private fields cannot be read outside the class body; Python's mangling is a convention.
+
+### Exercises
+
+1. **Translate to JS** — Convert this Python to an ES2015 class with a static alternative constructor: `class Money: def __init__(self, amount, cur="USD") ...; @classmethod def from_cents(cls, c) ...`.
+<details><summary>Solution</summary>
+
+```js
+class Money {
+  constructor(amount, cur = "USD") { this.amount = amount; this.cur = cur; }
+  static fromCents(c) { return new this(c / 100); }
+  toString() { return `${this.amount.toFixed(2)} ${this.cur}`; }
+}
+console.log(String(Money.fromCents(111800)));
+```
+
+</details>
+
+2. **Fix `this`** — The following loses `this`: `class Timer { start() { setInterval(function () { this.tick++; }, 1000); } }`. Rewrite it two ways.
+<details><summary>Solution</summary>
+
+```js
+class Timer {
+  tick = 0;
+  start() { setInterval(() => { this.tick++; }, 1000); }           // arrow: lexical this
+}
+class Timer2 {
+  tick = 0;
+  start() { setInterval(function () { this.tick++; }.bind(this), 1000); }   // explicit bind
+}
+```
+
+</details>
+
+3. **Prototype simulation** — Extend the Python `JsObject` with a `get_prototype_of` method and an `instance_of(proto)` method that walks the chain like `instanceof`.
+<details><summary>Solution</summary>
+
+```python
+class JsObject:
+    def __init__(self, proto=None, **own): self.proto, self.own = proto, dict(own)
+    def get_prototype_of(self): return self.proto
+    def instance_of(self, proto):
+        p = self.proto
+        while p is not None:
+            if p is proto: return True
+            p = p.proto
+        return False
+base = JsObject(); sub = JsObject(proto=base); obj = JsObject(proto=sub)
+print(obj.instance_of(base), base.instance_of(obj))
+```
+
+</details>
+
+### Interview Questions
+
+**Q: Explain prototypal inheritance and how `class` relates to it.**
+Every JavaScript object has an internal prototype link; property reads walk that chain until a match or `null`, while writes create own properties that shadow inherited ones. `Object.create(proto)` makes an object with a given prototype, and constructor functions with `new` set the prototype to `Fn.prototype`, where shared methods live. `class` is syntax for that same arrangement: `extends` sets `Sub.prototype`'s prototype to `Base.prototype` and links the constructors, `super()` calls the parent constructor, and static members sit on the constructor object. The real differences are that class bodies are strict mode, class declarations are not hoisted, calling a class without `new` throws, and `#private` fields and `static` blocks have no pre-2015 equivalent.
+
+**Q: What determines the value of `this`, and how do you avoid losing it?**
+`this` is bound at call time by the call form, not by where the function was defined: `obj.m()` binds `obj`, a bare `f()` binds `undefined` in strict mode, `new` binds the new object, and `call`, `apply` and `bind` set it explicitly; arrow functions have no `this` of their own and use the enclosing scope's. You lose it when a method is passed as a callback (`setTimeout(d.describe)`, `arr.map(this.format)`) because it is invoked as a bare function. Fixes are wrapping in an arrow (`() => d.describe()`), binding once in the constructor (`this.describe = this.describe.bind(this)`), or defining the method as a class field arrow. I prefer the arrow wrapper at the call site because it keeps prototype methods shared instead of creating a copy per instance.
+
+**Q: How would you implement a mixin or multiple inheritance in JavaScript?**
+JavaScript objects have a single prototype, so multiple inheritance is emulated. The simplest mixin copies methods onto a prototype with `Object.assign(Document.prototype, Serializable, Printable)`, which works for stateless behaviour but does not cooperate with `super`. The more structured approach is a class factory: `const Serializable = Base => class extends Base { toJSON() { … } }`, applied as `class Handbook extends Serializable(Printable(Document)) {}`, which builds a real chain so `super` calls flow through each mixin. Composition is usually cleaner: hold a serializer object and delegate. I mention that Python solves this with the C3 MRO and cooperative `super()`, which is why the same design is a single `class Handbook(Serializable, Printable, Document)` there.
+
+# LEVEL: Expert
+
+## SOLID principles
+
+**SOLID** is five design principles for object-oriented code, collected by Robert C. Martin, that together make systems easier to change without breaking. Every senior-level OOP interview touches at least one of them, and the strongest answers pair each principle with a violation, the fix, and the cost of over-applying it.
+
+### S: Single Responsibility Principle
+
+A class should have one reason to change. "Responsibility" means a stakeholder or axis of change, not "one method".
+
+```python
+class ReportService:                       # violates SRP: three reasons to change
+    def load_rows(self, path): ...         # storage format changes
+    def compute_totals(self, rows): ...    # business rules change
+    def render_pdf(self, totals): ...      # output format changes
+```
+
+Split along those axes: `RowLoader`, `TotalsCalculator`, `PdfRenderer`, with a thin `ReportService` that coordinates them. Each can now change and be tested alone. Over-applied, SRP produces dozens of one-method classes; the test is whether the pieces change for different reasons, not their size.
+
+### O: Open/Closed Principle
+
+Software entities should be open for extension but closed for modification: add behaviour by adding code, not by editing working code.
+
+```python
+def export(doc, fmt):                      # closed to extension: every new format edits this
+    if fmt == "pdf": ...
+    elif fmt == "docx": ...
+    elif fmt == "epub": ...
+```
+
+```python
+class Exporter(ABC):
+    @abstractmethod
+    def export(self, doc): ...
+
+EXPORTERS = {"pdf": PdfExporter, "docx": DocxExporter}   # add a key, touch nothing else
+def export(doc, fmt): return EXPORTERS[fmt]().export(doc)
+```
+
+Polymorphism, registries and plugins are how OCP is achieved. The cost is indirection; do not build an abstraction until a second variant actually exists.
+
+### L: Liskov Substitution Principle
+
+Subtypes must be usable wherever their base type is expected without the caller knowing. Concretely, an override must not strengthen preconditions, weaken postconditions or throw new exception types.
+
+```python
+class Document:
+    def add_page(self, page): self.pages.append(page)
+
+class ReadOnlyDocument(Document):
+    def add_page(self, page): raise PermissionError    # LSP violation: callers of Document break
+```
+
+The famous example is `Square(Rectangle)`: setting `width` on a square must also change `height`, breaking code that assumes rectangles behave independently. Fixes are to model the concept differently (an immutable `Shape` with `area()`, or a `ReadOnlyView` that does not claim to be a `Document`). Python's `collections.abc` separates `Sequence` from `MutableSequence` for exactly this reason.
+
+### I: Interface Segregation Principle
+
+Clients should not be forced to depend on methods they do not use. Fat interfaces make every implementation carry stubs and every test double huge.
+
+```python
+class Storage(ABC):                         # fat
+    def read(self): ...
+    def write(self, data): ...
+    def list_versions(self): ...
+    def restore(self, version): ...
+
+class Readable(Protocol):                   # segregated
+    def read(self) -> bytes: ...
+class Writable(Protocol):
+    def write(self, data: bytes) -> None: ...
+```
+
+A function that only reads accepts `Readable`; an S3 backend without versioning is no longer forced to raise `NotImplementedError` from four methods. Python's `Protocol` makes segregation cheap because no class has to declare which small interfaces it satisfies.
+
+### D: Dependency Inversion Principle
+
+High-level modules should not depend on low-level modules; both should depend on abstractions. Practically: pass dependencies in, typed by interface, rather than constructing concrete ones inside.
+
+```python
+class ReportService:
+    def __init__(self):
+        self.db = PostgresConnection("prod")     # hard-wired: untestable, unswappable
+
+class ReportService:
+    def __init__(self, repo: RowRepository):     # inverted: any repo, including a fake
+        self.repo = repo
+```
+
+**Dependency injection** is the technique (constructor injection above); DIP is the principle. The composition root, usually `main()`, wires the concrete objects together. The cost is that reading the code no longer tells you which implementation runs; good naming and a single wiring location keep it manageable.
+
+### The principles together
+
+| Principle | Smell it fixes | Tool |
+|---|---|---|
+| SRP | God class, unrelated reasons to change | Split by axis of change |
+| OCP | `if/elif` chains on type | Polymorphism, registries |
+| LSP | Overrides that raise or ignore | Model the real hierarchy, prefer composition |
+| ISP | `NotImplementedError` stubs, huge fakes | Small protocols |
+| DIP | `new` of concrete classes inside logic | Inject abstractions |
+
+> **Interview note:** Interviewers rarely want definitions; they want a story. Prepare one real refactor per principle: "the exporter `if` chain became a registry (OCP), which let the client add EPUB without a deployment of the core".
+
+### Try It Yourself
+
+```python
+from abc import ABC, abstractmethod
+from typing import Protocol
+
+# --- SRP + DIP: the service depends on small abstractions passed in ---
+class RowSource(Protocol):
+    def rows(self) -> list[dict]: ...
+
+class Renderer(ABC):
+    @abstractmethod
+    def render(self, totals: dict) -> str: ...
+
+class ListSource:                        # a fake for tests, or a CSV/DB source in production
+    def __init__(self, rows): self._rows = rows
+    def rows(self): return self._rows
+
+class TotalsCalculator:                  # one reason to change: business rules
+    def totals(self, rows):
+        out = {}
+        for r in rows:
+            out[r["state"]] = out.get(r["state"], 0) + r["files"]
+        return out
+
+class TextRenderer(Renderer):
+    def render(self, totals): return "\n".join(f"{k}: {v}" for k, v in sorted(totals.items()))
+
+class CsvRenderer(Renderer):
+    def render(self, totals): return "state,files\n" + "\n".join(f"{k},{v}" for k, v in sorted(totals.items()))
+
+# --- OCP: new renderers are registered, the service is never edited ---
+RENDERERS: dict[str, type[Renderer]] = {"text": TextRenderer, "csv": CsvRenderer}
+
+class ReportService:
+    def __init__(self, source: RowSource, calc: TotalsCalculator):
+        self.source, self.calc = source, calc
+    def build(self, fmt: str) -> str:
+        return RENDERERS[fmt]().render(self.calc.totals(self.source.rows()))
+
+rows = [{"state": "WY", "files": 124}, {"state": "CO", "files": 310}, {"state": "WY", "files": 6}]
+svc = ReportService(ListSource(rows), TotalsCalculator())
+print(svc.build("text")); print(svc.build("csv"))
+
+class JsonRenderer(Renderer):            # extension without modification
+    def render(self, totals):
+        import json; return json.dumps(totals, sort_keys=True)
+RENDERERS["json"] = JsonRenderer
+print(svc.build("json"))
+
+# --- LSP: a subtype that breaks the contract vs a correct model ---
+class Rectangle:
+    def __init__(self, w, h): self.w, self.h = w, h
+    def area(self): return self.w * self.h
+
+class Square(Rectangle):                 # violates LSP once width and height are set independently
+    def __init__(self, s): super().__init__(s, s)
+    def __setattr__(self, k, v):
+        object.__setattr__(self, "w", v); object.__setattr__(self, "h", v)
+
+def stretch(rect: Rectangle):
+    rect.w = 10; rect.h = 2
+    return rect.area()
+
+print("rectangle:", stretch(Rectangle(3, 3)), "square:", stretch(Square(3)), "<- caller expected 20")
+```
+
+### Quiz
+
+1. A class that loads rows, computes totals and renders a PDF violates…
+- [x] Single Responsibility
+- [ ] Liskov Substitution
+- [ ] Dependency Inversion
+> It has three unrelated reasons to change.
+
+2. Replacing an `if fmt == ...` chain with a registry of exporter classes is an application of…
+- [ ] ISP
+- [x] Open/Closed
+- [ ] SRP
+> New formats are added without modifying the dispatch code.
+
+3. `Square(Rectangle)` is the classic violation of…
+- [ ] OCP
+- [x] LSP
+- [ ] DIP
+> Code written for rectangles produces wrong results when given a square.
+
+4. Dependency inversion means…
+- [ ] Never import other modules
+- [x] Depend on abstractions that are passed in rather than constructing concrete classes inside
+- [ ] Always use a DI framework
+> Constructor injection of a protocol-typed collaborator is the common form.
+
+### Exercises
+
+1. **Segregate** — Split a `Printer` interface with `print()`, `scan()`, `fax()` so a basic printer does not have to stub `scan` and `fax`.
+<details><summary>Solution</summary>
+
+```python
+from typing import Protocol
+class Printer(Protocol):
+    def print(self, doc) -> None: ...
+class Scanner(Protocol):
+    def scan(self) -> bytes: ...
+class BasicPrinter:
+    def print(self, doc): print("printing", doc)
+class MultiFunction:
+    def print(self, doc): print("printing", doc)
+    def scan(self): return b"scan"
+def run(p: Printer): p.print("SOP")
+run(BasicPrinter()); run(MultiFunction())
+```
+
+</details>
+
+2. **Invert a dependency** — Refactor `class Mailer: def __init__(self): self.smtp = smtplib.SMTP("mail")` so it can be unit-tested with a fake.
+<details><summary>Solution</summary>
+
+```python
+from typing import Protocol
+class Transport(Protocol):
+    def send(self, to: str, body: str) -> None: ...
+class Mailer:
+    def __init__(self, transport: Transport): self.transport = transport
+    def notify(self, to, body): self.transport.send(to, body)
+class FakeTransport:
+    def __init__(self): self.sent = []
+    def send(self, to, body): self.sent.append((to, body))
+fake = FakeTransport(); Mailer(fake).notify("qa@example.com", "Report ready"); print(fake.sent)
+```
+
+</details>
+
+3. **Fix an LSP break** — `class Bird: def fly()` and `class Penguin(Bird)` raising in `fly()`. Remodel it.
+<details><summary>Solution</summary>
+
+```python
+class Bird:
+    def eat(self): return "eats"
+class FlyingBird(Bird):
+    def fly(self): return "flies"
+class Sparrow(FlyingBird): pass
+class Penguin(Bird): pass          # never claims to fly, so no caller is surprised
+def migrate(b: FlyingBird): return b.fly()
+print(migrate(Sparrow()), Penguin().eat())
+```
+
+</details>
+
+### Interview Questions
+
+**Q: Explain SOLID and give one concrete violation and fix for each.**
+SRP: one reason to change; a `ReportService` that loads, computes and renders splits into three collaborators. OCP: extend without modifying; an `if/elif` on export format becomes a registry of `Exporter` classes so EPUB is added with a new class and one dictionary entry. LSP: subtypes must be substitutable; a `ReadOnlyDocument(Document)` whose `add_page` raises breaks callers, so model it as a separate view type. ISP: clients depend only on what they use; a fat `Storage` interface becomes `Readable` and `Writable` protocols so a read-only backend has no stubs. DIP: depend on abstractions passed in; `ReportService` receives a `RowRepository` instead of constructing `PostgresConnection`, making it testable with a fake. The through-line is that all five reduce the blast radius of a change.
+
+**Q: Can SOLID be over-applied? How do you decide when to stop?**
+Yes: each principle adds indirection, and applied speculatively it produces interfaces with one implementation, factories that create one type and services split into fragments that always change together. My rule is to introduce an abstraction when the second concrete variant arrives or when a test needs a seam, and to split a class when two different stakeholders are asking for changes to it. I also watch the ratio of interfaces to implementations and whether a newcomer can trace a request through the code. Python's duck typing and `Protocol` lower the cost, since a dependency can be typed by a small protocol without any class hierarchy, so I lean towards DIP and ISP early and towards SRP and OCP only when change pressure appears.
+
+**Q: How does dependency injection relate to DIP, and do you need a framework?**
+DIP is the principle that policy code depends on abstractions; dependency injection is the mechanism that supplies the concrete implementations from outside, usually through the constructor. In Python a framework is rarely needed: a `main()` composition root instantiates the repository, renderer and service and wires them together, and tests pass fakes to the same constructors. Frameworks such as `dependency-injector` or FastAPI's `Depends` help when the object graph is large, has scopes such as per-request, or needs configuration-driven swapping, at the cost of magic that hides the wiring. I keep constructor injection explicit and reach for a container only when manual wiring exceeds a screen or two.
+
+## Design patterns
+
+A **design pattern** is a named, reusable solution to a recurring design problem, catalogued by the "Gang of Four" (Gamma, Helm, Johnson, Vlissides) in 1994. Knowing the names gives teams a shared vocabulary: "make that a Strategy" says in three words what would take a paragraph. This chapter covers the five that come up most in interviews and in document-automation code, with Python-idiomatic versions rather than Java translations.
+
+### Singleton: one instance
+
+**Problem:** exactly one configuration or connection pool should exist.
+
+```python
+class Config:
+    _instance = None
+    def __new__(cls, *a, **kw):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+```
+
+Every `Config()` call returns the same object. In Python the idiomatic singleton is usually a **module**: `config.py` with module-level state is imported once and shared. Singletons are global state, which makes tests order-dependent and hides dependencies; prefer creating one instance in the composition root and injecting it. Interviewers like to hear that Singleton is the pattern you know how to avoid.
+
+### Factory: creating without naming the class
+
+**Problem:** the caller knows *what kind* of object it needs, not which class implements it.
+
+```python
+class Exporter(ABC): ...
+class PdfExporter(Exporter): ...
+class EpubExporter(Exporter): ...
+
+def make_exporter(kind: str, **options) -> Exporter:     # factory function
+    registry = {"pdf": PdfExporter, "epub": EpubExporter}
+    try:
+        return registry[kind](**options)
+    except KeyError:
+        raise ValueError(f"unknown exporter {kind!r}") from None
+```
+
+The GoF **Factory Method** is an overridable method on a creator class (`Document.create_exporter()` overridden in subclasses); **Abstract Factory** groups related factories (a `ThemeFactory` producing matching fonts, colours and page styles). In Python a function or a `@classmethod` on the base usually suffices, and a dict registry plus `__init_subclass__` makes it self-maintaining.
+
+### Strategy: interchangeable algorithms
+
+**Problem:** the same operation has several algorithms chosen at runtime.
+
+```python
+class PricingStrategy(Protocol):
+    def premium(self, coverage: float) -> float: ...
+
+class StandardRate:
+    def premium(self, coverage): return 575 + max(0, coverage - 100_000) * 0.0036
+class ReissueRate:
+    def premium(self, coverage): return StandardRate().premium(coverage) * 0.6
+
+class Quote:
+    def __init__(self, coverage, strategy: PricingStrategy): self.coverage, self.strategy = coverage, strategy
+    def total(self): return round(self.strategy.premium(self.coverage), 2)
+
+print(Quote(250_000, StandardRate()).total(), Quote(250_000, ReissueRate()).total())
+```
+
+Because Python functions are objects, a strategy is often just a callable: `Quote(250_000, strategy=reissue_rate)`. Use classes when strategies carry configuration or several methods. Strategy is composition replacing an `if` chain and is the direct implementation of OCP.
+
+### Observer: publish and subscribe
+
+**Problem:** when one object changes, others must react without the subject knowing who they are.
+
+```python
+class Subject:
+    def __init__(self): self._observers = []
+    def subscribe(self, fn): self._observers.append(fn); return fn
+    def notify(self, *args, **kw):
+        for fn in list(self._observers): fn(*args, **kw)
+
+class JobQueue(Subject):
+    def complete(self, job):
+        self.notify("completed", job)
+
+queue = JobQueue()
+queue.subscribe(lambda event, job: print("email:", event, job))
+queue.subscribe(lambda event, job: print("dashboard refresh:", job))
+queue.complete("handbook.pdf")
+```
+
+Observers are callables; the subject only knows the calling convention. Real systems add unsubscribe, error isolation (one failing observer must not stop the rest), and often weak references so observers can be garbage collected. GUI events, Django signals and `asyncio` callbacks are Observer.
+
+### Builder: constructing step by step
+
+**Problem:** an object needs many optional parts, and a constructor with fifteen keyword arguments is unreadable or the parts must be assembled in order.
+
+```python
+class DocumentBuilder:
+    def __init__(self, title): self._doc = {"title": title, "sections": [], "meta": {}}
+    def author(self, name): self._doc["meta"]["author"] = name; return self
+    def section(self, heading, body): self._doc["sections"].append((heading, body)); return self
+    def toc(self, depth=2): self._doc["meta"]["toc_depth"] = depth; return self
+    def build(self): 
+        if not self._doc["sections"]: raise ValueError("a document needs at least one section")
+        return dict(self._doc)
+
+doc = (DocumentBuilder("Employee Handbook").author("Ali Raza")
+       .section("Leave policy", "...").section("Conduct", "...").toc(3).build())
+```
+
+Each method returns `self` (a **fluent interface**), and `build()` validates and produces the final object. `python-docx` and `pptxgenjs` are effectively builders. When the product is immutable, Builder is how you assemble it; when options are simple, keyword arguments and dataclasses are enough.
+
+### Other names to recognise
+
+| Pattern | One-line purpose | Python form |
+|---|---|---|
+| Adapter | Make an existing class fit an interface | Wrapper class delegating with renamed methods |
+| Decorator | Add behaviour to an object without subclassing | `functools.wraps` decorators, wrapper objects |
+| Facade | Simple entry point over a complex subsystem | A module with a few functions over `pikepdf`, `PyMuPDF` |
+| Template Method | Fixed algorithm, overridable steps | ABC with abstract hooks |
+| Command | Encapsulate an action as an object | Callables in a queue, undo stacks |
+| Iterator | Sequential access without exposing structure | `__iter__`, generators |
+| Proxy | Control access to another object | Lazy loading, caching wrappers |
+
+> **Tip:** In interviews, name the *problem* before the pattern: "we needed to add export formats without touching the core, so a registry-based Factory". Reciting pattern definitions without a problem sounds memorised; describing a problem and reaching for the name sounds experienced.
+
+### Try It Yourself
+
+```python
+from abc import ABC, abstractmethod
+
+# Factory with self-registering subclasses
+class Exporter(ABC):
+    registry = {}
+    kind = None
+    def __init_subclass__(cls, **kw):
+        super().__init_subclass__(**kw)
+        if cls.kind: Exporter.registry[cls.kind] = cls
+    @abstractmethod
+    def export(self, doc) -> str: ...
+    @classmethod
+    def create(cls, kind, **opts):
+        try: return cls.registry[kind](**opts)
+        except KeyError: raise ValueError(f"unknown exporter {kind!r}") from None
+
+class PdfExporter(Exporter):
+    kind = "pdf"
+    def __init__(self, dpi=300): self.dpi = dpi
+    def export(self, doc): return f"{doc['title']}.pdf @ {self.dpi} dpi, {len(doc['sections'])} sections"
+
+class EpubExporter(Exporter):
+    kind = "epub"
+    def export(self, doc): return f"{doc['title']}.epub, reflowable, toc depth {doc['meta'].get('toc_depth', 1)}"
+
+# Strategy as plain callables
+def standard_rate(coverage): return 575 + max(0, coverage - 100_000) * 0.0036
+def reissue_rate(coverage): return standard_rate(coverage) * 0.6
+
+class Quote:
+    def __init__(self, coverage, strategy=standard_rate): self.coverage, self.strategy = coverage, strategy
+    def total(self): return round(self.strategy(self.coverage), 2)
+
+# Observer with error isolation
+class Subject:
+    def __init__(self): self._subs = []
+    def subscribe(self, fn): self._subs.append(fn); return fn
+    def notify(self, *a):
+        for fn in list(self._subs):
+            try: fn(*a)
+            except Exception as e: print("observer failed:", e)
+
+# Builder with a fluent interface and validation
+class DocumentBuilder:
+    def __init__(self, title): self._d = {"title": title, "sections": [], "meta": {}}
+    def author(self, n): self._d["meta"]["author"] = n; return self
+    def section(self, h, body=""): self._d["sections"].append((h, body)); return self
+    def toc(self, depth=2): self._d["meta"]["toc_depth"] = depth; return self
+    def build(self):
+        if not self._d["sections"]: raise ValueError("no sections")
+        return dict(self._d)
+
+# Singleton via __new__ (and why a module is usually better)
+class Settings:
+    _inst = None
+    def __new__(cls):
+        if cls._inst is None:
+            cls._inst = super().__new__(cls); cls._inst.output_dir = "/out"
+        return cls._inst
+
+doc = DocumentBuilder("Employee Handbook").author("Ali Raza").section("Leave").section("Conduct").toc(3).build()
+events = Subject()
+events.subscribe(lambda kind, out: print("  mail:", kind, "->", out))
+events.subscribe(lambda kind, out: 1 / 0)                 # a broken observer does not stop the others
+events.subscribe(lambda kind, out: print("  dashboard:", out))
+for kind in ("pdf", "epub"):
+    out = Exporter.create(kind, **({"dpi": 150} if kind == "pdf" else {})).export(doc)
+    events.notify(kind, out)
+try: Exporter.create("mobi")
+except ValueError as e: print(e)
+print("quotes:", Quote(250_000).total(), Quote(250_000, reissue_rate).total())
+print("singleton:", Settings() is Settings(), Settings().output_dir)
+try: DocumentBuilder("Empty").build()
+except ValueError as e: print("builder validation:", e)
+```
+
+### Quiz
+
+1. Which pattern replaces an `if fmt == "pdf" ... elif` chain with interchangeable objects chosen at runtime?
+- [ ] Singleton
+- [x] Strategy
+- [ ] Builder
+> Strategy composes the algorithm; Factory chooses which object to construct.
+
+2. In Python, the most idiomatic "singleton" for shared configuration is usually…
+- [ ] a metaclass
+- [x] a module with module-level state
+- [ ] a class with `__new__` override
+> Modules are imported once; `__new__` singletons hide global state in a class.
+
+3. Observer's main benefit is that the subject…
+- [x] does not know who reacts to its events
+- [ ] runs faster
+- [ ] guarantees delivery order across threads
+> Loose coupling: subscribers are added without changing the subject.
+
+4. A fluent `DocumentBuilder` returns `self` from each method so that…
+- [ ] it is thread-safe
+- [x] calls can be chained before `build()` validates and produces the object
+- [ ] it can be pickled
+> Method chaining is a hallmark of Builder in Python and JavaScript.
+
+### Exercises
+
+1. **Adapter** — A legacy `OldPrinter` has `print_text(s)`. Write an adapter so it satisfies a `Printer` protocol with `print(doc)`.
+<details><summary>Solution</summary>
+
+```python
+class OldPrinter:
+    def print_text(self, s): print("legacy:", s)
+class PrinterAdapter:
+    def __init__(self, old): self.old = old
+    def print(self, doc): self.old.print_text(str(doc))
+def run(p): p.print("SOP v2")
+run(PrinterAdapter(OldPrinter()))
+```
+
+</details>
+
+2. **Command with undo** — Implement `RenameCommand(doc, new_title)` with `execute()` and `undo()`, and a history that can undo the last command.
+<details><summary>Solution</summary>
+
+```python
+class RenameCommand:
+    def __init__(self, doc, new): self.doc, self.new, self.old = doc, new, doc["title"]
+    def execute(self): self.doc["title"] = self.new
+    def undo(self): self.doc["title"] = self.old
+class History:
+    def __init__(self): self.stack = []
+    def run(self, cmd): cmd.execute(); self.stack.append(cmd)
+    def undo(self): self.stack.pop().undo()
+d = {"title": "Draft"}; h = History(); h.run(RenameCommand(d, "Final")); print(d); h.undo(); print(d)
+```
+
+</details>
+
+3. **Thread-safe singleton** — Make a `__new__`-based singleton safe under concurrent first access.
+<details><summary>Solution</summary>
+
+```python
+import threading
+class Pool:
+    _inst = None
+    _lock = threading.Lock()
+    def __new__(cls):
+        if cls._inst is None:
+            with cls._lock:
+                if cls._inst is None:            # double-checked locking
+                    cls._inst = super().__new__(cls)
+        return cls._inst
+print(Pool() is Pool())
+```
+
+</details>
+
+### Interview Questions
+
+**Q: Describe the Strategy pattern and how it differs from a Factory.**
+Strategy encapsulates a family of interchangeable algorithms behind one interface so the client can be configured with any of them at runtime; a `Quote` takes a `PricingStrategy` and calls `premium()` without knowing whether it is standard, reissue or simultaneous-issue pricing. Factory is about *creation*: it hides which concrete class is instantiated, returning something typed by the base interface, such as `make_exporter("pdf")`. They often appear together, with a factory choosing the strategy from configuration, but Strategy answers "how do I vary behaviour" and Factory answers "how do I vary construction". In Python a strategy is frequently a plain function and a factory a dictionary of classes, and I say that in interviews because it shows the pattern is about the idea, not the class ceremony.
+
+**Q: Why is Singleton considered an anti-pattern by many, and what do you use instead?**
+Singleton makes a class responsible for enforcing its own single instance, which turns it into global mutable state: any code can reach it, dependencies become invisible, tests share state across cases, and swapping a fake requires patching. It also violates SRP by mixing lifecycle management with the class's real job. The alternative is to create one instance in the composition root and inject it wherever needed, which keeps the "one instance" property as a wiring decision rather than a class constraint and makes testing trivial. When a genuinely process-wide resource exists, such as a logging configuration, a module with module-level state is the Python-native form and `functools.lru_cache` on a factory gives lazy single creation without a special class.
+
+**Q: How would you implement Observer robustly in production?**
+Beyond a list of callables and a `notify` loop, production code needs unsubscribe (return a handle or the function), error isolation so one failing subscriber is logged and the rest still run, and a decision about synchronous versus queued delivery; long-running subscribers should be dispatched to a task queue so the subject does not stall. Iterate over a copy of the subscriber list because observers often unsubscribe during notification, and consider `weakref.WeakMethod` so subscribers do not keep objects alive. Typed events (dataclasses per event kind) prevent argument drift, and in an async application the subject awaits coroutine subscribers with `asyncio.gather(return_exceptions=True)`. Django signals and `blinker` implement most of this; I reuse them unless the dependency is unwelcome.
+
+## UML class diagrams & modelling
+
+**UML** (Unified Modeling Language) class diagrams are the standard way to draw an object-oriented design: which classes exist, what they contain, and how they relate. You will meet them in software engineering coursework, design documents and system-design interviews, where you may be asked to sketch a model on a whiteboard. This chapter teaches the notation, the relationships that matter, and how to go from a requirement to a model and then to code.
+
+### The class box
+
+A class is a rectangle with three compartments: name, attributes, operations.
+
+```text
++----------------------------------+
+|           Document               |
++----------------------------------+
+| - title: str                     |
+| - pages: int                     |
+| + status: DocumentStatus         |
+| # created_at: datetime           |
++----------------------------------+
+| + render(fmt: str): bytes        |
+| + approve(): None                |
+| + from_json(text: str): Document |   (underlined = static / class-level)
++----------------------------------+
+```
+
+Visibility markers: `+` public, `-` private, `#` protected, `~` package. Abstract classes and methods are written in *italics* (or with `{abstract}`), interfaces with `<<interface>>` above the name, and static members underlined. Attribute syntax is `name: type = default`; operation syntax is `name(params): return type`.
+
+### Relationships
+
+| Relationship | Meaning | Arrow | Code |
+|---|---|---|---|
+| Association | A knows about B | plain line, optional arrowhead | `self.b = b` |
+| Aggregation | A has B, B can exist alone | hollow diamond at A | list of shared parts |
+| Composition | A owns B, B dies with A | filled diamond at A | parts created in `__init__` |
+| Inheritance (generalisation) | B is-a A | hollow triangle at A | `class B(A)` |
+| Realisation | B implements interface A | dashed line, hollow triangle | ABC / Protocol |
+| Dependency | A uses B temporarily | dashed arrow | parameter or local |
+
+```text
+ Document  <|--  Handbook            (inheritance: Handbook is-a Document)
+ Document  *--   Section             (composition: sections die with the document)
+ Report    o--   Chart               (aggregation: charts can be reused elsewhere)
+ Report    -->   Exporter            (association: a report has an exporter)
+ Report  ..>     PdfLibrary          (dependency: used inside render())
+ PdfExporter ..|> <<interface>> Exporter   (realisation)
+```
+
+Aggregation versus composition is the most-asked distinction: a `Section` cannot exist outside its `Document` (composition, filled diamond), while a `Chart` may appear in several reports (aggregation, hollow diamond). In code the difference shows in who creates and deletes the part.
+
+### Multiplicity
+
+Numbers at line ends say how many: `1`, `0..1`, `*` or `0..*`, `1..*`, `3..5`.
+
+```text
+ Document 1 ---- * Section        one document has many sections; each section belongs to one document
+ Author   1..* ---- * Document     documents have at least one author; authors write many documents
+ Order    1 ---- 0..1 Invoice      an order has at most one invoice
+```
+
+Multiplicity drives the data structures: `1 -- *` is a list on the one side and a back-reference on the many side; `* -- *` needs an association class or a join table in a database.
+
+### From requirement to model
+
+Take a client brief: *"A title-insurance production system tracks files. Each file belongs to one state and one client, passes through examination steps done by agents, and produces exactly one policy when closed. Agents belong to a team led by one supervisor. Weekly reports summarise files per state."*
+
+1. **Nouns** become candidate classes: File, State, Client, ExaminationStep, Agent, Policy, Team, Supervisor, WeeklyReport.
+2. **Verbs** become operations or associations: belongs to, passes through, produces, leads, summarises.
+3. **Decide kinds**: `State` is probably an enum, not a class; `Supervisor` is an `Agent` with a role (inheritance or a flag); `WeeklyReport` depends on `File` but does not own it.
+4. **Multiplicities**: File `*` -- `1` Client; File `1` -- `0..1` Policy; Team `1` -- `1..*` Agent; Team `1` -- `1` Supervisor.
+5. **Draw, then challenge**: does `Supervisor(Agent)` pass LSP? Can a file change client? Are examination steps ordered (a list) or a set?
+
+```text
+ Client 1 ---- * File * ---- 1 State (enum)
+                   |1
+                   |---- 0..1 Policy
+                   |---- * ExaminationStep * ---- 1 Agent
+ Team 1 ---- 1..* Agent
+ Team 1 ---- 1 Supervisor      Supervisor --|> Agent
+ WeeklyReport ..> File
+```
+
+### Other UML diagrams you should recognise
+
+- **Sequence diagram**: objects as vertical lifelines, messages as horizontal arrows in time order; ideal for "what happens when the user clicks Export".
+- **Use case diagram**: actors and the goals they achieve; requirements level.
+- **State machine diagram**: the lifecycle of one object, such as `Draft -> Under review -> Approved -> Archived`, which maps directly to an enum plus allowed transitions.
+- **Activity diagram**: flowchart of a process, useful for SOPs.
+
+### Tools
+
+PlantUML and Mermaid render diagrams from text, which keeps them in version control next to the code:
+
+```text
+classDiagram
+    Document <|-- Handbook
+    Document "1" *-- "*" Section
+    Document : -title str
+    Document : +render(fmt) bytes
+    class Exporter { <<interface>> +export(doc) }
+    PdfExporter ..|> Exporter
+```
+
+Mermaid renders in GitHub, GitLab, Notion and VS Code; PlantUML has richer notation. Draw.io and Lucidchart are the visual options. In an interview, a whiteboard and consistent arrowheads are enough.
+
+> **Interview note:** When asked to model something, say the multiplicities out loud and justify the diamonds. "Sections are composition because they cannot exist without the document; charts are aggregation because the same chart appears in the quarterly pack" is precisely what the interviewer is listening for.
+
+### Try It Yourself
+
+```python
+# Code that mirrors a class diagram, plus a tiny renderer that prints the diagram back from the code.
+from __future__ import annotations
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from enum import Enum
+
+class State(Enum):
+    WY = "Wyoming"; CO = "Colorado"; TX = "Texas"
+
+@dataclass
+class Section:                      # composition: created and owned by Document
+    heading: str
+    body: str = ""
+
+@dataclass
+class Chart:                        # aggregation: shared between reports
+    name: str
+
+class Exporter(ABC):                # <<interface>>
+    @abstractmethod
+    def export(self, doc: Document) -> str: ...
+
+class Document:
+    def __init__(self, title: str):
+        self._title = title                       # - private
+        self.sections: list[Section] = []         # 1 *-- * Section
+    def add_section(self, heading, body=""):      # + public
+        self.sections.append(Section(heading, body)); return self
+    def render(self, exporter: Exporter) -> str:  # ..> dependency on Exporter
+        return exporter.export(self)
+    @property
+    def title(self): return self._title
+
+class Handbook(Document):                         # Handbook --|> Document
+    def __init__(self, title, edition: int):
+        super().__init__(title); self.edition = edition
+
+class Report(Document):
+    def __init__(self, title, state: State):
+        super().__init__(title); self.state = state
+        self.charts: list[Chart] = []             # o-- aggregation
+
+class TextExporter(Exporter):                     # TextExporter ..|> Exporter
+    def export(self, doc):
+        return f"{doc.title}: " + ", ".join(s.heading for s in doc.sections)
+
+def class_diagram(*classes):
+    """Print a Mermaid classDiagram for the given classes from their live structure."""
+    lines = ["classDiagram"]
+    for cls in classes:
+        for base in cls.__bases__:
+            if base is not object and base is not ABC:
+                arrow = "..|>" if base is Exporter else "--|>"
+                lines.append(f"    {cls.__name__} {arrow} {base.__name__}")
+        if getattr(cls, "__abstractmethods__", None):
+            lines.append(f"    class {cls.__name__} {{ <<interface>> }}")
+        for name, fn in vars(cls).items():
+            if callable(fn) and not name.startswith("__"):
+                vis = "-" if name.startswith("_") else "+"
+                lines.append(f"    {cls.__name__} : {vis}{name}()")
+    return "\n".join(lines)
+
+shared_chart = Chart("Files per state")
+wy = Report("Weekly Production WY", State.WY).add_section("Summary").add_section("Escalations")
+wy.charts.append(shared_chart)
+co = Report("Weekly Production CO", State.CO); co.charts.append(shared_chart)   # aggregation: same chart, two reports
+hb = Handbook("Employee Handbook", edition=3).add_section("Leave").add_section("Conduct")
+print(wy.render(TextExporter())); print(hb.render(TextExporter()))
+print("chart shared:", wy.charts[0] is co.charts[0], "| sections owned:", wy.sections is not co.sections)
+print(class_diagram(Document, Handbook, Report, Exporter, TextExporter))
+```
+
+### Quiz
+
+1. A filled diamond on an association line means…
+- [ ] inheritance
+- [x] composition: the part cannot outlive the whole
+- [ ] a dependency
+> A hollow diamond is aggregation, where parts are shared or independent.
+
+2. A dashed line with a hollow triangle pointing at `<<interface>> Exporter` means…
+- [x] realisation: the class implements the interface
+- [ ] the class depends on Exporter temporarily
+- [ ] the class is abstract
+> Solid line with hollow triangle is inheritance; dashed is realisation.
+
+3. `Team 1 ---- 1..* Agent` states that…
+- [ ] an agent can be in many teams
+- [x] every team has at least one agent, and each agent belongs to exactly one team
+- [ ] teams are optional
+> Read each end from the perspective of the opposite class.
+
+4. In a class box, `- title: str` denotes…
+- [ ] a static attribute
+- [x] a private attribute named title of type str
+- [ ] a method
+> `+` is public, `#` protected, `~` package; underlining marks static.
+
+### Exercises
+
+1. **Model a library** — Draw (in Mermaid text) Book, Copy, Member and Loan with multiplicities: a book has many copies, a loan links one copy to one member, a member has many loans.
+<details><summary>Solution</summary>
+
+```text
+classDiagram
+    Book "1" *-- "1..*" Copy
+    Member "1" --> "*" Loan
+    Copy "1" --> "*" Loan
+    Loan : +borrowed_on date
+    Loan : +due_on date
+    Loan : +return_copy()
+```
+
+</details>
+
+2. **Aggregation or composition?** — Decide for: Order/OrderLine, Playlist/Song, House/Room, Course/Student. Justify each in a comment.
+<details><summary>Solution</summary>
+
+```text
+Order *-- OrderLine      composition: a line has no meaning outside its order and is deleted with it
+Playlist o-- Song        aggregation: songs exist independently and appear in many playlists
+House *-- Room           composition: rooms are part of the house's structure
+Course --- Student       plain association (many-to-many): neither owns the other; enrolment is an association class
+```
+
+</details>
+
+3. **State machine to code** — Turn `Draft -> Review -> Approved -> Archived` (with Review -> Draft on rejection) into an enum with an allowed-transitions table and a `transition()` function that raises on illegal moves.
+<details><summary>Solution</summary>
+
+```python
+from enum import Enum, auto
+class Status(Enum):
+    DRAFT = auto(); REVIEW = auto(); APPROVED = auto(); ARCHIVED = auto()
+ALLOWED = {Status.DRAFT: {Status.REVIEW}, Status.REVIEW: {Status.APPROVED, Status.DRAFT},
+           Status.APPROVED: {Status.ARCHIVED}, Status.ARCHIVED: set()}
+def transition(current, new):
+    if new not in ALLOWED[current]: raise ValueError(f"{current.name} -> {new.name} not allowed")
+    return new
+s = transition(Status.DRAFT, Status.REVIEW); s = transition(s, Status.DRAFT); print(s)
+```
+
+</details>
+
+### Interview Questions
+
+**Q: Explain the difference between association, aggregation and composition with examples.**
+All three are "has-a" relationships that differ in ownership and lifetime. Association is the weakest: a `Report` knows its `Exporter`, either may exist without the other, drawn as a plain line. Aggregation is a whole-part relationship where the parts are shared or independent: a `Chart` appears in several reports and survives when one is deleted, drawn with a hollow diamond. Composition is exclusive ownership with shared lifetime: a `Section` is created by and destroyed with its `Document`, drawn with a filled diamond. In code, composition usually means the whole constructs its parts in `__init__` and never hands out references it expects others to keep, whereas aggregation means parts are passed in from outside. Interviewers accept that the boundary is a modelling judgement as long as you justify it.
+
+**Q: How do you approach modelling a system from a written requirement?**
+I underline nouns as candidate classes and verbs as operations or associations, then prune: nouns that are just values become attributes or enums, nouns that are roles become inheritance or a role attribute, and duplicates merge. Next I assign multiplicities on every association and ask the lifetime question to pick aggregation versus composition. Then I look for behaviour that belongs together and for objects whose state has a lifecycle, which suggests a state diagram, and I draw a sequence diagram for the one or two most important flows to check the classes can actually collaborate. Finally I test the model against the principles: does every subclass pass LSP, does any class have too many reasons to change, and can the design be extended for the next likely requirement without editing the core. I keep the diagram as Mermaid text in the repository so it changes with the code.
+
+**Q: Are UML diagrams still relevant when teams use agile methods?**
+The heavyweight "model everything up front" use of UML is gone, but the notation is still the most compact way to communicate a design, and class and sequence diagrams appear in most design reviews, architecture decision records and system-design interviews. The modern practice is lightweight: a few diagrams for the parts that are hard to explain in prose, generated or written as text (Mermaid, PlantUML) so they are versioned and reviewable, and thrown away or updated as the code changes. For document-automation projects I draw the pipeline's class diagram and one sequence diagram per output format; they cost half an hour and prevent the "where does the TOC get built?" question from being asked in every onboarding.
+
+## Anti-patterns & OOP interview questions
+
+Knowing what good design looks like is half the skill; recognising bad design quickly is the other half, and interviews test both. This chapter catalogues the OOP **anti-patterns** you will meet in real codebases (and in "what is wrong with this code?" questions), then finishes with the interview questions that recur across junior, mid and senior loops with the shape of a strong answer.
+
+### Structural anti-patterns
+
+| Anti-pattern | Symptom | Fix |
+|---|---|---|
+| God object | One class knows and does everything; thousands of lines; every change touches it | Split by responsibility (SRP), extract collaborators |
+| Anemic domain model | Classes are bags of getters and setters; all logic lives in "service" or "manager" classes | Move behaviour next to the data it operates on |
+| Feature envy | A method uses another object's data more than its own | Move the method to that object |
+| Inappropriate intimacy | Classes reach into each other's private fields | Expose intent-revealing methods; encapsulate |
+| Deep inheritance / yo-yo problem | Understanding one method requires scrolling up and down six levels of hierarchy | Flatten, favour composition |
+| Refused bequest | Subclass overrides inherited methods to raise or do nothing | Remodel; the is-a claim is false (LSP) |
+| Circular dependency | A imports B imports A | Introduce an interface or move the shared piece down |
+| Primitive obsession | Strings and dicts everywhere for money, dates, IDs, statuses | Small value objects, enums, dataclasses |
+| Boolean parameter | `export(doc, True, False)` | Enums or separate methods |
+| Speculative generality | Abstract classes with one subclass, hooks nobody uses | Delete until needed (YAGNI) |
+
+### Behavioural anti-patterns
+
+- **Type switching**: `if isinstance(x, Pdf): ... elif isinstance(x, Epub): ...` scattered through the code; that is polymorphism done by hand. Put the varying behaviour in the classes or a registry.
+- **Getter/setter for everything**: Python's properties exist so you do not write Java-style accessors; expose attributes and add a property only when validation or computation is needed.
+- **Singleton everywhere**: hidden global state; inject instead.
+- **Mutable shared defaults**: class-level lists and `def f(x=[])`.
+- **Constructor that does work**: `__init__` opening files or network connections makes the class impossible to construct in tests; take the resource as a parameter or add a factory.
+- **Exceptions as control flow across layers**: raising a `DatabaseError` up to the UI; translate at boundaries.
+- **Leaky abstraction**: an `Exporter` interface whose methods take `pdf_options`.
+
+### A small "what is wrong here?" drill
+
+```python
+class Manager:
+    def __init__(self):
+        self.db = sqlite3.connect("prod.db")           # work in constructor, hard-wired dependency
+        self.cache = []                                # fine
+    def process(self, doc, is_pdf, is_signed):         # boolean parameters
+        if is_pdf:                                     # type switching
+            data = doc.title.encode() + b"%PDF"
+        else:
+            data = doc.title.encode()
+        if is_signed: data += b"[signed]"
+        self.db.execute("INSERT ...", (doc.title, data))
+        self.send_email(doc.owner.email, "done")       # feature envy: reaching through doc.owner
+        return data
+```
+
+Strong answers list: inject the connection (DIP, testability), replace booleans with an `Exporter` strategy and a `Signer` step (OCP, composition), give `Document` a `notify_owner()` or pass an `Owner` (encapsulation), and split persistence from processing (SRP).
+
+### Interview questions by level
+
+**Junior / graduate**
+
+- What are the four pillars? One sentence each with an example: encapsulation (`_balance` with `deposit()`), abstraction (`export()` hides the library), inheritance (`Handbook(Document)`), polymorphism (`for x in items: x.render()`).
+- Class vs object; `__init__` vs constructor; `self`.
+- Method overriding vs overloading (Python has no overloading by signature; use defaults or `functools.singledispatch`).
+- What is `super()` and why is it not just "call the parent"? (It follows the MRO.)
+
+**Mid-level**
+
+- Composition vs inheritance with a story.
+- Abstract class vs interface vs Protocol.
+- Explain the MRO for a diamond hierarchy; what `super()` calls in each class.
+- `@classmethod` vs `@staticmethod`; alternative constructors.
+- Dunder methods you have implemented and why (`__eq__`/`__hash__` pitfalls).
+- Immutability: dataclass `frozen=True`, `__slots__`, `NamedTuple`.
+- Two or three design patterns with a real use.
+
+**Senior**
+
+- SOLID with refactors from your own work.
+- When did a pattern make things worse?
+- Modelling a system live (see the UML chapter): nouns, verbs, multiplicities, LSP check.
+- OOP vs functional: when do you avoid classes? (Pure transformations, pipelines of functions, data as dataclasses; classes when state and behaviour genuinely belong together or when polymorphism is needed.)
+- Testing OO code: seams, fakes over mocks, avoiding testing private methods.
+- Language comparison: Python's MRO and duck typing vs JavaScript's prototypes vs Java's single inheritance and interfaces.
+
+### The answers interviewers remember
+
+1. **Lead with the concept, then a concrete example from your work.** "Encapsulation: in the rate calculator the `_matrix` is private and `premium(coverage)` is the only way in, so a client's bad edit to the sheet could never corrupt a quote."
+2. **Name trade-offs unprompted.** Every pattern and principle has a cost; saying it shows judgement.
+3. **Know your language's idioms.** In Python, mention protocols, dataclasses, `__init_subclass__`, `functools.singledispatch`; in JS, `#private`, prototypes, `bind`.
+4. **Draw when asked to design.** A class box and three arrows beat five minutes of talking.
+5. **Admit limits precisely.** "I have used Observer through Django signals but not written a thread-safe one" is a better answer than bluffing.
+
+### Rapid-fire checks
+
+```python
+class A:
+    def hi(self): return "A"
+class B(A):
+    def hi(self): return "B" + super().hi()
+class C(A):
+    def hi(self): return "C" + super().hi()
+class D(B, C): pass
+print(D().hi())                      # "BCA": MRO is D, B, C, A; super() in B resolves to C
+print([k.__name__ for k in D.__mro__])
+```
+
+Be ready to explain the output above, why `list.__init__` versus `__new__` matters for immutables, why `__eq__` disables hashing, and what `a is b` versus `a == b` means.
+
+> **Warning:** The most common way strong candidates lose OOP interviews is over-engineering the live design: five interfaces, two factories and a singleton for a three-class problem. Start with the simplest model that satisfies the requirements, then say what you would add when the next requirement arrives.
+
+### Try It Yourself
+
+```python
+# Before/after: an anti-pattern-laden class refactored with composition, injection and small value objects.
+from dataclasses import dataclass
+from enum import Enum
+from typing import Protocol
+
+# ---------- BEFORE ----------
+class Manager:
+    def __init__(self):
+        self.store = {}                              # pretend database created inside (hard-wired)
+    def process(self, title, owner_email, is_pdf, is_signed):      # booleans, primitives, does everything
+        data = title.encode() + (b"%PDF" if is_pdf else b"")
+        if is_signed: data += b"[signed]"
+        self.store[title] = data
+        print(f"(before) emailing {owner_email}: done")
+        return data
+
+print(Manager().process("Handbook", "ali@example.com", True, True))
+
+# ---------- AFTER ----------
+class Format(Enum):
+    PDF = "pdf"; TEXT = "text"
+
+@dataclass(frozen=True)
+class Owner:
+    name: str
+    email: str
+
+@dataclass(frozen=True)
+class Document:
+    title: str
+    owner: Owner
+
+class Renderer(Protocol):
+    def render(self, doc: Document) -> bytes: ...
+
+class PdfRenderer:
+    def render(self, doc): return doc.title.encode() + b"%PDF"
+class TextRenderer:
+    def render(self, doc): return doc.title.encode()
+
+class Signer:                                      # optional step, composed not flagged
+    def apply(self, data: bytes) -> bytes: return data + b"[signed]"
+
+class Repository(Protocol):
+    def save(self, key: str, data: bytes) -> None: ...
+
+class MemoryRepository:
+    def __init__(self): self.items = {}
+    def save(self, key, data): self.items[key] = data
+
+class Notifier(Protocol):
+    def notify(self, owner: Owner, message: str) -> None: ...
+
+class PrintNotifier:
+    def notify(self, owner, message): print(f"(after) emailing {owner.email}: {message}")
+
+class Processor:                                   # one job: orchestrate injected collaborators
+    RENDERERS = {Format.PDF: PdfRenderer, Format.TEXT: TextRenderer}
+    def __init__(self, repo: Repository, notifier: Notifier, steps=()):
+        self.repo, self.notifier, self.steps = repo, notifier, list(steps)
+    def process(self, doc: Document, fmt: Format) -> bytes:
+        data = self.RENDERERS[fmt]().render(doc)
+        for step in self.steps:
+            data = step.apply(data)
+        self.repo.save(doc.title, data)
+        self.notifier.notify(doc.owner, "done")
+        return data
+
+repo = MemoryRepository()
+proc = Processor(repo, PrintNotifier(), steps=[Signer()])
+doc = Document("Handbook", Owner("Ali Raza", "ali@example.com"))
+print(proc.process(doc, Format.PDF))
+print("stored keys:", list(repo.items))
+
+# Testability: swap in fakes without patching
+class SilentNotifier:
+    def __init__(self): self.calls = []
+    def notify(self, owner, message): self.calls.append((owner.email, message))
+fake = SilentNotifier()
+Processor(MemoryRepository(), fake).process(doc, Format.TEXT)
+print("fake notifier saw:", fake.calls)
+
+# Rapid-fire: MRO and cooperative super()
+class A:
+    def hi(self): return "A"
+class B(A):
+    def hi(self): return "B" + super().hi()
+class C(A):
+    def hi(self): return "C" + super().hi()
+class D(B, C): pass
+print(D().hi(), [k.__name__ for k in D.__mro__])
+```
+
+### Quiz
+
+1. A class with 3,000 lines that handles parsing, pricing, persistence and email is called a…
+- [ ] Facade
+- [x] God object
+- [ ] Builder
+> The fix is splitting along reasons to change.
+
+2. A model whose classes hold only data while all logic sits in service classes is…
+- [x] an anemic domain model
+- [ ] the Strategy pattern
+- [ ] dependency inversion
+> Behaviour should live with the data it operates on.
+
+3. `if isinstance(x, Pdf): ... elif isinstance(x, Epub): ...` repeated across modules suggests…
+- [ ] good defensive coding
+- [x] missing polymorphism: the varying behaviour belongs in the classes or a registry
+- [ ] a Singleton
+> Type switching is polymorphism done by hand.
+
+4. For `class D(B, C)` where B and C both subclass A and each calls `super().hi()`, `D().hi()` calls in order…
+- [x] D, B, C, A
+- [ ] D, B, A, C
+- [ ] D, C, B, A
+> The C3 MRO places C before A so cooperative `super()` reaches every class once.
+
+5. The best response to a live design question is usually to…
+- [ ] introduce interfaces for every class immediately
+- [x] start with the simplest model that meets the requirements and say what you would add next
+- [ ] refuse to draw until all requirements are known
+> Over-engineering is the most common failure mode for strong candidates.
+
+### Exercises
+
+1. **Spot the smells** — List at least four anti-patterns in: `class App: def __init__(self): self.conn = psycopg2.connect(...); def run(self, path, verbose, dry): ... 400 lines ...`.
+<details><summary>Solution</summary>
+
+```text
+1. Work and a hard-wired dependency in __init__ (untestable; violates DIP).
+2. Boolean parameters `verbose`, `dry` (use an Options dataclass or enums).
+3. God object: a 400-line run() doing everything (violates SRP).
+4. Primitive obsession: `path` as a string rather than pathlib.Path / a value object.
+5. Likely hidden global state if App is used as a singleton.
+```
+
+</details>
+
+2. **Replace booleans** — Refactor `export(doc, compress=True, encrypt=False)` into a design that scales to more options without changing the signature.
+<details><summary>Solution</summary>
+
+```python
+from dataclasses import dataclass, field
+@dataclass(frozen=True)
+class ExportOptions:
+    compress: bool = True
+    encrypt: bool = False
+    password: str | None = None
+def export(doc, options: ExportOptions = ExportOptions()):
+    steps = []
+    if options.compress: steps.append("compress")
+    if options.encrypt: steps.append("encrypt")
+    return f"{doc}: {steps}"
+print(export("Handbook", ExportOptions(encrypt=True, password="x")))
+```
+
+</details>
+
+3. **Value object** — Replace `amount: float, currency: str` pairs with a frozen `Money` dataclass that validates the currency code and forbids mixing currencies in `__add__`.
+<details><summary>Solution</summary>
+
+```python
+from dataclasses import dataclass
+@dataclass(frozen=True)
+class Money:
+    amount: float
+    currency: str
+    def __post_init__(self):
+        if len(self.currency) != 3 or not self.currency.isupper(): raise ValueError(self.currency)
+    def __add__(self, other):
+        if self.currency != other.currency: raise ValueError("currency mismatch")
+        return Money(self.amount + other.amount, self.currency)
+print(Money(575, "USD") + Money(543, "USD"))
+```
+
+</details>
+
+### Interview Questions
+
+**Q: What is an anemic domain model and why is it considered an anti-pattern?**
+An anemic model has domain classes that are only data holders, with every rule, validation and calculation living in separate service or manager classes that reach into those objects. It looks object-oriented but is procedural code with extra ceremony: invariants are not protected because any service can set any field, the same rule is duplicated across services, and the domain vocabulary is lost. The remedy is to move behaviour to the data it belongs with, so `Quote.apply_reissue_discount()` and `Document.approve()` enforce their own rules and services only orchestrate. The nuance is that thin services for cross-object workflows and persistence are still right; the smell is when *all* logic is outside the objects.
+
+**Q: How do you refactor a God object safely?**
+First get characterisation tests around the current behaviour, because the class is usually under-tested and every change risks regression. Then identify clusters of methods and fields that change together, using the reasons-to-change lens, and extract one cluster at a time into a collaborator that the God object delegates to, keeping its public interface stable so callers are untouched. Introduce interfaces for the extracted parts only where a test seam or a second implementation is needed. Each extraction is a separate small pull request with the tests green, and dependencies that were constructed inside move to the constructor so the pieces can be tested alone. The final step is to move callers directly to the collaborators and shrink the original to a facade or delete it.
+
+**Q: When would you not use OOP?**
+When the problem is a pipeline of transformations over data with little state, such as parsing a CSV, validating rows and writing a report, plain functions and dataclasses are clearer, easier to test and compose better than classes. When there is exactly one implementation and no lifecycle, a module with functions beats a class with one method. Concurrency-heavy code often favours immutable data and pure functions to avoid shared-state bugs. I reach for classes when data and the operations that maintain its invariants belong together (a `Money` value, a `Document` with a status lifecycle), when polymorphism across several implementations is genuinely needed, or when a framework's contract requires them. Most real codebases mix both: functional cores with object-oriented boundaries.
+
+**Q: Tell me about a time a design pattern made things worse.**
+A strong answer names the pattern, the context and what you learned. Example: in a document pipeline with two export formats I introduced an Abstract Factory producing matched renderers, stylesheets and post-processors, anticipating many formats. Only a third format ever arrived, and every change required editing three factory classes plus the interface, so simple tweaks became multi-file pull requests and new contributors could not find where output was actually produced. I replaced it with a registry of small exporter classes and plain keyword options, cutting the export package by half and making the third format a single file. The lesson I give interviewers is that patterns solve specific pressures; applied before the pressure exists they are cost without benefit.
