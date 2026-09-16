@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Try It Yourself · SkillForge</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<link rel="stylesheet" href="assets/css/learn.css">
+</head>
+<body>
+<header class="topbar"></header>
+<div class="editor-page">
+  <div class="editor-bar">
+    <span class="title" id="ed-title">Try It Yourself</span>
+    <label class="status">Runner <select id="runner-select"><option value="html">HTML / CSS / JS preview</option><option value="js">JavaScript (console)</option><option value="python">Python (Pyodide)</option><option value="sql">SQL (SQLite)</option><option value="none">Read-only code</option></select></label>
+    <button class="btn small" id="run-btn" type="button">▶ Run (Ctrl+Enter)</button>
+    <button class="btn small secondary" id="reset-btn" type="button">Reset</button>
+    <button class="btn small secondary" id="download-btn" type="button">Download code</button>
+    <a class="btn small ghost" id="back-link" href="index.html">← Back to lesson</a>
+  </div>
+  <div class="editor-pane">
+    <div class="pane-head"><span>Code</span><span class="status" id="save-status"></span></div>
+    <textarea class="code-editor" id="code" spellcheck="false" aria-label="Code editor"></textarea>
+  </div>
+  <div class="output-pane">
+    <div class="pane-head"><span>Result</span><span class="status" id="run-status"></span></div>
+    <iframe class="preview" id="preview" title="Preview" sandbox="allow-scripts allow-downloads allow-modals allow-popups allow-forms" style="display:none"></iframe>
+    <div class="output" id="output">Press <b>Run</b> to execute the code.</div>
+  </div>
+</div>
+<script src="assets/js/md.js"></script>
+<script src="assets/js/catalog.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="assets/js/engines.js"></script>
+<script src="assets/js/runner.js"></script>
+</body>
+</html>

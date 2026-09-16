@@ -24,6 +24,16 @@ https://alirazavirtualassistant-lab.github.io/my-website/cradle-your-cravings/
 
 Source: [`site/cradle-your-cravings/`](site/cradle-your-cravings/). Share this link with the client. It is fully self-contained (relative links/assets) and does not affect the myersmorrison.com preview.
 
+### 🎓 SkillForge — learning platform (separate preview)
+
+A W3Schools-style learning site covering every skill on Ali Raza's resume, from beginner to expert, with in-browser Try-It editors (Python, JavaScript, SQL, HTML/CSS), quizzes, a practice lab and an interview-prep hub. It lives in its own subfolder and publishes to its own URL without touching the previews above:
+
+```
+https://alirazavirtualassistant-lab.github.io/my-website/learn/
+```
+
+Source: [`site/learn/`](site/learn/) — see its [README](site/learn/README.md) for how to run it locally and add courses.
+
 ## 💳 Payments policy — unchanged from the live site
 
 Per the owner's instruction, **all payment links match the existing live site** — there is **no Stripe/PayPal** added:

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SkillForge · Learn every skill on your resume, beginner to expert</title>
+<meta name="description" content="A W3Schools-style learning platform covering Python, JavaScript, SQL, Excel, Power BI, document automation (python-docx, ReportLab, PyMuPDF, EPUB3), title insurance, leadership and interview prep — with Try-It editors, quizzes and mock interviews.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<link rel="stylesheet" href="assets/css/learn.css">
+</head>
+<body>
+<header class="topbar"></header>
+<section class="hero">
+  <h1>Learn every skill on your resume.<br>Beginner → Expert → Interview-ready.</h1>
+  <p>Step-by-step lessons with runnable examples, quizzes, exercises and real interview questions for document engineering, data &amp; reporting, programming, office tools and operations leadership.</p>
+  <div class="actions">
+    <a class="btn" href="#tracks">Browse courses</a>
+    <a class="btn secondary" href="roadmap.html">Follow the roadmap</a>
+    <a class="btn secondary" href="interview.html">Mock interview</a>
+  </div>
+  <div class="stats" id="stats"></div>
+</section>
+
+<div class="container">
+  <div class="feature-row">
+    <div class="feature"><div class="ic">🧪</div><b>Try it yourself</b><p>Run Python, JavaScript, SQL and HTML/CSS right in the browser. Generate real .docx, .pptx and .pdf files from the editor.</p></div>
+    <div class="feature"><div class="ic">📝</div><b>Quiz every chapter</b><p>Instant feedback with explanations. A perfect score marks the chapter complete automatically.</p></div>
+    <div class="feature"><div class="ic">🏋️</div><b>Practice lab</b><p>Coding challenges with automatic tests, plus analyst tasks in Excel, SQL and data cleaning.</p></div>
+    <div class="feature"><div class="ic">🎯</div><b>Interview prep</b><p>Thousands of questions with model answers, flashcards, a timed mock interview and STAR stories built from your own experience.</p></div>
+  </div>
+
+  <section class="section" id="continue" style="display:none">
+    <h2>Continue learning</h2>
+    <p class="sub">Pick up where you left off.</p>
+    <div class="grid" id="continue-grid"></div>
+  </section>
+
+  <section class="section" id="tracks">
+    <h2>All courses</h2>
+    <p class="sub">Every course has four levels — Beginner, Intermediate, Advanced and Expert — each with lessons, a Try-It editor, quizzes, exercises and interview questions.</p>
+    <div id="catalog"><div class="loading"><span class="spinner"></span>Loading catalogue…</div></div>
+  </section>
+</div>
+
+<footer class="footer">SkillForge · Built for Ali Raza's skill set · Static site, no accounts — progress is saved in this browser. <a href="#" id="reset-progress">Reset progress</a></footer>
+
+<script src="assets/js/md.js"></script>
+<script src="assets/js/catalog.js"></script>
+<script src="assets/js/app.js"></script>
+<script>
+(function () {
+  App.renderTopbar('home');
+  const C = window.CATALOG || { tracks: [], courses: [] };
+  const totalCh = C.courses.reduce(function (a, c) { return a + c.chapters; }, 0);
+  const totalQ = C.courses.reduce(function (a, c) { return a + c.quiz; }, 0);
+  const totalIQ = C.courses.reduce(function (a, c) { return a + c.interview; }, 0);
+  document.getElementById('stats').innerHTML = [[C.courses.length, 'courses'], [totalCh, 'chapters'], [totalQ, 'quiz questions'], [totalIQ, 'interview questions']].map(function (s) { return '<div><b>' + s[0] + '</b><span>' + s[1] + '</span></div>'; }).join('');
+
+  function card(c) {
+    const done = App.progress.countDone(c.id), pct = c.chapters ? Math.round(done / c.chapters * 100) : 0;
+    return '<a class="card" href="course.html?c=' + encodeURIComponent(c.id) + '" style="--card-color:' + App.esc(c.color) + '"><div class="ic">' + App.esc(c.icon) + '</div><div class="t">' + App.esc(c.title) + '</div><div class="d">' + App.esc(c.tagline) + '</div><div class="foot"><span>' + c.chapters + ' chapters · ' + c.interview + ' interview Qs</span><span>' + (pct ? pct + '%' : '') + '</span></div>' + (pct ? '<div class="progress-bar"><span style="width:' + pct + '%"></span></div>' : '') + '</a>';
+  }
+  const TRACK_BLURB = {
+    'Programming': 'Languages and fundamentals every automation pipeline is built on.',
+    'Document Engineering': 'The DOCX / PDF / EPUB / PPTX toolchain you sell on Fiverr and use at work.',
+    'Data & Reporting': 'From messy exports to management dashboards and weekly status reports.',
+    'Office & Tools': 'Expert-level Microsoft 365, Google Workspace, design and reference tools.',
+    'AI & Automation': 'Integrating LLM APIs reliably into document and data tools.',
+    'Computer Science': 'University-level theory for the BS-SE viva and technical interviews.',
+    'Operations & Career': 'Team leadership, quality, the title-insurance domain, and winning interviews.'
+  };
+  let html = '';
+  C.tracks.forEach(function (t) {
+    const cs = C.courses.filter(function (c) { return c.track === t; });
+    if (!cs.length) return;
+    html += '<div class="track-head"><h3>' + App.esc(t) + '</h3><span>' + App.esc(TRACK_BLURB[t] || '') + ' · ' + cs.length + ' courses</span></div><div class="grid">' + cs.map(card).join('') + '</div>';
+  });
+  document.getElementById('catalog').innerHTML = html || '<div class="notice">No courses found. Run <code>node tools/build-catalog.js</code>.</div>';
+
+  // continue learning
+  const prog = App.progress.all();
+  const recent = Object.keys(prog).map(function (id) { const c = App.courseById(id); if (!c) return null; const at = Math.max.apply(null, Object.keys(prog[id]).map(function (k) { return prog[id][k].at || 0; })); return { c: c, at: at }; }).filter(Boolean).sort(function (a, b) { return b.at - a.at; }).slice(0, 4);
+  if (recent.length) { document.getElementById('continue').style.display = 'block'; document.getElementById('continue-grid').innerHTML = recent.map(function (r) { return card(r.c); }).join(''); }
+
+  document.getElementById('reset-progress').addEventListener('click', function (e) { e.preventDefault(); if (confirm('Clear all saved progress, quiz scores and code edits in this browser?')) { App.progress.reset(); Object.keys(localStorage).filter(function (k) { return k.indexOf('sf.') === 0; }).forEach(function (k) { localStorage.removeItem(k); }); location.reload(); } });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interview Prep · SkillForge</title>
+<meta name="description" content="Question bank, flashcards, timed mock interviews and STAR stories for document automation, data analyst, developer and operations roles.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<link rel="stylesheet" href="assets/css/learn.css">
+</head>
+<body>
+<header class="topbar"></header>
+<div class="container" style="padding-bottom:60px">
+  <section class="section">
+    <h2>🎯 Interview Prep</h2>
+    <p class="sub">Every interview question from every course, plus behavioural questions and STAR stories built from your resume. Filter by course, then browse, flip flashcards or run a timed mock interview.</p>
+    <div class="chips" id="course-chips"></div>
+    <div class="tabs" role="tablist">
+      <button class="active" data-tab="bank" type="button">Question bank</button>
+      <button data-tab="flash" type="button">Flashcards</button>
+      <button data-tab="mock" type="button">Mock interview</button>
+      <button data-tab="star" type="button">STAR stories</button>
+      <button data-tab="plan" type="button">Interview-day checklist</button>
+    </div>
+    <div class="tab-panel active" id="tab-bank"><div class="run-row"><input type="search" id="bank-q" placeholder="Search questions…" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);min-width:260px"><span class="status" id="bank-count"></span></div><div id="bank"></div></div>
+    <div class="tab-panel" id="tab-flash"><div class="flashcard" id="flashcard"><div class="lbl" id="fc-lbl">Question</div><div class="q" id="fc-q"></div><div class="a lesson-body" id="fc-a"></div></div><div class="card-controls"><button class="btn secondary" id="fc-prev" type="button">« Previous</button><button class="btn" id="fc-flip" type="button">Flip (Space)</button><button class="btn secondary" id="fc-next" type="button">Next »</button><button class="btn ghost" id="fc-shuffle" type="button">Shuffle</button></div><p class="status" style="text-align:center" id="fc-count"></p></div>
+    <div class="tab-panel" id="tab-mock"><div class="run-row"><label>Questions <select id="mock-n"><option>5</option><option selected>8</option><option>12</option><option>20</option></select></label><label>Minutes per answer <select id="mock-min"><option>1</option><option selected>2</option><option>3</option><option>5</option></select></label><label><input type="checkbox" id="mock-beh" checked> Include behavioural</label><button class="btn" id="mock-start" type="button">Start mock interview</button><span class="timer" id="mock-timer"></span></div><div id="mock"></div></div>
+    <div class="tab-panel" id="tab-star"><div id="star"></div></div>
+    <div class="tab-panel" id="tab-plan"><div id="plan" class="lesson-body"></div></div>
+  </section>
+</div>
+<script src="assets/js/md.js"></script>
+<script src="assets/js/catalog.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="data/behavioral.js"></script>
+<script src="assets/js/interview.js"></script>
+</body>
+</html>
