@@ -2231,3 +2231,2116 @@ First express it as column arithmetic: most "if this column then that" logic is 
 
 **Q: Explain pd.cut versus pd.qcut.**
 `pd.cut` bins by fixed edges you supply (or equal-width bins if you give a count), which matches business bands such as coverage under 100k, 100–250k, above. `pd.qcut` bins by quantiles so each bin has roughly the same number of rows, which suits ranking customers into quartiles. Both return an ordered `category`, so sorting and grouping preserve band order, and both accept `labels=`. Edge cases: `cut` puts values outside the edges as NaN unless the edges include infinities, and `qcut` raises when there are too many duplicate values to form distinct edges unless `duplicates="drop"`.
+
+# LEVEL: Advanced
+
+## Pivot tables, crosstab, melt & stack
+
+Every weekly production report is a reshaping problem. The system exports one row per file (long format); management wants states down the side, weeks across the top and a total in each cell (wide format). pandas moves between the two shapes with `pivot_table`, `pivot`, `crosstab`, `melt`, `stack` and `unstack`. Master these and you never build a summary by hand in Excel again.
+
+### pivot_table: the PivotTable equivalent
+
+```python
+summary = pd.pivot_table(
+    df,
+    index="state",            # rows
+    columns="week",           # columns
+    values="files",           # what to aggregate
+    aggfunc="sum",            # default is "mean", so always set it
+    fill_value=0,
+    margins=True, margins_name="Total",
+)
+```
+
+`pivot_table` groups, aggregates and lays out in one call. `margins=True` adds row and column totals exactly like the Grand Total in Excel. Several measures at once are allowed: `values=["files", "errors"], aggfunc={"files": "sum", "errors": ["sum", "max"]}` produces a two-level column header.
+
+### pivot: reshape without aggregating
+
+```python
+wide = df.pivot(index="state", columns="week", values="files")
+```
+
+`pivot` is a pure reshape. It raises `ValueError: Index contains duplicate entries` if any (index, column) pair occurs twice, which is a useful check: if you expected one row per state-week and `pivot` fails, your data has duplicates. Use `pivot_table` when you want aggregation, `pivot` when you want the guarantee.
+
+### crosstab: frequency tables
+
+```python
+pd.crosstab(df["agent"], df["qa_result"])                          # counts
+pd.crosstab(df["agent"], df["qa_result"], normalize="index")       # row percentages
+pd.crosstab(df["agent"], df["qa_result"], values=df["files"], aggfunc="sum", margins=True)
+```
+
+`crosstab` works on plain arrays or Series, not just DataFrame columns, and `normalize="index"`, `"columns"` or `"all"` gives percentages without a second step. It is the fastest way to build a QA pass/fail matrix per agent.
+
+### melt: wide to long
+
+The reverse trip matters just as much. Clients send rate matrices with one column per coverage band; Power BI and SQL want one row per (state, band, rate).
+
+```python
+long = matrix.melt(
+    id_vars=["state"],
+    value_vars=["0-50k", "50-100k", "100-250k"],
+    var_name="band",
+    value_name="rate",
+)
+```
+
+Every column in `value_vars` becomes rows; `id_vars` are repeated. Omit `value_vars` to melt every column not in `id_vars`. `pd.wide_to_long` handles the special case where column names carry a stub and a suffix, such as `rate_2024`, `rate_2025`.
+
+### stack and unstack: move index levels
+
+```python
+stacked = wide.stack()            # columns → inner index level (long Series)
+back = stacked.unstack()          # inner index level → columns
+by_state = df.groupby(["state", "week"])["files"].sum().unstack("week", fill_value=0)
+```
+
+`groupby(...).sum().unstack()` is the idiom most experienced users reach for instead of `pivot_table`: it is explicit about the aggregation and gives you the same wide result. In pandas 2.1+ pass `future_stack=True` to `stack` to get the new implementation that keeps NaN rows and is much faster.
+
+### Cleaning up after a pivot
+
+Pivots create MultiIndex columns and an index name that Excel does not need. The usual cleanup is:
+
+```python
+out = summary.reset_index()                          # state back to a column
+out.columns = [" ".join(map(str, c)).strip() if isinstance(c, tuple) else c for c in out.columns]
+out.columns.name = None
+```
+
+| Task | Function |
+|---|---|
+| Summarise with aggregation | `pivot_table` |
+| Reshape one value per cell, no duplicates | `pivot` |
+| Counts or percentages of two categoricals | `crosstab` |
+| Wide to long | `melt`, `wide_to_long` |
+| Column level to index and back | `stack` / `unstack` |
+
+> **Tip:** `pivot_table` silently defaults to the mean. A report showing "files = 41.3" instead of the weekly total almost always means someone forgot `aggfunc="sum"`.
+
+### Try It Yourself
+
+```python
+import io
+import pandas as pd
+
+raw = """week,state,agent,files,errors,qa_result
+W36,WY,Asad,120,3,Pass
+W36,MT,Hina,95,6,Fail
+W36,WY,Hina,80,1,Pass
+W37,WY,Asad,130,2,Pass
+W37,MT,Asad,60,5,Fail
+W37,ID,Hina,110,2,Pass
+W38,ID,Asad,90,4,Pass
+W38,MT,Hina,105,3,Pass
+"""
+df = pd.read_csv(io.StringIO(raw))
+
+wide = pd.pivot_table(df, index="state", columns="week", values="files",
+                      aggfunc="sum", fill_value=0, margins=True, margins_name="Total")
+print("Files by state and week:\n", wide, "\n")
+
+qa = pd.crosstab(df["agent"], df["qa_result"], normalize="index").round(2)
+print("QA pass rate per agent:\n", qa, "\n")
+
+long = wide.drop("Total").drop(columns="Total").reset_index().melt(
+    id_vars="state", var_name="week", value_name="files")
+print("Back to long:\n", long.sort_values(["state", "week"]).to_string(index=False), "\n")
+
+stacked = df.groupby(["state", "week"])["errors"].sum().unstack("week", fill_value=0)
+print("Errors via groupby + unstack:\n", stacked)
+```
+
+### Quiz
+
+1. What is the default `aggfunc` of `pivot_table`?
+- [ ] sum
+- [x] mean
+- [ ] count
+> pivot_table averages unless you say otherwise; always pass aggfunc explicitly for reports.
+
+2. `df.pivot(...)` raises "Index contains duplicate entries". What does that tell you?
+- [x] Some (index, column) pair occurs more than once, so a pure reshape is ambiguous
+- [ ] The DataFrame index is not sorted
+- [ ] You must call reset_index first
+> pivot does not aggregate, so it needs exactly one value per cell; use pivot_table to aggregate duplicates.
+
+3. Which function turns one column per week into one row per week?
+- [ ] unstack
+- [x] melt
+- [ ] crosstab
+> melt converts wide columns into (variable, value) rows.
+
+4. `pd.crosstab(a, b, normalize="index")` returns what?
+- [ ] Counts
+- [x] Each row's values as a fraction of that row's total
+- [ ] Each column's values as a fraction of the grand total
+> normalize="index" divides by row sums, giving per-row percentages.
+
+### Exercises
+
+1. **Two measures** — Build a pivot with states as rows, weeks as columns, showing both the sum of files and the max errors.
+<details><summary>Solution</summary>
+
+```python
+pd.pivot_table(df, index="state", columns="week",
+               values=["files", "errors"],
+               aggfunc={"files": "sum", "errors": "max"}, fill_value=0)
+```
+
+</details>
+
+2. **Rate matrix to long** — A DataFrame `matrix` has columns `state, 0-50k, 50-100k, 100-250k`. Produce rows of (state, band, rate) sorted by state then band.
+<details><summary>Solution</summary>
+
+```python
+long = matrix.melt(id_vars="state", var_name="band", value_name="rate")
+long = long.sort_values(["state", "band"]).reset_index(drop=True)
+```
+
+</details>
+
+3. **Flatten headers** — After a two-measure pivot, flatten the MultiIndex columns into names like `files W36`.
+<details><summary>Solution</summary>
+
+```python
+p = pd.pivot_table(df, index="state", columns="week", values=["files", "errors"], aggfunc="sum")
+p.columns = [f"{m} {w}" for m, w in p.columns]
+p = p.reset_index()
+```
+
+</details>
+
+### Interview Questions
+
+**Q: What is the difference between pivot and pivot_table?**
+`pivot` is a pure reshape: it requires exactly one value for each (index, column) combination and raises on duplicates. `pivot_table` groups and aggregates first, so duplicates are combined by `aggfunc`, and it supports `margins` and `fill_value`. I use `pivot` deliberately when duplicates would be a data-quality bug, because the error is a free assertion, and `pivot_table` when I need totals. Under the hood `pivot_table` is `groupby` followed by `unstack`, which is why many people write that idiom directly.
+
+**Q: When would you melt a DataFrame?**
+Whenever the data is wide for human reading but needs to be long for analysis or storage. A rate matrix with one column per coverage band cannot be joined, filtered or charted per band until it is melted into (state, band, rate) rows. Long data is what SQL tables, Power BI models and `groupby` want; wide data is what managers want to look at. A typical pipeline melts on the way in, computes in long form, and pivots on the way out to Excel.
+
+**Q: How does crosstab differ from pivot_table?**
+`crosstab` is a convenience for frequency tables of two or more categorical arrays: by default it counts, it accepts raw arrays rather than needing a DataFrame, and it has a `normalize` argument to produce row, column or overall percentages in one step. `pivot_table` needs a DataFrame and a `values` column, and returns raw aggregates. For a QA pass/fail rate per agent, `crosstab(agent, result, normalize="index")` is one line; the equivalent with `pivot_table` needs a count column and a division.
+
+**Q: What does unstack do and when does it produce NaN?**
+`unstack` moves the innermost index level (or a named level) into the columns. If a combination of the remaining index and the moved level did not exist in the data, that cell has no value and becomes NaN, which is why `fill_value=0` is common for count-type data. The reverse, `stack`, moves a column level back into the index and by default drops those NaN cells, so `stack` and `unstack` are not perfectly symmetric unless you use `dropna=False` or `future_stack=True` in pandas 2.1+.
+
+## Datetime, resampling & time series
+
+Production data is time-stamped: a file is received, worked and closed, and every report groups those events by day, week or month. pandas has a dedicated `datetime64[ns]` dtype, a `.dt` accessor, a `DatetimeIndex` with calendar-aware slicing, and `resample` for changing the frequency. Doing dates properly means Monday-to-Sunday weeks, month ends that respect February, and time-zone-safe comparisons.
+
+### Parsing dates
+
+```python
+df["received"] = pd.to_datetime(df["received"], format="%m/%d/%Y")       # US style, explicit
+df["closed"] = pd.to_datetime(df["closed"], errors="coerce")            # bad values → NaT
+df = pd.read_csv(path, parse_dates=["received", "closed"])
+```
+
+Always pass `format=` when you know it; parsing is faster and unambiguous (`03/04/2026` is 4 March in Lahore and 3 April in Texas). Since pandas 2.0 a mixed-format column raises unless you pass `format="mixed"`. Missing dates are `NaT`, and `isna()` recognises them.
+
+### The .dt accessor
+
+```python
+df["year"] = df["received"].dt.year
+df["week"] = df["received"].dt.isocalendar().week          # ISO week number
+df["dow"] = df["received"].dt.day_name()
+df["month"] = df["received"].dt.to_period("M")             # 2026-09
+df["days_open"] = (df["closed"] - df["received"]).dt.days
+df["due"] = df["received"] + pd.Timedelta(days=5)
+df["due_bd"] = df["received"] + pd.offsets.BusinessDay(5)  # skips weekends
+```
+
+Subtracting two datetimes gives a `timedelta64` Series; `.dt.days` or `.dt.total_seconds()` turns it into a number. `pd.offsets` covers business days, month ends (`MonthEnd`), quarter starts and custom holiday calendars.
+
+### DatetimeIndex slicing
+
+```python
+ts = df.set_index("received").sort_index()
+ts.loc["2026-09"]                       # the whole month
+ts.loc["2026-09-01":"2026-09-07"]       # inclusive on both ends
+ts.between_time("09:00", "17:00")       # only for timestamps with a time part
+```
+
+Partial-string indexing is the reason to put dates in the index: a month, a quarter or a date range is one string. Sort the index first, otherwise slicing raises `KeyError` on unsorted data.
+
+### resample: change the frequency
+
+```python
+weekly = ts["files"].resample("W-SUN").sum()      # weeks ending Sunday
+monthly = ts.resample("ME").agg({"files": "sum", "errors": "sum", "days_open": "mean"})
+daily = ts["files"].resample("D").sum().fillna(0) # fills calendar gaps with 0
+```
+
+`resample` is a time-aware `groupby`. Common frequency strings: `D` day, `W` or `W-MON` week ending on that day, `ME` month end (`M` before pandas 2.2), `MS` month start, `QE` quarter end, `YE` year end, `h`/`min` for intraday. Days with no rows appear in the output as NaN, which is exactly what a management chart needs so gaps are visible.
+
+### Grouper: resample inside groupby
+
+```python
+df.groupby(["state", pd.Grouper(key="received", freq="W-SUN")])["files"].sum().unstack(0)
+```
+
+`pd.Grouper` lets you resample per state in one call, and `unstack(0)` gives weeks as rows and states as columns.
+
+### Time zones
+
+```python
+s = pd.to_datetime(df["created_utc"]).dt.tz_localize("UTC")
+s.dt.tz_convert("America/Chicago")          # Stewart's Texas office
+s.dt.tz_convert("Asia/Karachi").dt.tz_localize(None)   # naive local time for Excel
+```
+
+`tz_localize` attaches a zone to naive timestamps; `tz_convert` changes zone. Comparing tz-aware and naive timestamps raises `TypeError`, so pick one convention per pipeline. Excel cannot store time zones, so strip them with `tz_localize(None)` before export.
+
+### Rolling calendars and date ranges
+
+```python
+pd.date_range("2026-09-01", periods=4, freq="W-MON")           # every Monday
+pd.date_range("2026-01-01", "2026-12-31", freq="BME")           # business month ends
+ts.reindex(pd.date_range(ts.index.min(), ts.index.max(), freq="D"), fill_value=0)
+```
+
+`date_range` builds a complete calendar; `reindex` against it forces every day to appear even when the source had no rows, which stops charts from silently skipping quiet days.
+
+| Frequency alias | Meaning |
+|---|---|
+| `D`, `B` | Calendar day, business day |
+| `W-SUN` | Weekly, periods end on Sunday |
+| `ME` / `MS` | Month end / month start |
+| `QE` / `YE` | Quarter end / year end |
+| `h`, `min`, `s` | Hour, minute, second |
+
+> **Warning:** Excel stores dates as serial numbers and pandas reads them as datetimes correctly through openpyxl, but a CSV exported from Excel contains text like `9/3/26`. Two-digit years and month/day order are the most common source of wrong weekly totals; fix them with an explicit `format=`.
+
+### Try It Yourself
+
+```python
+import io
+import pandas as pd
+
+raw = """file_id,state,received,closed,files
+1,WY,09/01/2026,09/03/2026,12
+2,MT,09/01/2026,09/05/2026,9
+3,WY,09/04/2026,09/08/2026,15
+4,ID,09/09/2026,,7
+5,MT,09/10/2026,09/12/2026,11
+6,WY,09/16/2026,09/17/2026,14
+7,ID,09/22/2026,09/29/2026,6
+"""
+df = pd.read_csv(io.StringIO(raw))
+df["received"] = pd.to_datetime(df["received"], format="%m/%d/%Y")
+df["closed"] = pd.to_datetime(df["closed"], format="%m/%d/%Y", errors="coerce")
+
+df["days_open"] = (df["closed"] - df["received"]).dt.days
+df["due"] = df["received"] + pd.offsets.BusinessDay(5)
+df["iso_week"] = df["received"].dt.isocalendar().week
+print(df[["file_id", "received", "closed", "days_open", "due", "iso_week"]], "\n")
+
+ts = df.set_index("received").sort_index()
+weekly = ts["files"].resample("W-SUN").sum()
+print("Weekly files (weeks ending Sunday):\n", weekly, "\n")
+
+by_state = (df.groupby(["state", pd.Grouper(key="received", freq="W-SUN")])["files"]
+              .sum().unstack(0, fill_value=0))
+print("Weekly files per state:\n", by_state, "\n")
+
+print("Still open:", df.loc[df["closed"].isna(), "file_id"].tolist())
+print("Avg days open:", round(df["days_open"].mean(), 1))
+```
+
+### Quiz
+
+1. What does `pd.to_datetime(s, errors="coerce")` do with an unparseable value?
+- [ ] Raises ValueError
+- [x] Returns NaT for that element
+- [ ] Leaves the original string
+> coerce converts failures to NaT, the datetime missing value, so the column stays datetime64.
+
+2. Which frequency string means weeks ending on Sunday?
+- [x] `W-SUN`
+- [ ] `W-MON`
+- [ ] `7D`
+> W-<DAY> anchors each period to end on that weekday; 7D is unanchored.
+
+3. `ts.loc["2026-09"]` on a sorted DatetimeIndex returns what?
+- [ ] Only 1 September 2026
+- [x] Every row in September 2026
+- [ ] A KeyError
+> Partial-string indexing selects the whole period named by the string.
+
+4. Why does `df["received"] + pd.offsets.BusinessDay(5)` differ from `+ pd.Timedelta(days=5)`?
+- [x] BusinessDay skips Saturdays and Sundays
+- [ ] Timedelta cannot be added to datetimes
+- [ ] BusinessDay counts hours, not days
+> Offsets are calendar-aware; Timedelta is a fixed duration.
+
+### Exercises
+
+1. **Monthly summary** — From `ts` (DatetimeIndex), compute per month the total files and the mean days open, with month-end labels.
+<details><summary>Solution</summary>
+
+```python
+monthly = ts.resample("ME").agg({"files": "sum", "days_open": "mean"}).round(1)
+```
+
+</details>
+
+2. **Fill the calendar** — Produce a daily Series of files with 0 on days that had no rows.
+<details><summary>Solution</summary>
+
+```python
+daily = ts["files"].resample("D").sum()
+full = daily.reindex(pd.date_range(daily.index.min(), daily.index.max(), freq="D"), fill_value=0)
+```
+
+</details>
+
+3. **SLA breach** — Flag files where `closed` is later than `received + 5 business days`, treating unclosed files as breached if today is past the due date.
+<details><summary>Solution</summary>
+
+```python
+due = df["received"] + pd.offsets.BusinessDay(5)
+today = pd.Timestamp("2026-09-16")
+df["breach"] = (df["closed"] > due) | (df["closed"].isna() & (today > due))
+```
+
+</details>
+
+### Interview Questions
+
+**Q: What is the difference between resample and groupby on a date column?**
+`resample` is a `groupby` specialised for a regular time frequency: it requires a DatetimeIndex (or `on=`/`pd.Grouper`), it understands calendar semantics such as month ends and weeks anchored to a weekday, and it emits every period in the range, including empty ones as NaN. A plain `groupby(df.received.dt.month)` only returns months that had data and loses the year unless you add it. For a weekly production report I use `resample("W-SUN")` so an empty week shows as zero rather than vanishing, which a manager would otherwise read as a data error.
+
+**Q: How do you handle mixed date formats in one column?**
+First I find out why they are mixed, because it usually means two source systems were concatenated. Then I parse each known format explicitly with `pd.to_datetime(format=..., errors="coerce")` and combine the results with `fillna`, so nothing is guessed. `format="mixed"` (pandas 2.0+) infers per element but is slow and can silently swap day and month, so I only use it for exploration. I finish with an assertion that the count of `NaT` equals the count of originally blank cells.
+
+**Q: Explain tz_localize versus tz_convert.**
+`tz_localize` attaches a time zone to naive timestamps without changing the wall-clock value; `tz_convert` shifts an already-aware timestamp to another zone, changing the wall-clock value. If a system logs `2026-09-16 14:00` in Chicago, I `tz_localize("America/Chicago")` and then `tz_convert("UTC")` to store it. Mixing aware and naive values raises a `TypeError`, and Excel cannot hold zones, so I convert to the report's local zone and `tz_localize(None)` right before writing.
+
+**Q: Why put dates in the index at all?**
+Three features need it: partial-string slicing (`ts.loc["2026-Q3"]`), `resample`, and alignment when adding or subtracting two time series with different dates. Outside of those, keeping the date as a column is simpler for merges and Excel export. My pattern is to set the index for the time-series computations and `reset_index()` at the end of that block.
+
+## Window functions (rolling, expanding, shift, rank)
+
+A single week's number means little on its own. Managers want the four-week moving average, the change versus last week, the running total for the quarter and each agent's rank. In SQL these are window functions (`OVER (PARTITION BY ... ORDER BY ...)`); in pandas they are `rolling`, `expanding`, `ewm`, `shift`, `diff`, `pct_change`, `cumsum` and `rank`, all of which work per group when chained after `groupby`.
+
+### shift, diff and pct_change
+
+```python
+w = weekly.sort_values("week")
+w["prev"] = w["files"].shift(1)                  # last week's value
+w["change"] = w["files"].diff()                  # files - prev
+w["pct"] = w["files"].pct_change() * 100         # (files / prev - 1) * 100
+w["next"] = w["files"].shift(-1)                 # look ahead
+```
+
+`shift(1)` moves values down one row so each row sees the previous row; the first row gets NaN. This is SQL's `LAG`; `shift(-1)` is `LEAD`. Sort first, always: shift operates on row position, not on the week label.
+
+### rolling: moving windows
+
+```python
+w["ma4"] = w["files"].rolling(4).mean()                       # 4-week moving average
+w["ma4"] = w["files"].rolling(4, min_periods=1).mean()        # partial windows at the start
+w["max8"] = w["errors"].rolling(8).max()
+w["ma_centered"] = w["files"].rolling(5, center=True).mean()
+```
+
+`rolling(n)` looks at the current row and the `n-1` before it. Without `min_periods` the first `n-1` results are NaN. Any aggregation works: `sum`, `mean`, `std`, `min`, `max`, `median`, `quantile`, `apply(func, raw=True)` and `corr` between two columns. With a DatetimeIndex you can use a time offset instead of a count: `rolling("28D")` uses the last 28 calendar days regardless of how many rows fall in them.
+
+### expanding and ewm
+
+```python
+w["ytd"] = w["files"].expanding().sum()          # same as cumsum
+w["running_mean"] = w["files"].expanding().mean()
+w["ewma"] = w["files"].ewm(span=4).mean()        # recent weeks weighted more
+```
+
+`expanding` grows from the first row to the current one. `ewm` (exponentially weighted) gives a smoother trend line than a plain moving average because it never drops an old value suddenly.
+
+### cumulative functions
+
+```python
+w["cum_files"] = w["files"].cumsum()
+w["record_high"] = w["files"].cummax()
+w["cum_errors"] = w.groupby("state")["errors"].cumsum()
+```
+
+`cumsum`, `cumprod`, `cummax` and `cummin` are the fast path for running totals.
+
+### Per-group windows
+
+Everything above accepts a `groupby` in front of it, which is `PARTITION BY`:
+
+```python
+df = df.sort_values(["state", "week"])
+df["prev"] = df.groupby("state")["files"].shift(1)
+df["ma4"] = df.groupby("state")["files"].transform(lambda s: s.rolling(4, min_periods=1).mean())
+df["ma4"] = df.groupby("state")["files"].rolling(4, min_periods=1).mean().reset_index(level=0, drop=True)
+```
+
+`groupby().shift()` and `groupby().cumsum()` return a Series aligned to the original index. `groupby().rolling()` returns a MultiIndex (group, original index), so either drop the group level as shown or wrap the rolling call in `transform`, which keeps alignment automatically.
+
+### rank
+
+```python
+df["rank"] = df["files"].rank(ascending=False, method="min")            # 1 = most files
+df["rank_in_state"] = df.groupby("state")["files"].rank(ascending=False, method="dense")
+df["pctile"] = df["files"].rank(pct=True)
+```
+
+| `method` | Ties get | SQL equivalent |
+|---|---|---|
+| `average` (default) | mean of their positions | none |
+| `min` | the lowest position | `RANK()` |
+| `dense` | consecutive ranks with no gaps | `DENSE_RANK()` |
+| `first` | order of appearance | `ROW_NUMBER()` |
+
+`rank` is what an agent league table needs: rank agents by files within each team, then filter `rank <= 3` for a top-three list.
+
+### nlargest and top-n per group
+
+```python
+df.nlargest(3, "files")                                   # top 3 overall
+df.sort_values("files", ascending=False).groupby("state").head(2)    # top 2 per state
+```
+
+`groupby().head(n)` after sorting is the simplest top-n-per-group; it keeps the original columns and avoids `apply`.
+
+> **Interview note:** "Compute a 4-week moving average per state" is a common pandas screening task. The complete answer is: sort by state and week, then `groupby("state")["files"].transform(lambda s: s.rolling(4, min_periods=1).mean())`, and mention that forgetting to sort or forgetting `min_periods` are the two usual bugs.
+
+### Try It Yourself
+
+```python
+import io
+import pandas as pd
+
+raw = """week,state,files,errors
+1,WY,100,4
+2,WY,120,3
+3,WY,90,5
+4,WY,140,2
+5,WY,130,6
+1,MT,80,2
+2,MT,85,4
+3,MT,70,1
+4,MT,95,3
+5,MT,110,2
+"""
+df = pd.read_csv(io.StringIO(raw)).sort_values(["state", "week"]).reset_index(drop=True)
+g = df.groupby("state")["files"]
+
+df["prev"] = g.shift(1)
+df["change_pct"] = (g.pct_change() * 100).round(1)
+df["ma3"] = g.transform(lambda s: s.rolling(3, min_periods=1).mean()).round(1)
+df["cum"] = g.cumsum()
+df["record"] = g.cummax()
+df["rank_in_state"] = g.rank(ascending=False, method="dense").astype(int)
+df["err_rate_ewm"] = (df["errors"] / df["files"]).groupby(df["state"]).transform(
+    lambda s: s.ewm(span=3).mean()).round(4)
+print(df.to_string(index=False), "\n")
+
+top = df.sort_values("files", ascending=False).groupby("state").head(2)
+print("Top 2 weeks per state:\n", top[["state", "week", "files"]].to_string(index=False))
+```
+
+### Quiz
+
+1. `s.shift(1)` corresponds to which SQL window function?
+- [ ] LEAD
+- [x] LAG
+- [ ] ROW_NUMBER
+> shift(1) brings the previous row's value forward; shift(-1) is LEAD.
+
+2. Without `min_periods`, what do the first three values of `s.rolling(4).mean()` contain?
+- [x] NaN
+- [ ] 0
+- [ ] The partial mean
+> A window of 4 needs four observations; set min_periods=1 to allow partial windows.
+
+3. Which `rank` method matches SQL's `DENSE_RANK()`?
+- [ ] min
+- [x] dense
+- [ ] first
+> dense gives tied rows the same rank and the next rank has no gap.
+
+4. Why must you sort before `groupby("state")["files"].shift(1)`?
+- [x] shift works by row position, so unsorted rows give the wrong "previous" value
+- [ ] groupby requires sorted input
+- [ ] shift raises on unsorted data
+> Window operations are positional; sorting defines what "previous" means.
+
+### Exercises
+
+1. **Four-week average per state** — Add a column with the 4-week moving average of `files` per state, allowing partial windows.
+<details><summary>Solution</summary>
+
+```python
+df = df.sort_values(["state", "week"])
+df["ma4"] = df.groupby("state")["files"].transform(lambda s: s.rolling(4, min_periods=1).mean())
+```
+
+</details>
+
+2. **Week-over-week alert** — Flag rows where files dropped more than 20% versus the previous week in the same state.
+<details><summary>Solution</summary>
+
+```python
+df["alert"] = df.groupby("state")["files"].pct_change() < -0.20
+```
+
+</details>
+
+3. **Agent league table** — Given `agents` with `team, agent, files`, rank agents within each team (1 = most files, ties share the lowest rank) and keep the top 3 per team.
+<details><summary>Solution</summary>
+
+```python
+agents["rank"] = agents.groupby("team")["files"].rank(ascending=False, method="min")
+top3 = agents[agents["rank"] <= 3].sort_values(["team", "rank"])
+```
+
+</details>
+
+### Interview Questions
+
+**Q: How do pandas window operations map to SQL window functions?**
+`groupby` plays the role of `PARTITION BY`, sorting plays `ORDER BY`, and the method is the function: `shift` is `LAG`/`LEAD`, `cumsum` is `SUM() OVER (ROWS UNBOUNDED PRECEDING)`, `rolling(n).sum()` is `ROWS n-1 PRECEDING`, `rank(method="min")` is `RANK()`, `rank(method="dense")` is `DENSE_RANK()` and `rank(method="first")` or `cumcount()+1` is `ROW_NUMBER()`. The main practical difference is that pandas is positional, so I sort explicitly first, whereas SQL sorts inside the `OVER` clause.
+
+**Q: What is the difference between rolling, expanding and ewm?**
+`rolling` uses a fixed-size window (count or time offset), so old values drop out; `expanding` uses everything from the start, giving running totals and running means; `ewm` weights all history with exponentially decaying weights controlled by `span`, `halflife` or `alpha`. For a weekly KPI chart I show a 4-week rolling mean because managers understand it, but for anomaly detection I prefer `ewm` because it reacts faster to a real shift and does not jump when a single outlier leaves the window.
+
+**Q: groupby().rolling() gave me a MultiIndex I cannot assign back. What happened?**
+`groupby().rolling()` returns a result indexed by (group key, original index), so its shape does not align with the DataFrame. Two fixes: `reset_index(level=0, drop=True)` to drop the group level and get back the original index, or wrap the rolling call in `groupby().transform(lambda s: s.rolling(...).mean())`, which returns a Series aligned to the original rows. I use `transform` because it is also the pattern for every other per-group calculation, so the code stays uniform.
+
+**Q: How would you compute a time-based rolling window when weeks have missing rows?**
+Count-based `rolling(4)` silently spans gaps, so a "4-week" average might cover six calendar weeks. With a DatetimeIndex I use an offset window, `rolling("28D")`, which uses whatever rows fall in the last 28 days. Alternatively I `resample("W")` first so every week exists (with 0 or NaN), then use a count window. Which is right depends on whether a missing week means zero activity or missing data, and I confirm that with the data owner before choosing.
+
+## MultiIndex
+
+A MultiIndex (hierarchical index) is what you get whenever you group by two keys, pivot with two measures or stack a wide table. Many people treat it as an obstacle and `reset_index()` immediately. Understanding it instead gives you fast, readable selection of "Wyoming in week 37" and clean two-level Excel headers, and it is what makes `unstack` and `xs` possible.
+
+### Where a MultiIndex comes from
+
+```python
+g = df.groupby(["state", "week"])["files"].sum()
+print(g.index.nlevels, g.index.names)            # 2 ['state', 'week']
+g.loc[("WY", 37)]                                # one value
+g.loc["WY"]                                      # all weeks for WY (Series indexed by week)
+```
+
+Grouping by two keys yields a Series whose index has two levels. Tuples address a full key, a scalar addresses the outer level.
+
+### Building one directly
+
+```python
+idx = pd.MultiIndex.from_tuples([("WY", 36), ("WY", 37), ("MT", 36)], names=["state", "week"])
+idx = pd.MultiIndex.from_product([["WY", "MT"], [36, 37, 38]], names=["state", "week"])
+df2 = df.set_index(["state", "week"]).sort_index()
+```
+
+`from_product` creates every combination, which is handy for `reindex` when you want missing state-week pairs to appear as zero. `set_index` with a list of columns is the everyday way to get a MultiIndex from flat data. Always `sort_index()` afterwards: unsorted MultiIndex slicing raises `UnsortedIndexError` or a `PerformanceWarning`.
+
+### Selecting with loc, xs and IndexSlice
+
+```python
+df2.loc[("WY", 37)]                               # full key
+df2.loc["WY"]                                     # outer level
+df2.loc[("WY", 36):("WY", 38)]                    # tuple range (sorted index needed)
+df2.xs(37, level="week")                          # inner level, any outer
+idx = pd.IndexSlice
+df2.loc[idx[["WY", "MT"], 36:37], "files"]        # lists and ranges on each level
+```
+
+`xs` (cross-section) is the clean way to pick a value on an inner level; `IndexSlice` lets you slice each level independently, which the plain `[:, 37]` syntax cannot express inside `loc` without ambiguity.
+
+### Levels on columns
+
+Pivots with several measures give MultiIndex columns:
+
+```python
+p = pd.pivot_table(df, index="state", columns="week", values=["files", "errors"], aggfunc="sum")
+p["files"]                     # all weeks of the files measure
+p[("files", 37)]               # a single column
+p.xs(37, level="week", axis=1) # both measures for week 37
+p.columns = p.columns.swaplevel(0, 1)
+p = p.sort_index(axis=1)       # week outer, measure inner
+```
+
+Column MultiIndexes work with the same tools plus `axis=1`. `swaplevel` and `reorder_levels` change the level order so a report shows weeks then measures; `droplevel` removes a level you do not need.
+
+### Aggregating by level
+
+```python
+df2.groupby(level="state").sum()          # total per state
+df2.groupby(level=[0, 1]).sum()
+df2["files"].sum(level="state")           # removed in pandas 2.0; use groupby(level=)
+```
+
+`groupby(level=...)` aggregates across one level of the index. The old `sum(level=)` shortcut was removed in pandas 2.0.
+
+### Flattening for export
+
+```python
+flat = p.copy()
+flat.columns = [f"{measure}_{week}" for measure, week in flat.columns]
+flat = flat.reset_index()
+```
+
+openpyxl and CSV need single-level headers. Join the tuple with an underscore or a space, then `reset_index` so the state becomes a normal column. `to_excel` can write a MultiIndex header with merged cells, but the merged header breaks filters and PivotTables downstream, so flat names are safer for anything a client will refresh.
+
+### Common operations table
+
+| Task | Code |
+|---|---|
+| Create from columns | `df.set_index(["state", "week"])` |
+| Select one full key | `df2.loc[("WY", 37)]` |
+| Select on inner level | `df2.xs(37, level="week")` |
+| Slice both levels | `df2.loc[pd.IndexSlice["WY":"WY", 36:37], :]` |
+| Move a level to columns | `df2["files"].unstack("week")` |
+| Aggregate one level | `df2.groupby(level="state").sum()` |
+| Rename levels | `df2.rename_axis(["State", "Week"])` |
+| Back to flat | `df2.reset_index()` |
+
+> **Tip:** If `df2.loc["WY", 37]` gives a confusing result, remember pandas reads `loc[a, b]` as row `a`, column `b`. Use a tuple, `loc[("WY", 37)]`, to mean two index levels.
+
+### Try It Yourself
+
+```python
+import io
+import pandas as pd
+
+raw = """week,state,files,errors
+36,WY,120,3
+36,MT,95,6
+37,WY,130,2
+37,MT,60,5
+37,ID,110,2
+38,ID,90,4
+38,MT,105,3
+"""
+df = pd.read_csv(io.StringIO(raw))
+m = df.set_index(["state", "week"]).sort_index()
+print(m, "\n")
+
+print("WY week 37:", m.loc[("WY", 37), "files"])
+print("All of WY:\n", m.loc["WY"], "\n")
+print("Week 37 across states:\n", m.xs(37, level="week"), "\n")
+
+idx = pd.IndexSlice
+print("MT and WY, weeks 36-37:\n", m.loc[idx[["MT", "WY"], 36:37], :], "\n")
+
+full = pd.MultiIndex.from_product([["ID", "MT", "WY"], [36, 37, 38]], names=["state", "week"])
+complete = m.reindex(full, fill_value=0)
+print("Every state-week, zero-filled:\n", complete["files"].unstack("week"), "\n")
+
+p = pd.pivot_table(df, index="state", columns="week", values=["files", "errors"], aggfunc="sum", fill_value=0)
+p.columns = [f"{measure}_{week}" for measure, week in p.columns]
+print("Flattened for Excel:\n", p.reset_index().to_string(index=False))
+```
+
+### Quiz
+
+1. Which call selects week 37 for every state from a (state, week) MultiIndex?
+- [ ] `m.loc[37]`
+- [x] `m.xs(37, level="week")`
+- [ ] `m.loc["week", 37]`
+> loc with a scalar addresses the outer level; xs picks a value on any named level.
+
+2. What does `pd.MultiIndex.from_product([["WY","MT"], [36,37]])` contain?
+- [x] Four tuples: every state paired with every week
+- [ ] Two tuples: ("WY",36) and ("MT",37)
+- [ ] An error, because the lists have equal length
+> from_product is the Cartesian product of the level values.
+
+3. Why call `sort_index()` after `set_index(["state","week"])`?
+- [ ] It is required for groupby
+- [x] Range slicing on a MultiIndex needs a lexsorted index
+- [ ] It converts the index to categorical
+> Unsorted MultiIndex slices raise UnsortedIndexError or warn about performance.
+
+4. `df["files"].sum(level="state")` in pandas 2.x does what?
+- [ ] Sums per state
+- [x] Raises, because the level argument was removed
+- [ ] Returns the grand total
+> Use df.groupby(level="state")["files"].sum() instead.
+
+### Exercises
+
+1. **Error rate per state-week** — Using `m` from the Try It, add an `error_rate` column and select the state-weeks above 4%.
+<details><summary>Solution</summary>
+
+```python
+m["error_rate"] = m["errors"] / m["files"]
+high = m[m["error_rate"] > 0.04]
+```
+
+</details>
+
+2. **Swap and sort** — Turn the (state, week) index into (week, state) sorted by week.
+<details><summary>Solution</summary>
+
+```python
+by_week = m.swaplevel("state", "week").sort_index()
+```
+
+</details>
+
+3. **State totals with a subtotal row** — Produce a table of files per state and week with a "Total" row across states.
+<details><summary>Solution</summary>
+
+```python
+wide = m["files"].unstack("week", fill_value=0)
+wide.loc["Total"] = wide.sum()
+```
+
+</details>
+
+### Interview Questions
+
+**Q: What is a MultiIndex and when would you keep one rather than reset it?**
+A MultiIndex is an index with several levels, so each row (or column) is addressed by a tuple such as ("WY", 37). It arises from `groupby` with multiple keys, `set_index` with a list, `pivot_table` with several values, and `stack`. I keep it when I need level-aware operations: `unstack` to reshape, `xs` to slice an inner level, `groupby(level=)` for subtotals, or `reindex` against `from_product` to force every combination to exist. I reset it at the boundaries, before a merge (which is clearer on columns) and before writing to Excel or SQL.
+
+**Q: How do you slice on an inner level of a MultiIndex?**
+`xs(value, level=name)` for a single value, and `pd.IndexSlice` for ranges or lists: `df.loc[pd.IndexSlice[:, 36:37], :]` selects weeks 36 to 37 for every state. The index must be lexsorted with `sort_index()` first, otherwise pandas raises `UnsortedIndexError`. Boolean masks built from `df.index.get_level_values("week")` are a third option and are the most explicit when the condition is complex.
+
+**Q: Why avoid writing MultiIndex headers straight to Excel?**
+`to_excel` writes a MultiIndex column header as two rows with merged cells and a blank spacer row. Merged headers break Excel AutoFilter, Tables and PivotTables, and any downstream `read_excel` needs `header=[0,1]` to reconstruct them. For client deliverables I flatten the columns to names like `files_W37`, reset the index and write a single header row, then apply formatting with openpyxl. The exception is a purely visual management summary where nobody will filter the sheet.
+
+**Q: What is the performance implication of an unsorted MultiIndex?**
+Lookups on a sorted (lexsorted) MultiIndex use binary search and are O(log n); on an unsorted one pandas falls back to a full scan and emits a `PerformanceWarning`, and range slicing fails outright. `df.index.is_monotonic_increasing` tells you whether it is sorted. In a pipeline I sort once after `set_index` and never append rows to an indexed frame in a loop, because each append destroys the sort.
+
+## Categorical data & memory
+
+A 2-million-row production export has a `state` column with 50 distinct values stored 2 million times as Python strings. The `category` dtype stores each distinct value once and an integer code per row, cutting memory by 10–50× and speeding up `groupby`, `sort` and comparisons. It also gives you ordered bands (`Low < Medium < High`) that sort correctly in reports. Knowing how to measure memory and choose dtypes is what lets a laptop process files that would otherwise need a server.
+
+### Measuring memory
+
+```python
+df.info(memory_usage="deep")
+df.memory_usage(deep=True).sort_values(ascending=False)
+```
+
+Without `deep=True` pandas reports only the 8-byte pointer for each object cell, not the string it points to. `deep=True` tells the truth, and the sorted per-column view shows which columns to fix first: it is nearly always the text columns.
+
+### Converting to category
+
+```python
+df["state"] = df["state"].astype("category")
+df["agent"] = df["agent"].astype("category")
+print(df["state"].cat.categories)           # the distinct values
+print(df["state"].cat.codes.head())         # the integer codes
+df = pd.read_csv(path, dtype={"state": "category", "agent": "category"})
+```
+
+Convert at read time when possible so the object strings never exist. A good rule: convert when the number of unique values is under about 50% of the row count; above that the categories table costs more than it saves.
+
+### Ordered categories
+
+```python
+bands = pd.CategoricalDtype(["Low", "Medium", "High"], ordered=True)
+df["risk"] = df["risk"].astype(bands)
+df.sort_values("risk")                       # Low, Medium, High, not alphabetical
+df[df["risk"] >= "Medium"]                   # comparisons work
+df["risk"].max()                             # "High"
+```
+
+Ordered categories are the correct way to store business bands, priority levels and ISO week labels like `W36`. `pd.cut` and `pd.qcut` return ordered categories automatically.
+
+### Category pitfalls
+
+```python
+df["state"] = df["state"].cat.add_categories(["CO"])         # before assigning a new value
+df.loc[0, "state"] = "CO"
+df["state"] = df["state"].cat.remove_unused_categories()     # after filtering rows
+df.groupby("state", observed=True)["files"].sum()           # skip empty categories
+```
+
+Assigning a value that is not a category raises `TypeError: Cannot setitem on a Categorical with a new category`. Filtering rows does not drop categories, so `groupby` on a category column returns every category including empty ones (`observed=False` was the old default; pandas 2.1 warns and 3.0 switches to `observed=True`). Concatenating two frames whose categories differ silently produces an object column, so union the categories first with `pd.api.types.union_categoricals` or convert after the concat.
+
+### Smaller numeric dtypes
+
+```python
+df["files"] = pd.to_numeric(df["files"], downcast="integer")    # int64 → int16 if it fits
+df["rate"] = pd.to_numeric(df["rate"], downcast="float")        # float64 → float32
+df["files"] = df["files"].astype("Int32")                       # nullable integer
+```
+
+`downcast` picks the smallest type that holds every value. Beware of `float32` for money: it has about 7 significant digits, so premiums above a few million lose cents. Use nullable `Int64`/`Int32` when the column has missing values and must stay an integer rather than becoming `float64`.
+
+### String dtype and Arrow
+
+```python
+df["memo"] = df["memo"].astype("string")                  # nullable string dtype
+df = pd.read_csv(path, dtype_backend="pyarrow")           # pandas 2.0+: Arrow-backed columns
+```
+
+The `string` dtype uses `pd.NA` consistently and, with the `pyarrow` backend, stores text far more compactly than Python objects and runs `.str` operations faster. pandas 3.0 makes the Arrow-backed string dtype the default. Free text such as memos should be `string`; low-cardinality text should be `category`.
+
+| Column type | Best dtype |
+|---|---|
+| Few distinct values (state, agent, status) | `category` |
+| Free text (memo, address) | `string` / `string[pyarrow]` |
+| Whole numbers with no NaN | smallest `int` via downcast |
+| Whole numbers with NaN | `Int64` (nullable) |
+| Money | `float64`, or `Decimal` objects for ledgers |
+| Yes/No | `bool`, or `boolean` if NaN possible |
+| Dates | `datetime64[ns]` |
+
+> **Warning:** A category's codes are meaningless outside pandas. Never write `.cat.codes` to a file as if they were IDs, and never `merge` on a category column against an object column without converting one side, or you will get an object dtype and a slower join.
+
+### Try It Yourself
+
+```python
+import io
+import numpy as np
+import pandas as pd
+
+states = np.random.choice(["WY", "MT", "ID", "TX", "CO"], size=200_000)
+agents = np.random.choice([f"agent_{i:02d}" for i in range(20)], size=200_000)
+df = pd.DataFrame({"state": states, "agent": agents,
+                   "files": np.random.randint(1, 300, 200_000).astype("int64"),
+                   "risk": np.random.choice(["Low", "Medium", "High"], size=200_000)})
+
+before = df.memory_usage(deep=True).sum()
+opt = df.copy()
+opt["state"] = opt["state"].astype("category")
+opt["agent"] = opt["agent"].astype("category")
+opt["files"] = pd.to_numeric(opt["files"], downcast="integer")
+opt["risk"] = opt["risk"].astype(pd.CategoricalDtype(["Low", "Medium", "High"], ordered=True))
+after = opt.memory_usage(deep=True).sum()
+
+print(f"before: {before/1e6:.1f} MB   after: {after/1e6:.1f} MB   saved: {100*(1-after/before):.0f}%")
+print(opt.dtypes, "\n")
+print("codes for state:", opt["state"].cat.codes.head(3).tolist(), opt["state"].cat.categories.tolist())
+print("risk sorted correctly:", opt["risk"].drop_duplicates().sort_values().tolist())
+print("High-risk rows:", int((opt["risk"] >= "High").sum()))
+print(opt.groupby("risk", observed=True)["files"].mean().round(1))
+```
+
+### Quiz
+
+1. Why does `df.info()` under-report memory for text columns?
+- [x] Without memory_usage="deep" it counts only the pointer, not the string
+- [ ] It ignores text columns entirely
+- [ ] It reports memory in kilobytes
+> Object columns store pointers to Python strings; deep=True measures the strings too.
+
+2. What happens when you assign a value that is not one of the categories?
+- [ ] It is added automatically
+- [x] A TypeError is raised
+- [ ] It becomes NaN
+> Add it first with cat.add_categories, then assign.
+
+3. Which dtype keeps integers when a column has missing values?
+- [ ] int64
+- [x] Int64
+- [ ] float32
+> The capitalised nullable integer types support pd.NA; plain int64 cannot hold NaN.
+
+4. After filtering rows, `groupby("risk")` shows a "Medium" group with 0 rows. Why?
+- [x] Unused categories remain and observed=False includes them
+- [ ] The filter did not work
+- [ ] Categorical groupby always adds an empty group
+> Use observed=True or cat.remove_unused_categories().
+
+### Exercises
+
+1. **Read lean** — Read a CSV with columns `state, agent, files, memo` using the smallest sensible dtypes at read time.
+<details><summary>Solution</summary>
+
+```python
+df = pd.read_csv(path, dtype={"state": "category", "agent": "category",
+                              "files": "int32", "memo": "string"})
+```
+
+</details>
+
+2. **Priority order** — Make a `priority` column with values `P3, P2, P1` sort so that P1 comes first.
+<details><summary>Solution</summary>
+
+```python
+df["priority"] = df["priority"].astype(pd.CategoricalDtype(["P1", "P2", "P3"], ordered=True))
+df = df.sort_values("priority")
+```
+
+</details>
+
+3. **Safe concat** — Two frames both have a category `state` column with different category sets. Concatenate them and keep `state` categorical.
+<details><summary>Solution</summary>
+
+```python
+from pandas.api.types import union_categoricals
+cats = union_categoricals([a["state"], b["state"]]).categories
+a["state"] = a["state"].cat.set_categories(cats)
+b["state"] = b["state"].cat.set_categories(cats)
+out = pd.concat([a, b], ignore_index=True)
+```
+
+</details>
+
+### Interview Questions
+
+**Q: How does the category dtype save memory and when does it not help?**
+A categorical stores an array of integer codes (int8 if there are under 128 categories) plus one copy of each distinct value, so a 2-million-row state column drops from roughly 120 MB of Python strings to about 2 MB. It also speeds up `groupby`, `sort_values` and equality filters because they operate on the integer codes. It does not help, and can hurt, when the cardinality is high, such as a unique file ID per row: the categories table is as big as the column, plus the codes. My rule of thumb is to convert when unique values are below a few percent of the row count.
+
+**Q: A colleague's merge got slower after converting keys to category. Why?**
+Merging a category column against an object column forces pandas to convert, producing an object join key and losing the benefit; merging two categoricals with different category sets does the same. The fix is to give both sides the identical `CategoricalDtype` before the merge, at which point the join runs on integer codes and is faster than object strings. This is also why I set dtypes at read time from a shared dictionary rather than converting ad hoc in each script.
+
+**Q: What is the difference between object, string and string[pyarrow] dtypes?**
+`object` is a NumPy array of pointers to arbitrary Python objects; it is the pre-1.0 default, mixes types freely and uses `NaN` for missing. `string` (pandas 1.0+) is a dedicated extension dtype that guarantees text, uses `pd.NA` and makes `.str` methods return nullable results. `string[pyarrow]` stores the same data in Arrow buffers, which use far less memory and run vectorised string kernels in C++, often 5–10× faster. pandas 3.0 makes the Arrow-backed string the default, so I already write code that handles `pd.NA` rather than `NaN` in text columns.
+
+**Q: How would you fit a 10 GB CSV into 8 GB of RAM with pandas?**
+First reduce width and dtypes: `usecols` to drop unneeded columns, `dtype=` with categories for low-cardinality text and downcast integers, and `parse_dates` for dates. That alone often gives a 5–10× reduction. If it still does not fit, process in `chunksize` batches and aggregate per chunk, or convert once to Parquet and read only needed columns. If the workload is truly larger than memory, I move to Polars, DuckDB or a database and use pandas only for the final report shaping.
+
+# LEVEL: Expert
+
+## Performance (vectorisation, query/eval, chunking, dtypes)
+
+The difference between a pandas script that runs in 4 seconds and one that runs in 40 minutes is rarely the hardware. It is loops where there should be arrays, object columns where there should be categories, a whole file loaded when a column would do, and copies made by accident. This chapter is the checklist a senior analyst applies before asking for a bigger machine.
+
+### Measure first
+
+```python
+import time
+t0 = time.perf_counter()
+result = step(df)
+print(f"{time.perf_counter() - t0:.3f}s")
+```
+
+In Jupyter use `%timeit step(df)` for a repeated timing and `%prun` for a profile. Profile the pipeline once and fix the slowest step; the top item is usually 80% of the runtime.
+
+### Rule 1: no Python loops over rows
+
+```python
+# slow: 1M iterations in Python
+for i, row in df.iterrows():
+    df.loc[i, "premium"] = row["coverage"] / 1000 * row["rate"]
+
+# fast: one C loop
+df["premium"] = df["coverage"] / 1000 * df["rate"]
+```
+
+`iterrows` plus `df.loc[i, ...] = ` assignment is the worst pattern in pandas: each assignment may re-check the index and reallocate. The vectorised line is 1000× faster on a million rows.
+
+### Rule 2: the right dtype at read time
+
+```python
+df = pd.read_csv(
+    "production.csv",
+    usecols=["file_id", "state", "received", "coverage", "rate"],
+    dtype={"state": "category", "coverage": "float32", "file_id": "int32"},
+    parse_dates=["received"],
+    engine="pyarrow",             # pandas 2.0+, multithreaded parsing
+)
+```
+
+`usecols` avoids parsing columns you never use, `dtype` avoids a second conversion pass and the memory of object strings, and `engine="pyarrow"` parses several times faster than the default C engine on wide files.
+
+### Rule 3: query and eval for big expressions
+
+```python
+mask = df[(df["state"] == "WY") & (df["coverage"] > 250_000) & (df["rate"] < 0.02)]
+mask = df.query("state == 'WY' and coverage > 250000 and rate < 0.02")
+df.eval("premium = coverage / 1000 * rate", inplace=True)
+limit = 250_000
+df.query("coverage > @limit")
+```
+
+`query` and `eval` use the `numexpr` engine when it is installed, which evaluates the whole expression in one pass over the data without allocating an intermediate boolean array for every comparison. On frames above ~100k rows they are typically 1.5–3× faster and far more readable. Reference Python variables with `@name`.
+
+### Rule 4: chunking for files larger than memory
+
+```python
+totals = {}
+for chunk in pd.read_csv("huge.csv", chunksize=500_000, dtype={"state": "category"}):
+    part = chunk.groupby("state", observed=True)["files"].sum()
+    for state, n in part.items():
+        totals[state] = totals.get(state, 0) + n
+result = pd.Series(totals).sort_values(ascending=False)
+```
+
+`chunksize` returns an iterator of DataFrames. Aggregate each chunk and combine the partial results; this works for sums, counts, min and max, and for means if you carry sum and count separately. It does not work for medians or anything that needs all rows at once, which is where Parquet plus DuckDB or Polars come in.
+
+### Rule 5: Parquet instead of CSV
+
+```python
+df.to_parquet("production.parquet", index=False)
+df = pd.read_parquet("production.parquet", columns=["state", "coverage"])
+```
+
+Parquet stores dtypes, compresses columns and lets you read a subset of columns without touching the rest. Reading is typically 10–50× faster than CSV and the file is 5–10× smaller. Convert once, then every downstream script reads Parquet.
+
+### Rule 6: avoid accidental copies and chained assignment
+
+```python
+sub = df[df["state"] == "WY"]
+sub["flag"] = True                     # SettingWithCopyWarning: may not modify df
+sub = df.loc[df["state"] == "WY"].copy()
+sub["flag"] = True                     # clear intent
+df.loc[df["state"] == "WY", "flag"] = True   # modify the original in one step
+```
+
+pandas 2.x with Copy-on-Write (`pd.options.mode.copy_on_write = True`, default in 3.0) makes every derived frame behave like a copy, removing the warning and the ambiguity. Under CoW, writing `df["x"] = ...` is cheap and chained assignment `df["a"]["b"] = 1` never works, so write `df.loc[...]`.
+
+### Rule 7: concat once, not in a loop
+
+```python
+frames = [pd.read_csv(p) for p in paths]
+df = pd.concat(frames, ignore_index=True)
+```
+
+Appending inside a loop re-allocates the whole frame each time (quadratic). Collect pieces in a list and `concat` once.
+
+| Symptom | Fix |
+|---|---|
+| Slow row loop | Vectorise, `np.where`, `map`, `merge` |
+| High memory | `usecols`, `dtype=category`, downcast, Parquet |
+| Slow filter on many conditions | `query` / `eval` with numexpr |
+| File does not fit | `chunksize`, Parquet column subsets, DuckDB |
+| Slow groupby on strings | Convert keys to `category` |
+| Slow repeated `.loc` lookups | `set_index` + sort, or `merge` |
+
+> **Interview note:** Interviewers ask "your pandas job takes an hour, what do you do?" The answer they want is a method, not a trick: profile, then vectorise the hot loop, then fix dtypes and I/O, then chunk or change engine. Quote numbers you measured.
+
+### Try It Yourself
+
+```python
+import io, time
+import numpy as np
+import pandas as pd
+
+n = 300_000
+rng = np.random.default_rng(1)
+df = pd.DataFrame({
+    "state": rng.choice(["WY", "MT", "ID", "TX"], n),
+    "coverage": rng.integers(20_000, 900_000, n).astype("float64"),
+    "rate": rng.uniform(0.005, 0.03, n),
+})
+
+def timed(label, fn):
+    t = time.perf_counter(); out = fn(); dt = (time.perf_counter() - t) * 1000
+    print(f"{label:<38}{dt:8.1f} ms"); return out
+
+# 1. loop vs vectorised (loop on a 20k slice only, scaled up)
+small = df.head(20_000)
+def loop():
+    out = []
+    for r in small.itertuples(index=False):
+        out.append(r.coverage / 1000 * r.rate)
+    return pd.Series(out)
+timed("itertuples loop (20k rows)", loop)
+timed("vectorised (300k rows)", lambda: df["coverage"] / 1000 * df["rate"])
+
+# 2. boolean mask vs query
+timed("boolean mask", lambda: df[(df["state"] == "WY") & (df["coverage"] > 250_000) & (df["rate"] < 0.02)])
+timed("query()", lambda: df.query("state == 'WY' and coverage > 250000 and rate < 0.02"))
+
+# 3. groupby on object vs category
+cat = df.assign(state=df["state"].astype("category"))
+timed("groupby object key", lambda: df.groupby("state")["coverage"].sum())
+timed("groupby category key", lambda: cat.groupby("state", observed=True)["coverage"].sum())
+
+# 4. memory
+print(f"object frame: {df.memory_usage(deep=True).sum()/1e6:.1f} MB, "
+      f"category frame: {cat.memory_usage(deep=True).sum()/1e6:.1f} MB")
+
+# 5. chunked aggregation from an in-memory CSV
+csv = df.to_csv(index=False)
+totals = None
+for chunk in pd.read_csv(io.StringIO(csv), chunksize=100_000):
+    part = chunk.groupby("state")["coverage"].sum()
+    totals = part if totals is None else totals.add(part, fill_value=0)
+print("\nChunked totals match:", np.allclose(totals.sort_index(), df.groupby("state")["coverage"].sum().sort_index()))
+```
+
+### Quiz
+
+1. Which read_csv argument avoids parsing columns you will never use?
+- [ ] `nrows`
+- [x] `usecols`
+- [ ] `skiprows`
+> usecols restricts parsing to the named columns, saving time and memory.
+
+2. What does `df.query("coverage > @limit")` do with `@limit`?
+- [x] Substitutes the Python variable named limit
+- [ ] Treats it as a column named limit
+- [ ] Raises a syntax error
+> The @ prefix references local Python variables inside query and eval strings.
+
+3. Why is appending to a DataFrame inside a loop slow?
+- [ ] DataFrames cannot grow
+- [x] Each append copies the whole frame, giving quadratic cost
+- [ ] The index must be re-sorted every time
+> Build a list of pieces and call pd.concat once.
+
+4. What does Copy-on-Write change?
+- [ ] Nothing; it is a linter setting
+- [x] Derived frames behave as copies, ending SettingWithCopyWarning ambiguity
+- [ ] It makes every operation in place
+> CoW (default in pandas 3.0) copies lazily only when a write would affect another object.
+
+### Exercises
+
+1. **Lean read** — Write the `read_csv` call for a 4 GB export where you need only `file_id, state, coverage, received`, with correct dtypes and date parsing.
+<details><summary>Solution</summary>
+
+```python
+df = pd.read_csv("export.csv",
+                 usecols=["file_id", "state", "coverage", "received"],
+                 dtype={"file_id": "int64", "state": "category", "coverage": "float64"},
+                 parse_dates=["received"], engine="pyarrow")
+```
+
+</details>
+
+2. **Chunked mean** — Compute the mean coverage per state from a file too large for memory.
+<details><summary>Solution</summary>
+
+```python
+s = c = None
+for chunk in pd.read_csv("big.csv", chunksize=500_000, usecols=["state", "coverage"]):
+    g = chunk.groupby("state")["coverage"].agg(["sum", "count"])
+    s = g["sum"] if s is None else s.add(g["sum"], fill_value=0)
+    c = g["count"] if c is None else c.add(g["count"], fill_value=0)
+mean = (s / c).sort_values(ascending=False)
+```
+
+</details>
+
+3. **Rewrite with eval** — Replace three separate column assignments computing `units = ceil(coverage/1000)`, `premium = units * rate`, `premium_floor = max(premium, 150)` with vectorised code that avoids intermediate frames.
+<details><summary>Solution</summary>
+
+```python
+import numpy as np
+df["units"] = np.ceil(df["coverage"] / 1000)
+df.eval("premium = units * rate", inplace=True)
+df["premium_floor"] = df["premium"].clip(lower=150)
+```
+
+</details>
+
+### Interview Questions
+
+**Q: A daily pandas job takes 45 minutes on a 3 GB CSV. Walk me through speeding it up.**
+I profile first: time each stage and look at `memory_usage(deep=True)`. Typically the read is a third of the time, so I add `usecols`, explicit `dtype` with categories, `parse_dates` and `engine="pyarrow"`, and I convert the file to Parquet once so subsequent runs skip parsing entirely. Then I search for `iterrows`, `apply(axis=1)` and loops that append, and replace them with vectorised expressions, `map`, `merge` or `groupby().transform`. Finally I check for repeated `.loc` lookups by key, which become a merge or an indexed lookup. On a comparable Stewart production file this sequence took a report from about 40 minutes to under 2, and I keep the before/after timings in the script's docstring.
+
+**Q: When do query and eval actually help, and what are their limits?**
+They help on large frames with several conditions because numexpr evaluates the whole expression in one pass with less temporary memory; on small frames the parsing overhead makes them slower. The syntax is a subset of Python: you cannot call arbitrary functions, column names with spaces need backticks, and string comparisons only support `==`, `!=`, `in` and `not in`. I use them for readability in long filters and for memory on frames above roughly 100k rows, and I fall back to boolean masks whenever the logic needs a method call such as `.str.contains`.
+
+**Q: Explain the SettingWithCopyWarning and how Copy-on-Write resolves it.**
+Before pandas 2, `df[mask]` might return a view or a copy depending on dtype layout, so assigning into it might or might not modify `df`; the warning flagged that ambiguity. The correct fix was always either `.copy()` when you want an independent frame or a single `df.loc[mask, col] = value` when you want to modify the original. Copy-on-Write, opt-in in 2.x and the default in 3.0, makes every derived object behave as an independent copy and defers the physical copy until a write happens, so the warning disappears and the semantics become predictable at almost no performance cost.
+
+**Q: When would you leave pandas for Polars or DuckDB?**
+When the data exceeds memory, when the workload is dominated by joins and groupbys on tens of millions of rows, or when you need multithreading without writing it yourself. Polars has a lazy engine that optimises the whole query and uses all cores; DuckDB runs SQL directly over Parquet and CSV files with almost no memory footprint and returns a pandas DataFrame with `.df()`. My usual split is DuckDB or Polars for the heavy aggregation and pandas for the last mile, formatting the result and writing the Excel report, because that is where pandas' ecosystem is strongest.
+
+## Validation & data-quality checks (schemas, assertions)
+
+A report that is wrong is worse than a report that is late. In title-insurance production a rate applied to the wrong state, a duplicated file ID or a week that silently lost half its rows costs real money and trust. Expert pandas users build validation into the pipeline so that bad input stops the run with a clear message instead of producing a plausible-looking Excel file. This chapter shows lightweight assertions, a reusable check function, and the `pandera` schema library.
+
+### Assertions at the boundaries
+
+```python
+expected = ["file_id", "state", "received", "coverage", "rate"]
+missing = set(expected) - set(df.columns)
+assert not missing, f"missing columns: {missing}"
+
+assert df["file_id"].is_unique, "duplicate file_id"
+assert df["state"].isin(valid_states).all(), df.loc[~df["state"].isin(valid_states), "state"].unique()
+assert df["coverage"].between(1, 50_000_000).all()
+assert df["received"].notna().all() and (df["received"] <= pd.Timestamp.today()).all()
+assert len(df) > 0.5 * last_week_rows, f"row count dropped to {len(df)}"
+```
+
+Check inputs right after reading and outputs right before writing. Every assertion message should say what was wrong and show the offending values, because the person reading the error at 7 a.m. on Monday will not have the script open.
+
+### A reusable check function
+
+```python
+def check(df, name, mask, sample=5):
+    bad = df.loc[~mask]
+    if len(bad):
+        raise ValueError(f"{name}: {len(bad)} rows failed\n{bad.head(sample).to_string()}")
+    return df
+
+df = (df.pipe(check, "positive coverage", df["coverage"] > 0)
+        .pipe(check, "known state", df["state"].isin(valid_states))
+        .pipe(check, "rate in range", df["rate"].between(0.001, 0.05)))
+```
+
+`pipe` keeps validation inline in a method chain. Collecting all failures before raising is friendlier than stopping at the first, so a production version appends messages to a list and raises once at the end.
+
+### Reconciliation checks
+
+```python
+assert abs(df["premium"].sum() - source_total) < 0.01, "premium total does not reconcile"
+counts = df.groupby("state", observed=True).size()
+assert (counts == expected_counts).all()
+pd.testing.assert_frame_equal(new_report, old_report, check_like=True)
+```
+
+Reconciling to a control total from the source system is the single most valuable check in a reporting pipeline. `pd.testing.assert_frame_equal` and `assert_series_equal` compare two frames with tolerances (`rtol`, `atol`) and ignore column order with `check_like=True`; they are the backbone of pandas unit tests.
+
+### pandera schemas
+
+```python
+import pandera.pandas as pa       # pandas 2 + pandera 0.20+; older: import pandera as pa
+
+schema = pa.DataFrameSchema(
+    {
+        "file_id": pa.Column(int, unique=True),
+        "state": pa.Column(str, pa.Check.isin(["WY", "MT", "ID", "TX"])),
+        "received": pa.Column("datetime64[ns]", pa.Check.le(pd.Timestamp("2026-12-31"))),
+        "coverage": pa.Column(float, pa.Check.between(1, 50_000_000)),
+        "rate": pa.Column(float, pa.Check.in_range(0.001, 0.05), nullable=False),
+        "memo": pa.Column(str, nullable=True, required=False),
+    },
+    strict=True,        # no unexpected columns
+    coerce=True,        # cast to the declared dtype before checking
+)
+clean = schema.validate(df, lazy=True)     # lazy: collect every failure, then raise SchemaErrors
+```
+
+A schema documents the contract in one place and produces a table of every failing row and check. `lazy=True` reports all problems at once. Decorate pipeline functions with `@pa.check_input(schema)` and `@pa.check_output(schema)` to validate automatically. The alternative library `great_expectations` suits teams that want HTML data-docs and scheduled suites; pandera is lighter and lives in code.
+
+### Profiling for unknown data
+
+```python
+df.describe(include="all").T
+df.isna().mean().sort_values(ascending=False)          # missing rate per column
+df.nunique()
+df.duplicated(subset=["file_id"]).sum()
+df.select_dtypes("object").apply(lambda s: s.str.strip().ne(s).sum())   # cells with stray whitespace
+```
+
+Before you write checks for a new client file, profile it. The missing-rate view and the duplicate count expose most surprises in a minute.
+
+| Check type | Example |
+|---|---|
+| Schema | Columns present, dtypes correct, no extras |
+| Domain | State in list, rate in range, dates not in future |
+| Uniqueness | `file_id.is_unique` |
+| Completeness | Required columns have no NaN |
+| Reconciliation | Totals match source, row count near last week |
+| Referential | Every `state` exists in the rate table |
+
+> **Tip:** Save the failing rows to `rejects_<date>.csv` before raising. The operations team can fix the source while you re-run, and the file is evidence when a client asks why the report was late.
+
+### Try It Yourself
+
+```python
+import io
+import pandas as pd
+
+raw = """file_id,state,received,coverage,rate
+1001,WY,2026-09-01,187450,0.0055
+1002,MT,2026-09-02,250000,0.0060
+1003,XX,2026-09-02,99999,0.0052
+1004,ID,2026-09-03,-5,0.0050
+1002,MT,2026-09-04,300000,0.0060
+1006,TX,2027-01-15,500000,0.0999
+"""
+df = pd.read_csv(io.StringIO(raw), parse_dates=["received"])
+valid_states = {"WY", "MT", "ID", "TX"}
+today = pd.Timestamp("2026-09-16")
+
+problems = []
+def check(name, mask):
+    bad = df.loc[~mask]
+    if len(bad):
+        problems.append((name, bad.index.tolist()))
+
+check("file_id unique", ~df["file_id"].duplicated(keep=False))
+check("state known", df["state"].isin(valid_states))
+check("coverage positive", df["coverage"] > 0)
+check("rate in range", df["rate"].between(0.001, 0.05))
+check("received not in future", df["received"] <= today)
+
+if problems:
+    print("VALIDATION FAILED")
+    for name, rows in problems:
+        print(f"  {name}: rows {rows}")
+    bad_rows = sorted({r for _, rows in problems for r in rows})
+    print("\nRejected rows:\n", df.loc[bad_rows].to_string())
+    clean = df.drop(index=bad_rows)
+else:
+    clean = df
+
+print(f"\n{len(clean)} of {len(df)} rows passed")
+control_total = 187450   # accepted rows per the source system (only file 1001 survives)
+assert abs(clean["coverage"].sum() - control_total) < 0.01, "does not reconcile"
+print("Reconciled to control total:", control_total)
+```
+
+### Quiz
+
+1. Which check most directly catches "the source system only sent half the rows"?
+- [ ] `df["file_id"].is_unique`
+- [x] Comparing the row count or total to last run's or to a control total
+- [ ] `df.dtypes`
+> Reconciliation to a known total detects silent truncation.
+
+2. What does `lazy=True` do in `schema.validate`?
+- [x] Collects every failure before raising
+- [ ] Skips validation until the data is used
+- [ ] Validates only the first 100 rows
+> Lazy validation reports all failing checks and rows in one SchemaErrors.
+
+3. Which function compares two DataFrames with a numeric tolerance?
+- [ ] `df.equals`
+- [x] `pd.testing.assert_frame_equal`
+- [ ] `df.compare`
+> assert_frame_equal supports rtol/atol and check_like; equals is exact.
+
+4. Where should input validation run?
+- [ ] After the report is written
+- [x] Immediately after reading, before any transformation
+- [ ] Only in unit tests
+> Failing early with the raw rows makes the cause obvious and prevents bad output.
+
+### Exercises
+
+1. **Referential check** — Assert that every `state` in `df` exists in `rates["state"]`, printing the missing ones.
+<details><summary>Solution</summary>
+
+```python
+missing = set(df["state"]) - set(rates["state"])
+assert not missing, f"states with no rate: {sorted(missing)}"
+```
+
+</details>
+
+2. **Collect all failures** — Rewrite the `check` helper so it returns a DataFrame of (check, file_id) pairs for every failing row instead of raising.
+<details><summary>Solution</summary>
+
+```python
+def run_checks(df, checks):
+    out = []
+    for name, mask in checks.items():
+        for fid in df.loc[~mask, "file_id"]:
+            out.append({"check": name, "file_id": fid})
+    return pd.DataFrame(out, columns=["check", "file_id"])
+
+rejects = run_checks(df, {"state known": df["state"].isin(valid_states),
+                          "coverage positive": df["coverage"] > 0})
+```
+
+</details>
+
+3. **pandera schema** — Write a schema for a QA sheet with `agent` (str), `files` (int ≥ 0), `errors` (int ≥ 0, must not exceed files).
+<details><summary>Solution</summary>
+
+```python
+import pandera.pandas as pa
+schema = pa.DataFrameSchema(
+    {"agent": pa.Column(str), "files": pa.Column(int, pa.Check.ge(0)),
+     "errors": pa.Column(int, pa.Check.ge(0))},
+    checks=pa.Check(lambda d: d["errors"] <= d["files"], error="errors exceed files"),
+    coerce=True)
+```
+
+</details>
+
+### Interview Questions
+
+**Q: How do you make sure a weekly report is correct before it goes out?**
+Three layers. Input validation right after reading: schema, domains, uniqueness and a row-count comparison with the previous run. Reconciliation: the report's totals must match a control total from the source system to the cent, and per-state counts must match the raw file. Output tests: `assert_frame_equal` against a golden copy in a unit test for a fixed sample input, so any change in logic is caught before it reaches production. When any layer fails the script writes a rejects file, sends the error and does not produce the Excel, because a missing report triggers a question while a wrong one triggers a decision.
+
+**Q: Why use pandera instead of plain asserts?**
+Plain asserts are fine for three or four checks, but they stop at the first failure, scatter the contract across the code and give terse messages. A pandera schema is one declarative object that documents column names, dtypes, nullability and domain rules, validates lazily to report every failing row and check at once, coerces dtypes on the way in, and can be attached to functions with decorators so validation is not forgotten. The trade-off is a dependency and a small learning curve, so for one-off notebooks I still use asserts, and for anything scheduled I use a schema.
+
+**Q: What is the difference between df.equals and assert_frame_equal?**
+`equals` returns a boolean and requires exact equality of values, dtypes and the order of rows and columns, treating NaN as equal to NaN in the same position. `assert_frame_equal` raises with a detailed diff showing the first differing values, supports `rtol`/`atol` for floats, `check_like=True` to ignore row and column order, `check_dtype=False` and similar switches. In tests I always use `assert_frame_equal` because the failure message tells me which cell differs; `equals` only tells me that something does.
+
+**Q: How do you validate data you have never seen before, such as a new client's rate matrix?**
+I profile before I write rules: `describe(include="all")`, missing rates, `nunique`, duplicate keys, and string columns checked for stray whitespace and case variants. From that I draft a schema with the client's stated rules, run it lazily, and review the failures with them, because half the time a failure is a rule I misunderstood rather than bad data. The agreed schema then becomes the acceptance test for every future file, and I version it alongside the pipeline so the contract history is visible.
+
+## Building the weekly production report (pandas → Excel with formatting via openpyxl/xlsxwriter)
+
+This chapter assembles the whole course into the deliverable that pays the bills: a Monday-morning workbook with a summary sheet, per-state detail, conditional formatting, number formats, frozen headers and a chart, produced by one script from the raw export. `to_excel` gets the numbers in; openpyxl or XlsxWriter make it look like something a manager opens without asking for "the nice version".
+
+### Step 1: compute the tables
+
+```python
+raw = pd.read_csv("production_export.csv", parse_dates=["received", "closed"],
+                  dtype={"state": "category", "agent": "category"})
+raw["week"] = raw["received"].dt.to_period("W-SUN").astype(str)
+raw["days_open"] = (raw["closed"] - raw["received"]).dt.days
+
+summary = (raw.groupby(["state", "week"], observed=True)
+              .agg(files=("file_id", "count"), errors=("errors", "sum"),
+                   avg_days=("days_open", "mean"))
+              .assign(error_rate=lambda d: d["errors"] / d["files"])
+              .reset_index())
+wide = summary.pivot_table(index="state", columns="week", values="files",
+                           aggfunc="sum", fill_value=0, margins=True, margins_name="Total")
+```
+
+Keep the computation separate from the formatting: `summary` and `wide` are plain DataFrames you can unit-test.
+
+### Step 2: write several sheets with ExcelWriter
+
+```python
+with pd.ExcelWriter("weekly_report.xlsx", engine="openpyxl") as xw:
+    wide.to_excel(xw, sheet_name="Summary")
+    summary.to_excel(xw, sheet_name="Detail", index=False)
+    for state, part in raw.groupby("state", observed=True):
+        part.drop(columns="state").to_excel(xw, sheet_name=str(state)[:31], index=False)
+```
+
+`ExcelWriter` as a context manager saves on exit. Sheet names are limited to 31 characters and cannot contain `[]:*?/\`. `engine="xlsxwriter"` is faster for large sheets and has richer formatting; `openpyxl` can also re-open and edit existing files, which XlsxWriter cannot.
+
+### Step 3: format with openpyxl
+
+```python
+from openpyxl import load_workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.formatting.rule import CellIsRule, ColorScaleRule
+from openpyxl.utils import get_column_letter
+
+wb = load_workbook("weekly_report.xlsx")
+ws = wb["Detail"]
+header_fill = PatternFill("solid", fgColor="150458")
+for cell in ws[1]:
+    cell.font = Font(bold=True, color="FFFFFF"); cell.fill = header_fill
+    cell.alignment = Alignment(horizontal="center")
+ws.freeze_panes = "A2"
+ws.auto_filter.ref = ws.dimensions
+
+for col_cells in ws.columns:
+    width = max(len(str(c.value)) if c.value is not None else 0 for c in col_cells) + 2
+    ws.column_dimensions[get_column_letter(col_cells[0].column)].width = min(width, 40)
+
+rate_col = get_column_letter(list(summary.columns).index("error_rate") + 1)
+for cell in ws[rate_col][1:]:
+    cell.number_format = "0.0%"
+ws.conditional_formatting.add(f"{rate_col}2:{rate_col}{ws.max_row}",
+    CellIsRule(operator="greaterThan", formula=["0.04"], fill=PatternFill("solid", fgColor="F8CBAD")))
+wb.save("weekly_report.xlsx")
+```
+
+Number formats are Excel format strings (`"#,##0"`, `"0.0%"`, `"$#,##0.00"`, `"yyyy-mm-dd"`). Conditional formatting rules live in the workbook, so they keep working when the client edits values. `freeze_panes` and `auto_filter` are the two touches managers notice most.
+
+### Step 3 alternative: XlsxWriter in one pass
+
+```python
+with pd.ExcelWriter("weekly_report.xlsx", engine="xlsxwriter") as xw:
+    summary.to_excel(xw, sheet_name="Detail", index=False)
+    wb, ws = xw.book, xw.sheets["Detail"]
+    hdr = wb.add_format({"bold": True, "bg_color": "#150458", "font_color": "white", "border": 1})
+    pct = wb.add_format({"num_format": "0.0%"})
+    for i, name in enumerate(summary.columns):
+        ws.write(0, i, name, hdr)
+    ws.set_column("F:F", 12, pct)
+    ws.freeze_panes(1, 0); ws.autofilter(0, 0, len(summary), len(summary.columns) - 1)
+    ws.conditional_format(f"F2:F{len(summary)+1}",
+        {"type": "cell", "criteria": ">", "value": 0.04, "format": wb.add_format({"bg_color": "#F8CBAD"})})
+    chart = wb.add_chart({"type": "column"})
+    chart.add_series({"name": "Files", "categories": ["Detail", 1, 1, len(summary), 1],
+                      "values": ["Detail", 1, 2, len(summary), 2]})
+    ws.insert_chart("H2", chart)
+```
+
+XlsxWriter formats are applied as you write, in one pass, and native charts are simple. Choose it for new files you generate from scratch; choose openpyxl when you must fill a client's existing template.
+
+### Step 4: Styler for quick colour-coded output
+
+```python
+styled = (summary.style
+            .format({"error_rate": "{:.1%}", "avg_days": "{:.1f}", "files": "{:,}"})
+            .background_gradient(subset=["error_rate"], cmap="Reds")
+            .highlight_max(subset=["files"], color="#C6EFCE"))
+styled.to_excel("styled.xlsx", engine="openpyxl", index=False)
+```
+
+`DataFrame.style` exports static fills and number formats through openpyxl. It is the fastest route to a heat-mapped table, but it bakes colours in as static styles rather than rules, so it suits one-off snapshots more than templates.
+
+| Need | Tool |
+|---|---|
+| Numbers into sheets | `to_excel`, `ExcelWriter` |
+| Edit an existing template | openpyxl |
+| Fast new file with charts | XlsxWriter |
+| Quick heat map | `Styler.to_excel` |
+| Formulas that recalc in Excel | write strings starting with `=` (either engine) |
+
+> **Warning:** openpyxl writes formulas as text and does not calculate them; the cached value is empty until Excel opens the file. If a downstream script reads the file with `read_excel`, it will see NaN for formula cells. Compute values in pandas and write numbers unless the client specifically needs live formulas.
+
+### Try It Yourself
+
+```python
+import io
+import pandas as pd
+
+raw = """file_id,state,agent,received,closed,errors
+1,WY,Asad,2026-09-01,2026-09-03,0
+2,MT,Hina,2026-09-01,2026-09-05,2
+3,WY,Hina,2026-09-04,2026-09-08,1
+4,ID,Asad,2026-09-09,2026-09-11,0
+5,MT,Asad,2026-09-10,2026-09-12,3
+6,WY,Asad,2026-09-16,2026-09-17,0
+7,ID,Hina,2026-09-15,2026-09-19,1
+"""
+df = pd.read_csv(io.StringIO(raw), parse_dates=["received", "closed"])
+df["week"] = df["received"].dt.to_period("W-SUN").astype(str)
+df["days_open"] = (df["closed"] - df["received"]).dt.days
+
+summary = (df.groupby(["state", "week"])
+             .agg(files=("file_id", "count"), errors=("errors", "sum"), avg_days=("days_open", "mean"))
+             .assign(error_rate=lambda d: d["errors"] / d["files"]).reset_index())
+wide = summary.pivot_table(index="state", columns="week", values="files",
+                           aggfunc="sum", fill_value=0, margins=True, margins_name="Total")
+print("Summary sheet:\n", wide, "\n")
+print("Detail sheet:\n", summary.round(3).to_string(index=False), "\n")
+
+try:
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as xw:
+        wide.to_excel(xw, sheet_name="Summary")
+        summary.to_excel(xw, sheet_name="Detail", index=False)
+        ws = xw.sheets["Detail"]
+        for cell in ws[1]:
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill("solid", fgColor="150458")
+        ws.freeze_panes = "A2"
+        for cell in ws["F"][1:]:
+            cell.number_format = "0.0%"
+    print(f"weekly_report.xlsx built in memory: {len(buf.getvalue()):,} bytes, sheets: Summary, Detail")
+except ImportError:
+    print("openpyxl is not installed in this runner; the same code writes the workbook locally.")
+    print("CSV fallback of the Detail sheet:\n", summary.to_csv(index=False))
+```
+
+### Quiz
+
+1. Which engine can open and modify an existing .xlsx file?
+- [x] openpyxl
+- [ ] xlsxwriter
+- [ ] Both
+> XlsxWriter only creates new files; openpyxl reads and writes.
+
+2. What is the maximum length of an Excel sheet name?
+- [ ] 255
+- [x] 31
+- [ ] 64
+> Excel limits sheet names to 31 characters and forbids []:*?/\ characters.
+
+3. A formula written by openpyxl shows as NaN in `read_excel`. Why?
+- [ ] openpyxl wrote it as text
+- [x] The cached value is empty until Excel recalculates the file
+- [ ] read_excel cannot read formulas
+> Python engines do not evaluate formulas; write computed values or open in Excel first.
+
+4. Which approach keeps conditional colours working after the client edits values?
+- [ ] `Styler.background_gradient`
+- [x] A conditional formatting rule (CellIsRule or `conditional_format`)
+- [ ] Static fills per cell
+> Rules are evaluated by Excel; Styler and static fills are frozen colours.
+
+### Exercises
+
+1. **One sheet per agent** — Write a workbook with a sheet per agent, each containing only that agent's rows, index omitted.
+<details><summary>Solution</summary>
+
+```python
+with pd.ExcelWriter("by_agent.xlsx", engine="openpyxl") as xw:
+    for agent, part in df.groupby("agent"):
+        part.to_excel(xw, sheet_name=str(agent)[:31], index=False)
+```
+
+</details>
+
+2. **Currency and dates** — Using openpyxl, format column `premium` as `$#,##0.00` and column `received` as `yyyy-mm-dd` on sheet "Detail".
+<details><summary>Solution</summary>
+
+```python
+from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
+wb = load_workbook("weekly_report.xlsx"); ws = wb["Detail"]
+cols = {c.value: get_column_letter(c.column) for c in ws[1]}
+for cell in ws[cols["premium"]][1:]: cell.number_format = "$#,##0.00"
+for cell in ws[cols["received"]][1:]: cell.number_format = "yyyy-mm-dd"
+wb.save("weekly_report.xlsx")
+```
+
+</details>
+
+3. **Live total row** — Add a row under the Detail table with an Excel `SUM` formula for the files column so it recalculates in Excel.
+<details><summary>Solution</summary>
+
+```python
+n = ws.max_row
+ws.cell(row=n + 1, column=1, value="Total")
+ws.cell(row=n + 1, column=3, value=f"=SUM(C2:C{n})")
+wb.save("weekly_report.xlsx")
+```
+
+</details>
+
+### Interview Questions
+
+**Q: Describe how you would automate a weekly Excel report end to end.**
+Read the export with explicit dtypes and validate it (schema, uniqueness, reconciliation to a control total). Compute the tables in pandas as plain DataFrames: a pivot summary, a detail table and per-state slices. Write them with `ExcelWriter`, then apply formatting: bold header fill, frozen header row, autofilter, column widths, number formats for percentages, currency and dates, and conditional formatting rules for thresholds such as error rate above 4%. Name the file with the ISO week, log row counts and totals, and run it from Task Scheduler or cron. At Stewart the equivalent manual process took about two hours of a Monday; the script ran in under a minute and the reconciliation step caught a truncated export twice in the first quarter.
+
+**Q: openpyxl or XlsxWriter?**
+XlsxWriter is write-only, faster, has cleaner formatting and native chart APIs, and is the better choice for generating a new workbook from scratch every run. openpyxl can load an existing workbook, so it is the only option when the client has a template with their logo, named ranges and formulas that must be preserved, or when I need to append a sheet to last week's file. Neither calculates formulas; for that I either compute in pandas or open the file through Excel automation. In practice I keep both installed and pick per deliverable.
+
+**Q: How do you handle a client template with merged cells and formulas?**
+I load it with openpyxl, never rewrite the sheet wholesale, and write values cell by cell into the data region below the fixed header, using the template's own column positions found by scanning the header row. Merged header cells are left untouched; I only write to the top-left cell of a merged range if I must change it. Formula cells are preserved because openpyxl keeps them as strings, but their cached values are dropped, so I tell the client the file needs opening in Excel or I compute and write the values instead. I keep the untouched template under version control and generate a fresh copy each run.
+
+**Q: What are the pitfalls of to_excel with a MultiIndex or a large frame?**
+A MultiIndex header writes as merged cells plus a blank row, which breaks filters, so I flatten columns first. A DatetimeIndex with time zones raises, so I strip zones with `tz_localize(None)`. Frames over about a million rows exceed Excel's row limit (1,048,576) and must be split across sheets or delivered as CSV or Parquet. Writing is single-threaded and can take minutes for wide frames; `engine="xlsxwriter"` with `options={"constant_memory": True}` streams rows and keeps memory flat. Finally, `NaN` writes as an empty cell and `inf` raises unless replaced.
+
+## pandas + SQL (read_sql, to_sql with sqlite3)
+
+Most production data lives in a database, not a CSV. pandas talks to any DB-API or SQLAlchemy connection: `read_sql` pulls a query into a DataFrame, `to_sql` pushes a DataFrame into a table. The skill is knowing where to draw the line: aggregate and filter in SQL where the data is, shape and format in pandas where the tools are. SQLite ships with Python, so everything here runs without a server.
+
+### Reading
+
+```python
+import sqlite3
+import pandas as pd
+
+con = sqlite3.connect("production.db")
+df = pd.read_sql("SELECT * FROM files WHERE state = ?", con, params=("WY",))
+df = pd.read_sql("SELECT * FROM files WHERE received >= :start", con, params={"start": "2026-09-01"})
+df = pd.read_sql_query("SELECT state, COUNT(*) n FROM files GROUP BY state", con, index_col="state")
+df = pd.read_sql_table("files", engine)     # SQLAlchemy engine only
+```
+
+Always pass parameters with `params=`, never with f-strings: it prevents SQL injection and handles quoting. `read_sql` dispatches to `read_sql_query` for SQL text and `read_sql_table` for a table name; the table form requires SQLAlchemy. Add `parse_dates=["received"]` because SQLite stores dates as text.
+
+### Writing
+
+```python
+df.to_sql("weekly_summary", con, if_exists="replace", index=False)
+df.to_sql("files", con, if_exists="append", index=False, chunksize=10_000, method="multi")
+```
+
+`if_exists` is `fail` (default), `replace` (drop and recreate) or `append`. `index=False` stops the pandas index becoming a column. `chunksize` batches inserts; `method="multi"` sends many rows per `INSERT`, which is much faster on PostgreSQL and MySQL. For SQLite, the default executemany is already fast. `dtype={"rate": "REAL"}` overrides the guessed column types.
+
+### SQLAlchemy for real databases
+
+```python
+from sqlalchemy import create_engine, text
+engine = create_engine("postgresql+psycopg2://user:pw@host:5432/prod")
+engine = create_engine("mssql+pyodbc://user:pw@dsn_name")             # SQL Server via ODBC
+with engine.begin() as con:                                             # transaction
+    df = pd.read_sql(text("SELECT * FROM files WHERE state = :s"), con, params={"s": "WY"})
+    out.to_sql("summary", con, if_exists="replace", index=False)
+```
+
+pandas 2.2+ warns if you pass a raw DB-API connection other than sqlite3; SQLAlchemy is the supported route to PostgreSQL, MySQL, SQL Server and Oracle. `engine.begin()` wraps the block in a transaction so a failed write rolls back.
+
+### Push work to the database
+
+```python
+# bad: pull 5M rows, group in pandas
+df = pd.read_sql("SELECT * FROM files", con).groupby("state").size()
+
+# good: 50 rows cross the wire
+df = pd.read_sql("""
+    SELECT state, strftime('%Y-%W', received) AS week, COUNT(*) AS files, SUM(errors) AS errors
+    FROM files
+    WHERE received >= date('now', '-90 days')
+    GROUP BY state, week
+""", con)
+```
+
+Filtering, joining and aggregating are what databases are optimised for. Pull only the columns and rows the report needs. Window functions in SQL (`SUM() OVER`) and in pandas do the same job; choose based on where the data already is.
+
+### Round trips and dtypes
+
+| pandas dtype | SQLite type via to_sql | Comes back as |
+|---|---|---|
+| int64 | INTEGER | int64 |
+| float64 | REAL | float64 |
+| object / string | TEXT | object |
+| datetime64 | TIMESTAMP (stored as text) | object unless `parse_dates` |
+| bool | INTEGER | int64 |
+| category | TEXT | object |
+
+SQLite has no date or boolean type, so re-apply `parse_dates` and `astype("bool")` after reading. On PostgreSQL the mapping is exact.
+
+### Upserts and incremental loads
+
+```python
+last = pd.read_sql("SELECT MAX(received) AS m FROM files", con)["m"][0]
+new = source[source["received"] > pd.Timestamp(last)]
+new.to_sql("files", con, if_exists="append", index=False)
+```
+
+`to_sql` has no upsert. For an insert-or-update pattern write the frame to a staging table with `if_exists="replace"`, then run one SQL statement: `INSERT INTO files SELECT * FROM staging WHERE true ON CONFLICT(file_id) DO UPDATE SET ...` (SQLite 3.24+ and PostgreSQL) or `MERGE` on SQL Server.
+
+### Executing statements
+
+```python
+con.execute("CREATE INDEX IF NOT EXISTS ix_files_state ON files(state)")
+con.executemany("UPDATE files SET status = ? WHERE file_id = ?", list(df[["status", "file_id"]].itertuples(index=False)))
+con.commit()
+```
+
+Anything that is not a `SELECT` goes through the connection directly. `itertuples(index=False)` is the right way to feed a DataFrame to `executemany`. Remember to `commit()` on sqlite3 connections; `to_sql` commits for you, `execute` does not.
+
+> **Interview note:** "Would you do this join in SQL or pandas?" The strong answer weighs data location, size and reuse: join in SQL when both tables are in the database and the result is small; join in pandas when one side is a file, when you need fuzzy or `merge_asof` logic, or when the shaped result feeds further pandas steps anyway.
+
+### Try It Yourself
+
+```python
+import io, sqlite3
+import pandas as pd
+
+raw = """file_id,state,received,coverage,errors
+1001,WY,2026-09-01,187450,0
+1002,MT,2026-09-02,250000,2
+1003,WY,2026-09-04,99999,1
+1004,ID,2026-09-09,120500,0
+1005,MT,2026-09-10,300000,3
+1006,WY,2026-09-16,410000,0
+"""
+files = pd.read_csv(io.StringIO(raw))
+rates = pd.DataFrame({"state": ["WY", "MT", "ID"], "rate_per_1000": [5.5, 6.0, 5.2]})
+
+con = sqlite3.connect(":memory:")
+files.to_sql("files", con, index=False, if_exists="replace")
+rates.to_sql("rates", con, index=False, if_exists="replace")
+con.execute("CREATE INDEX ix_files_state ON files(state)")
+
+q = """
+SELECT f.state,
+       strftime('%Y-%W', f.received)              AS week,
+       COUNT(*)                                   AS files,
+       SUM(f.errors)                              AS errors,
+       ROUND(SUM(CEIL(f.coverage / 1000.0) * r.rate_per_1000), 2) AS premium
+FROM files f JOIN rates r ON r.state = f.state
+WHERE f.received >= :start
+GROUP BY f.state, week
+ORDER BY f.state, week
+"""
+summary = pd.read_sql(q, con, params={"start": "2026-09-01"})
+print("Aggregated in SQL:\n", summary.to_string(index=False), "\n")
+
+summary.to_sql("weekly_summary", con, index=False, if_exists="replace")
+back = pd.read_sql("SELECT * FROM weekly_summary WHERE premium > :p", con, params={"p": 1000})
+print("Rows with premium > 1000:\n", back.to_string(index=False), "\n")
+
+# incremental append: only new file_ids
+new = pd.DataFrame({"file_id": [1006, 1007], "state": ["WY", "ID"], "received": ["2026-09-16", "2026-09-18"],
+                    "coverage": [410000, 75000], "errors": [0, 1]})
+existing = pd.read_sql("SELECT file_id FROM files", con)["file_id"]
+to_add = new[~new["file_id"].isin(existing)]
+to_add.to_sql("files", con, index=False, if_exists="append")
+print("Appended", len(to_add), "new row(s); files now:", pd.read_sql("SELECT COUNT(*) n FROM files", con)["n"][0])
+
+dates = pd.read_sql("SELECT file_id, received FROM files", con, parse_dates=["received"])
+print("received dtype after parse_dates:", dates["received"].dtype)
+```
+
+### Quiz
+
+1. Why pass `params=` to `read_sql` instead of formatting the SQL string?
+- [x] It prevents SQL injection and handles quoting
+- [ ] It makes the query run faster
+- [ ] Formatting strings is not allowed in pandas
+> Parameter binding lets the driver escape values safely.
+
+2. What does `to_sql(..., if_exists="replace")` do?
+- [ ] Updates matching rows
+- [x] Drops the table and creates it again from the DataFrame
+- [ ] Appends only new rows
+> replace is destructive; append adds rows; fail raises if the table exists.
+
+3. Why do dates come back as strings from SQLite?
+- [x] SQLite has no native date type; pass parse_dates
+- [ ] read_sql never parses dates
+- [ ] to_sql stores dates as integers
+> SQLite stores TIMESTAMP as text; parse_dates restores datetime64.
+
+4. When should aggregation happen in SQL rather than pandas?
+- [ ] Never; pandas is always faster
+- [x] When the data is already in the database and the result is much smaller than the input
+- [ ] Only for joins
+> Moving 50 aggregated rows across the network beats moving 5 million raw rows.
+
+### Exercises
+
+1. **Parameterised report** — Write a function `weekly(con, state, start)` that returns files and errors per ISO week for one state from `files`.
+<details><summary>Solution</summary>
+
+```python
+def weekly(con, state, start):
+    q = """SELECT strftime('%Y-%W', received) AS week, COUNT(*) AS files, SUM(errors) AS errors
+           FROM files WHERE state = :s AND received >= :start GROUP BY week ORDER BY week"""
+    return pd.read_sql(q, con, params={"s": state, "start": start})
+```
+
+</details>
+
+2. **Upsert via staging** — Load `new` into a staging table and upsert into `files` keyed on `file_id`, updating `coverage` and `errors`.
+<details><summary>Solution</summary>
+
+```python
+new.to_sql("staging", con, index=False, if_exists="replace")
+con.execute("""
+    INSERT INTO files (file_id, state, received, coverage, errors)
+    SELECT file_id, state, received, coverage, errors FROM staging WHERE true
+    ON CONFLICT(file_id) DO UPDATE SET coverage = excluded.coverage, errors = excluded.errors
+""")
+con.commit()
+```
+
+</details>
+
+3. **Chunked pull** — Read a 20-million-row table in 500k-row chunks and compute total coverage per state.
+<details><summary>Solution</summary>
+
+```python
+total = None
+for chunk in pd.read_sql("SELECT state, coverage FROM files", con, chunksize=500_000):
+    part = chunk.groupby("state")["coverage"].sum()
+    total = part if total is None else total.add(part, fill_value=0)
+```
+
+</details>
+
+### Interview Questions
+
+**Q: How do you decide what to do in SQL versus pandas?**
+Do in SQL what reduces data volume and uses indexes: filtering by date and state, joining tables that already live together, and grouping to the report grain. Do in pandas what SQL does badly or what depends on files: reshaping to wide, `merge_asof` against rate tables effective by date, string cleaning, percentile bands, and Excel formatting. The heuristic is to pull the smallest result set that still lets pandas finish the job, and to keep the SQL in a version-controlled `.sql` file so DBAs can review it. If the same aggregation is needed by three reports, it becomes a view.
+
+**Q: What are the limits of to_sql and how do you load large frames fast?**
+`to_sql` issues row inserts, has no upsert, guesses column types (TEXT for objects, no primary key) and is slow for millions of rows. For speed I create the table myself with proper types and keys, then use `method="multi"` with `chunksize` on PostgreSQL or MySQL, `fast_executemany=True` on the SQL Server ODBC engine, or bypass pandas with the database's bulk loader: `COPY` on PostgreSQL via `psycopg2.copy_expert` from an in-memory CSV, or `bcp`/`BULK INSERT` on SQL Server. For upserts I load into a staging table and run one `INSERT ... ON CONFLICT` or `MERGE` statement.
+
+**Q: Why does pandas warn about a raw DB-API connection?**
+Since pandas 2.2, `read_sql` and `to_sql` are tested only against SQLAlchemy connectables and sqlite3 connections; other raw DB-API connections such as psycopg2 or pyodbc still work in many cases but emit a `UserWarning` because parameter styles and type handling differ per driver. The fix is `create_engine` with the driver URL and passing the engine or a connection from `engine.begin()`. This also gives transactions, connection pooling and a consistent `:name` parameter style through `sqlalchemy.text`.
+
+**Q: How do you keep a database-backed report reproducible?**
+I record the exact query text, the parameters (report week, as-of date) and the row count and checksum of what was pulled, and I write them to a log next to the output file. Where possible the query filters by a stable "as of" column rather than `now()`, so re-running for last week returns last week's data. Results that must never change, such as month-end numbers, are snapshotted to Parquet at run time so a later database correction does not silently rewrite history. That combination has let me answer "why does the March number differ from what you sent" with evidence instead of guesses.
+
+## pandas interview questions & coding tasks
+
+pandas interviews come in three shapes: rapid-fire concept questions, a live coding task on a small DataFrame, and a "tell me about a pipeline you built" conversation. This chapter is a rehearsal for all three. Work every task in the runner before reading the solution, and say your reasoning out loud the way you would on a call, because interviewers grade the thinking as much as the code.
+
+### Concept questions you will be asked
+
+| Question | The one-line answer to expand on |
+|---|---|
+| loc vs iloc | Label-based vs position-based; loc slices are inclusive |
+| merge vs join vs concat | Key-based SQL joins; index-based join; stacking along an axis |
+| apply vs vectorised | Python per row vs C over arrays; 100× gap |
+| groupby agg vs transform | Reduces to one row per group vs returns aligned same-length result |
+| NaN vs None vs pd.NA | float sentinel; Python object; pandas nullable missing |
+| Copy vs view | Ambiguous before Copy-on-Write; use `.loc` or `.copy()` |
+| category dtype | Integer codes plus a categories table; ordered comparisons |
+| pivot vs pivot_table | Pure reshape vs aggregate then reshape |
+| inplace=True | Rarely faster, breaks method chains, being deprecated |
+| Series vs DataFrame | 1-D labelled array vs 2-D dict of aligned Series |
+
+For each, have a concrete example from your own work ready, such as the rate-matrix melt or the reconciliation assertion.
+
+### Coding task 1: second-highest per group
+
+"Given `files(state, agent, files)`, return each state's second-best agent."
+
+```python
+ranked = df.assign(r=df.groupby("state")["files"].rank(method="first", ascending=False))
+second = ranked[ranked["r"] == 2].drop(columns="r")
+# or
+second = df.sort_values("files", ascending=False).groupby("state").nth(1)
+```
+
+Mention that `nth(1)` is positional and needs the sort, and that `rank(method="first")` breaks ties deterministically.
+
+### Coding task 2: sessionise events
+
+"Rows of `(agent, timestamp)`; start a new session when the gap exceeds 30 minutes; count sessions per agent."
+
+```python
+df = df.sort_values(["agent", "ts"])
+gap = df.groupby("agent")["ts"].diff() > pd.Timedelta(minutes=30)
+df["session"] = gap.groupby(df["agent"]).cumsum()
+sessions = df.groupby("agent")["session"].nunique()
+```
+
+The trick is `diff` per group, a boolean for "new session", and `cumsum` to label sessions. It is a common pattern for QA-review sessions and web logs.
+
+### Coding task 3: fill gaps in a calendar
+
+"Daily counts have missing dates; produce a complete series with zeros."
+
+```python
+s = df.set_index("date")["files"]
+full = s.reindex(pd.date_range(s.index.min(), s.index.max(), freq="D"), fill_value=0)
+```
+
+### Coding task 4: as-of join
+
+"Apply the rate that was effective on each file's received date."
+
+```python
+out = pd.merge_asof(files.sort_values("received"), rates.sort_values("effective"),
+                    left_on="received", right_on="effective", by="state", direction="backward")
+```
+
+`merge_asof` is the answer whenever the join condition is "most recent row on or before". Say that both sides must be sorted by the key.
+
+### Coding task 5: deduplicate keeping the latest
+
+```python
+latest = df.sort_values("updated_at").drop_duplicates("file_id", keep="last")
+```
+
+Follow up: explain why `sort_values` then `keep="last"` is clearer than `groupby().tail(1)`, and that `drop_duplicates` keeps the first by default.
+
+### Coding task 6: percentage of total within group
+
+```python
+df["share"] = df["files"] / df.groupby("state")["files"].transform("sum")
+```
+
+This is the canonical `transform` example: the denominator is broadcast back to every row.
+
+### Coding task 7: reshape a rate matrix
+
+"Columns `state, 0-50k, 50-100k, 100-250k`; produce long rows and then a pivot back with a Total column."
+
+```python
+long = matrix.melt(id_vars="state", var_name="band", value_name="rate")
+back = long.pivot(index="state", columns="band", values="rate")
+back["Total"] = back.sum(axis=1)
+```
+
+### The "tell me about a pipeline" conversation
+
+Structure the answer as input, validation, transformation, output and impact, with numbers:
+
+1. Input: the weekly export, 400k rows, 60 columns, CSV with US dates.
+2. Validation: schema, uniqueness on `file_id`, reconciliation to the source total, reject file on failure.
+3. Transformation: category dtypes, `merge_asof` against the rate table, `pivot_table` per state and week, window columns for the 4-week trend.
+4. Output: `ExcelWriter` with openpyxl formatting, frozen headers, conditional formatting on error rate.
+5. Impact: two hours of manual work to one minute, and the reconciliation caught a truncated export.
+
+### Questions to ask the interviewer
+
+- Which pandas version is in production, and is Copy-on-Write enabled?
+- Is the data in a warehouse, files or both, and who owns validation?
+- How are reports delivered: Excel, Power BI, email, an internal app?
+
+> **Interview note:** When you do not know a method name, describe the operation ("I would do a per-group cumulative sum after a sorted diff") and then look it up. Interviewers care far more about recognising the pattern than recalling the signature.
+
+### Try It Yourself
+
+```python
+import io
+import pandas as pd
+
+files = pd.read_csv(io.StringIO("""state,agent,files,received
+WY,Asad,120,2026-09-01
+WY,Hina,110,2026-09-02
+WY,Sara,90,2026-09-03
+MT,Asad,60,2026-09-04
+MT,Hina,95,2026-09-05
+MT,Sara,95,2026-09-06
+"""), parse_dates=["received"])
+rates = pd.DataFrame({"state": ["WY", "WY", "MT"],
+                      "effective": pd.to_datetime(["2026-08-01", "2026-09-02", "2026-08-01"]),
+                      "rate": [5.5, 5.8, 6.0]})
+
+# Task 1: second-best agent per state
+ranked = files.assign(r=files.groupby("state")["files"].rank(method="first", ascending=False))
+print("Second per state:\n", ranked[ranked["r"] == 2][["state", "agent", "files"]].to_string(index=False), "\n")
+
+# Task 4: as-of join to the rate effective on the received date
+asof = pd.merge_asof(files.sort_values("received"), rates.sort_values("effective"),
+                     left_on="received", right_on="effective", by="state", direction="backward")
+print("Effective rate per file:\n", asof[["state", "agent", "received", "rate"]].to_string(index=False), "\n")
+
+# Task 6: share of state total
+files["share"] = (files["files"] / files.groupby("state")["files"].transform("sum")).round(3)
+print("Share within state:\n", files[["state", "agent", "files", "share"]].to_string(index=False), "\n")
+
+# Task 2: sessionise QA review timestamps with a 30-minute gap
+events = pd.DataFrame({"agent": ["Asad"] * 5 + ["Hina"] * 3,
+                       "ts": pd.to_datetime(["09:00", "09:10", "09:20", "11:00", "11:05",
+                                             "13:00", "13:45", "13:50"], format="%H:%M")})
+events = events.sort_values(["agent", "ts"])
+new = events.groupby("agent")["ts"].diff() > pd.Timedelta(minutes=30)
+events["session"] = new.groupby(events["agent"]).cumsum() + 1
+print("Sessions per agent:\n", events.groupby("agent")["session"].nunique())
+```
+
+### Quiz
+
+1. Which idiom returns each row's share of its group total?
+- [ ] `df.groupby("state")["files"].sum()`
+- [x] `df["files"] / df.groupby("state")["files"].transform("sum")`
+- [ ] `df["files"].pct_change()`
+> transform broadcasts the group sum back to every row for element-wise division.
+
+2. Which function performs a "most recent rate on or before this date" join?
+- [ ] `merge(how="left")`
+- [x] `merge_asof`
+- [ ] `join`
+> merge_asof matches on the nearest key, optionally within groups via by=.
+
+3. To label sessions from sorted timestamps, which pair of operations do you use?
+- [x] `diff` compared to a threshold, then `cumsum`
+- [ ] `shift` then `rank`
+- [ ] `rolling` then `apply`
+> A boolean "new session" flag summed cumulatively gives a session id.
+
+4. What does `drop_duplicates("file_id")` keep by default?
+- [x] The first occurrence
+- [ ] The last occurrence
+- [ ] A random occurrence
+> keep="first" is the default; sort first when you need the latest row.
+
+### Exercises
+
+1. **Top-2 per state with ties kept** — Return all agents whose files are within the top two distinct values per state.
+<details><summary>Solution</summary>
+
+```python
+r = files.groupby("state")["files"].rank(method="dense", ascending=False)
+top2 = files[r <= 2].sort_values(["state", "files"], ascending=[True, False])
+```
+
+</details>
+
+2. **Days since previous file per agent** — Add a column with the number of days since the same agent's previous received date.
+<details><summary>Solution</summary>
+
+```python
+files = files.sort_values(["agent", "received"])
+files["days_since"] = files.groupby("agent")["received"].diff().dt.days
+```
+
+</details>
+
+3. **Explain a pipeline** — Write, in five bullet points, the input, validation, transformation, output and impact of a pipeline you built, with at least three numbers.
+<details><summary>Solution</summary>
+
+```text
+- Input: weekly production export, ~400k rows, 60 columns, CSV with US-format dates.
+- Validation: schema and uniqueness on file_id, reconciliation to the source premium total.
+- Transformation: category dtypes, merge_asof to effective rates, pivot per state/week, 4-week trend.
+- Output: ExcelWriter with openpyxl formatting, frozen headers, conditional formatting on error rate.
+- Impact: 2 hours of manual work to under 1 minute; caught a truncated export twice in Q1.
+```
+
+</details>
+
+### Interview Questions
+
+**Q: Walk me through how you would find the top three agents by files per state, and what could go wrong.**
+Sort by files descending and take `groupby("state").head(3)`, or rank within group with `rank(method="first", ascending=False)` and filter `<= 3`. What goes wrong: ties, where `head(3)` cuts arbitrarily and `method="dense"` may return more than three; NaN in files, which `rank` places last or drops depending on `na_option`; and a category `state` column with unused categories producing empty groups unless `observed=True`. I would state the tie rule I chose and show the result on a five-row example before running it on the full file.
+
+**Q: How do you approach a pandas coding question you have not seen before?**
+Restate the input and output shapes, including the grain of each, because most pandas problems are "what is one row of the answer". Decide whether it is a filter, a reshape, a group aggregation, a window or a join, and name the primitive: `groupby().transform`, `melt`, `merge_asof`, `diff` plus `cumsum`. Write a three-row example by hand to check edge cases such as ties, missing values and the first row of each group. Then code it as a method chain and print intermediate steps. Interviewers reward this because it is how the work is actually done, and it recovers gracefully when you forget a method name.
+
+**Q: What is the difference between agg, transform, filter and apply on a GroupBy?**
+`agg` reduces each group to one row per aggregation, returning a frame with one row per group. `transform` applies a function per group and returns a result the same length as the input, aligned to the original index, which is what you need for shares, z-scores and per-group fills. `filter` keeps or drops whole groups based on a boolean function, such as states with more than 100 files. `apply` is the general escape hatch that can return anything and is therefore the slowest and the hardest to reason about. In reviews I replace `apply` with one of the other three whenever possible.
+
+**Q: Describe a bug you found in a pandas report and how you prevented it recurring.**
+A weekly summary showed the average files per state instead of totals because a `pivot_table` had no `aggfunc`, and the values looked plausible for two weeks. The fix was the one-word `aggfunc="sum"`, but the prevention was a reconciliation assertion that the pivot's grand total equals the sum of the input column, plus a unit test with a fixed six-row input and a golden output compared with `assert_frame_equal`. Since then every report script has a reconciliation block, and the tests run before deployment, so a wrong default cannot reach a manager's inbox.
+
+**Q: Which pandas features changed recently that a candidate should know?**
+pandas 2.0 (April 2023) added the pyarrow dtype backend and `dtype_backend="pyarrow"`, removed `append` and `sum(level=)`, and made `to_datetime` strict about mixed formats. pandas 2.1 renamed `applymap` to `DataFrame.map` and began warning about `observed=False` on categorical groupby. pandas 2.2 renamed frequency aliases (`M` to `ME`, `Q` to `QE`, `Y` to `YE`, `H` to `h`) and warned about non-SQLAlchemy connections. pandas 3.0 makes Copy-on-Write and the Arrow-backed string dtype the default and switches `observed=True`. Knowing these shows you maintain code rather than only write it once.
