@@ -11,13 +11,13 @@ Published at: `https://alirazavirtualassistant-lab.github.io/my-website/learn/`
 | `index.html` | Course catalogue grouped by track, progress bars, "continue learning", global search |
 | `course.html?c=<id>` | Course viewer: chapter sidebar (Beginner → Expert), lesson body, Try-It block, quiz with instant feedback, exercises with hidden solutions, interview questions, mark-complete |
 | `tryit.html` | Try-It editor. Runs **HTML/CSS/JS** natively, **JavaScript** in a sandboxed iframe (with optional libraries: `docx`, `pptxgenjs`, `pdf-lib`), **Python** via Pyodide (installs `python-docx`, `openpyxl`, … with micropip), **SQL** via sql.js (SQLite). Edits are saved locally. |
-| `practice.html` | Practice Lab: 50+ challenges with automatic tests (Python, JavaScript, SQL, pandas, DSA, python-docx/openpyxl) and self-check tasks (Excel, Power BI, document engineering) |
+| `practice.html` | Practice Lab: 52 challenges with automatic tests (Python, JavaScript, SQL, pandas, DSA, python-docx/openpyxl) and self-check tasks (Excel, Power BI, document engineering) |
 | `interview.html` | Interview Prep: every interview question from every course (searchable, filter by course), flashcards, timed mock interview with self-scoring, 12 STAR stories mined from the resume, interview-day checklist |
 | `roadmap.html` | 24-week study roadmap with a persistent checklist and live course progress |
 
 Progress, quiz scores, code edits and checklists are stored in the browser's `localStorage` (no accounts, no server).
 
-## Courses (39)
+## Courses (40)
 
 **Programming** — Python · JavaScript · HTML · CSS · SQL · Node.js · OOP · Git & Dev Tools
 **Document Engineering** — python-docx · docx-js · OOXML internals · openpyxl · ReportLab · WeasyPrint · PyMuPDF · pikepdf · pdfplumber · PptxGenJS · Fillable PDF & DOCX forms · EPUB3 · Print-ready PDF & prepress · LibreOffice headless automation
@@ -60,7 +60,7 @@ Commit the regenerated files together with the course.
 learn/
 ├── index.html · course.html · tryit.html · practice.html · interview.html · roadmap.html
 ├── CONTENT-SPEC.md              Course file format
-├── courses/*.md                 One Markdown file per course (39)
+├── courses/*.md                 One Markdown file per course (40)
 ├── data/
 │   ├── challenges.js            Practice Lab challenges + tests
 │   ├── behavioral.js            Behavioural questions, STAR stories, checklist
