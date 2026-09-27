@@ -1,10 +1,15 @@
 {
   "name": "Cradle Your Cravings",
   "short_name": "Cradle",
-  "description": "Freedom from food cravings — for you, your family, and generations to come.",
-  "start_url": "/",
+  "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#FBF5EE",
+  "background_color": "#FBF6EF",
   "theme_color": "#3D4F44",
-  "icons": []
+  "icons": [
+    {
+      "src": "assets/img/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
 }

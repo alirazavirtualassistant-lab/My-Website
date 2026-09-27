@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Nutrition Integration Challenge — Module 2 | Cradle Your Cravings</title>
+<meta name="description" content="Implement a 7-day nutrition reset to solidify habits." />
+<link rel="canonical" href="https://alirazavirtualassistant-lab.github.io/my-website/cradle-your-cravings/course/module-2-lesson-8.html" />
+<meta name="theme-color" content="#3D4F44" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Cradle Your Cravings" />
+<meta property="og:title" content="Nutrition Integration Challenge — Module 2 | Cradle Your Cravings" />
+<meta property="og:description" content="Implement a 7-day nutrition reset to solidify habits." />
+<meta property="og:image" content="https://static.wixstatic.com/media/e5b602_11f5da33ff684f9a8482628125ecf075~mv2.jpg/v1/fill/w_900,h_1125,al_c,q_85,enc_auto/portrait.jpg" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/css/styles.css" />
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml" />
+<link rel="manifest" href="../site.webmanifest" />
+</head>
+<body data-root="../" data-dir="course" data-lesson="m2-l8">
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="container nav">
+    <a class="brand" href="../index.html" aria-label="Cradle Your Cravings — home"><svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#D08B7B"/><stop offset="1" stop-color="#D9A85D"/></linearGradient></defs><circle cx="24" cy="24" r="24" fill="#3D4F44"/><path d="M11 25c0 7.2 5.8 13 13 13s13-5.8 13-13" fill="none" stroke="url(#lg)" stroke-width="3.2" stroke-linecap="round"/><path d="M24 29c-4-2.6-7-5.6-7-9a3.8 3.8 0 0 1 7-2 3.8 3.8 0 0 1 7 2c0 3.4-3 6.4-7 9z" fill="#F6E2D8"/><circle cx="24" cy="11" r="2" fill="#D9A85D"/></svg><span class="brand-text"><strong>Cradle Your Cravings</strong><small>with Cynthia Myers-Morrison, EdD</small></span></a>
+    <nav aria-label="Primary"><ul class="nav-links">
+      <li><a href="../index.html">Home</a></li>
+      <li class="has-menu"><button type="button" aria-expanded="false" aria-haspopup="true" class="is-current">The Program <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+        <div class="menu menu--wide"><a href="../course/welcome.html"><span class="mi" style="background:var(--m0)">★</span><span><strong>Welcome to Baby Steps</strong><small>Course Home · Week 1</small></span></a><a href="../course/module-1.html"><span class="mi" style="background:var(--m1)">1</span><span><strong>Foundations of Family Wellness</strong><small>Module 1 · Week 1</small></span></a><a href="../course/module-2.html"><span class="mi" style="background:var(--m2)">2</span><span><strong>Nutrition for Optimal Fertility</strong><small>Module 2 · Week 2</small></span></a><a href="../course/module-3.html"><span class="mi" style="background:var(--m3)">3</span><span><strong>Exercise and Movement</strong><small>Module 3 · Week 3</small></span></a><a href="../course/module-4.html"><span class="mi" style="background:var(--m4)">4</span><span><strong>Stress Management and Emotional Wellness</strong><small>Module 4 · Week 4</small></span></a><a href="../course/module-5.html"><span class="mi" style="background:var(--m5)">5</span><span><strong>Toxin Elimination and Detox</strong><small>Module 5 · Week 5</small></span></a><a href="../course/module-6.html"><span class="mi" style="background:var(--m6)">6</span><span><strong>Family Connection and Communication</strong><small>Module 6 · Week 6</small></span></a><a href="../course/module-7.html"><span class="mi" style="background:var(--m7)">7</span><span><strong>Integration and Long-Term Wellness</strong><small>Module 7 · Week 7</small></span></a><a href="../course/bonuses.html"><span class="mi" style="background:var(--mb)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v9H5v-9"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg></span><span><strong>Bonus Trainings</strong><small>4 sessions</small></span></a><a href="../course/replays.html"><span class="mi" style="background:var(--mr)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3v10l-6-3z"/></svg></span><span><strong>Group Coaching Replays</strong><small>2 sessions</small></span></a><div class="menu-foot"><a href="../program.html">Program overview →</a><a href="../course/index.html">My course dashboard →</a></div></div></li>
+      <li><a href="../assessment.html">Free Assessment</a></li>
+      <li><a href="../resources.html">Resources</a></li>
+      <li class="has-menu"><button type="button" aria-expanded="false" aria-haspopup="true">About <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+        <div class="menu">
+          <a href="../about.html"><span class="mi" style="background:var(--rose)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z"/></svg></span><span><strong>Meet Cynthia</strong><small>Her story, credentials &amp; books</small></span></a>
+          <a href="../team.html"><span class="mi" style="background:var(--moss)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-3.9 3.1-7 7-7s7 3.1 7 7"/><circle cx="17" cy="9" r="3"/><path d="M16 14.2c3.4.4 6 3 6 6.8"/></svg></span><span><strong>Join the Team</strong><small>Ambassadors, circle hosts &amp; partners</small></span></a>
+          <a href="../faq.html"><span class="mi" style="background:var(--amber)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></span><span><strong>FAQ</strong><small>Answers to common questions</small></span></a>
+          <a href="../contact.html"><span class="mi" style="background:var(--m5)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span><span><strong>Contact</strong><small>Reach Cynthia directly</small></span></a>
+        </div></li>
+    </ul></nav>
+    <div class="nav-cta">
+      <a class="btn btn--ghost btn--sm guest-only" href="../login.html">Sign in</a>
+      <a class="btn btn--rose btn--sm guest-only" href="../signup.html">Join free</a>
+    </div>
+    <a class="member-pill" href="../course/index.html"><span class="av" data-member-initial>•</span><span>My course</span></a>
+    <button class="nav-toggle" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="drawer"><span></span><span></span><span></span></button>
+  </div>
+</header>
+<nav class="drawer" id="drawer" aria-label="Mobile">
+  <a href="../index.html">Home</a>
+  <details><summary>The Program</summary><div>
+    <a href="../program.html">Program overview</a>
+    <a href="../course/index.html">My course dashboard</a>
+    <a href="../course/welcome.html">Course Home · Welcome to Baby Steps</a><a href="../course/module-1.html">Module 1 · Foundations of Family Wellness</a><a href="../course/module-2.html">Module 2 · Nutrition for Optimal Fertility</a><a href="../course/module-3.html">Module 3 · Exercise and Movement</a><a href="../course/module-4.html">Module 4 · Stress Management and Emotional Wellness</a><a href="../course/module-5.html">Module 5 · Toxin Elimination and Detox</a><a href="../course/module-6.html">Module 6 · Family Connection and Communication</a><a href="../course/module-7.html">Module 7 · Integration and Long-Term Wellness</a><a href="../course/bonuses.html">Bonus Trainings</a><a href="../course/replays.html">Group Coaching Replays</a>
+  </div></details>
+  <a href="../assessment.html">Free Assessment</a>
+  <a href="../resources.html">Resources</a>
+  <details><summary>About</summary><div>
+    <a href="../about.html">Meet Cynthia</a>
+    <a href="../team.html">Join the Team</a>
+    <a href="../faq.html">FAQ</a>
+    <a href="../contact.html">Contact</a>
+  </div></details>
+  <a class="btn btn--rose btn--block btn--lg guest-only" href="../signup.html">Join free</a>
+  <a class="btn btn--ghost btn--block btn--lg guest-only" href="../login.html">Sign in</a>
+  <a class="btn btn--primary btn--block btn--lg member-only" href="../course/index.html">Go to my course</a>
+</nav>
+<main id="main">
+
+<section class="mod-hero" style="--c:var(--m2);padding-bottom:40px">
+  <div class="container">
+    <ol class="crumbs" aria-label="Breadcrumb"><li><a href="../index.html">Home</a></li><li><a href="../course/index.html">My course</a></li><li><a href="../course/module-2.html">Module 2</a></li><li aria-current="page">Lesson 8</li></ol>
+    <span class="mod-num">Module 2 · Lesson 8</span>
+    <h1 style="max-width:24ch">Nutrition Integration Challenge</h1>
+    <p class="lead">Implement a 7-day nutrition reset to solidify habits.</p>
+  </div>
+</section>
+<section class="section--tight" style="padding-top:40px">
+  <div class="container mod-layout">
+    <div>
+      <div class="player" style="--c:var(--m2)" role="img" aria-label="Lesson video: Nutrition Integration Challenge">
+        <span class="tag">Module 2</span>
+        <div><div class="play"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16l13-8z" fill="currentColor" stroke="none"/></svg></div><h2>Nutrition Integration Challenge</h2><p>Video lesson with Cynthia · releasing to members soon</p></div>
+        <span class="dur">12:00</span>
+      </div>
+
+      <p class="pull" style="margin-top:40px;--c:var(--m2)">Seven days. That&#x27;s the whole ask. Not a new identity, not a lifestyle, seven days of doing one small thing each day that you already know how to do, because you learned it in this module.</p>
+
+      <div class="card" style="margin-top:30px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px">
+          <h2 style="font-size:1.5rem;margin:0">Your action steps</h2>
+          <span class="chip chip--amber" data-lesson-xp>0 / 100 XP</span>
+        </div>
+        <div class="actions"><label class="action" data-action="m2-l8-a1" data-xp="50">
+  <input type="checkbox" /><span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></span>
+  <span class="at">Complete Daily Tasks</span><span class="xp">+50 XP</span></label><label class="action" data-action="m2-l8-a2" data-xp="30">
+  <input type="checkbox" /><span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></span>
+  <span class="at">Reflect on Changes</span><span class="xp">+30 XP</span></label><label class="action" data-action="m2-l8-a3" data-xp="20">
+  <input type="checkbox" /><span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></span>
+  <span class="at">Share Wins in Forum</span><span class="xp">+20 XP</span></label></div>
+        <div class="btn-row" style="margin-top:20px"><button class="btn btn--primary" type="button" data-complete-lesson>Mark lesson complete</button><a class="btn btn--ghost" href="../course/module-3-lesson-1.html">Next lesson <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></a></div>
+        <p class="guest-only muted" style="font-size:.86rem;margin:14px 0 0"><a href="../signup.html?next=course/module-2-lesson-8.html">Join free</a> to save your progress and earn XP.</p>
+      </div>
+
+      <div class="card" style="margin-top:24px"><h2 style="font-size:1.5rem">In this lesson</h2><ol class="outline"><li><time>0:00</time><span>Hook</span></li><li><time>0:30</time><span>Why a Challenge Works</span></li><li><time>2:00</time><span>The Structure: Seven Days, Seven Themes</span></li><li><time>7:00</time><span>Daily Tips for Staying on Track</span></li><li><time>10:00</time><span>Motivation and Heart-led Close</span></li><li><time>11:20</time><span>Action Handoff</span></li></ol></div>
+
+      <div class="transcript" style="margin-top:24px"><div class="card"><h2 style="font-size:1.5rem">Read the lesson</h2><p class="muted" style="font-size:.9rem">The full lesson from Cynthia, in her own words.</p><div class="tx-body"><h4><time>0:00</time>Hook</h4>
+<p>Seven days. That&#x27;s the whole ask. Not a new identity, not a lifestyle, seven days of doing one small thing each day that you already know how to do, because you learned it in this module. By the end of the week you&#x27;ll have a body of evidence, in both senses, about what fertility nutrition feels like in your real life. Let&#x27;s set it up.</p>
+<h4><time>0:30</time>Why a Challenge Works</h4>
+<p>You might have heard that a habit takes twenty-one days. It doesn&#x27;t. Phillippa Lally&#x27;s research at University College London, published in the European Journal of Social Psychology, tracked people building a new daily habit and found it took anywhere from eighteen to two hundred and fifty-four days to become automatic, with a median of sixty-six. So why bother with seven? Because Lally also found that missing a single day made no real difference to the long-term outcome; what mattered was getting back on track. A seven-day challenge isn&#x27;t about finishing a habit. It&#x27;s about starting one in a way that&#x27;s short enough to succeed at, and repeated enough that Day Eight feels easier than Day One. Gardner, Lally, and Wardle put it simply in the British Journal of General Practice: small, specific actions, tied to a consistent cue, repeated, become automatic. That&#x27;s what this week is.</p>
+<p>And there&#x27;s the tying-together piece. You&#x27;ve met eight ideas in this module. A challenge is where they stop being ideas and start being Tuesday.</p>
+<h4><time>2:00</time>The Structure: Seven Days, Seven Themes</h4>
+<p>Here&#x27;s the week. Each day has one theme, one task, and a box to tick. Everything else is optional.</p>
+<p>Day one: hydrate. Set your water target using the calculator from Training Three, fill a pitcher or bottle in the morning, and finish it. That&#x27;s the task. Nothing about food today; we start with the easiest win.</p>
+<p>Day two: protein first. Eat a protein-first breakfast: eggs, Greek yogurt, the smoothie, leftover fish, beans. Then notice your three o&#x27;clock. That&#x27;s the whole task. The noticing is the point.</p>
+<p>Day three: greens at two meals. A handful of leafy greens at two meals. In a smoothie, in eggs, under a piece of fish, in a soup. Folate for the neural tube, magnesium for calm, fiber for the gut.</p>
+<p>Day four: one fermented food. A spoon of sauerkraut, a glass of kefir, plain yogurt with live cultures, a side of kimchi. Remember the Stanford study in Cell: ten weeks of this changed inflammation markers. Today is week one, day one of that.</p>
+<p>Day five: the sugar swap. Pick the swap from Training Two that matches your strongest trigger, and use it once today. Berries and walnuts, the craving-buster tea, the fifteen-minute walk. If you also eat the sugary thing, tick the box anyway; you did the swap.</p>
+<p>Day six: plan and prep. Sit down with the Meal Template and plan three meals for next week, and prep one thing: boil eggs, make soup, roast a tray of vegetables. Today you&#x27;re building next week&#x27;s ease.</p>
+<p>Day seven: reflect and celebrate. Complete the reflection page in the tracker, share one win in the forum, and do something kind for yourself that isn&#x27;t food. A bath, a walk with your partner, an early night. Celebration tells the brain this was worth repeating.</p>
+<p>If you&#x27;re doing this with a partner, each of you gets your own tracker; same themes, your own boxes. On Day Seven, compare notes. You&#x27;ll be surprised how different the same week felt from two chairs at the same table.</p>
+<p>Let me show you what a day actually looks like, using Day Three as the example. You wake up and drink your glass of water, because Day One&#x27;s habit is still running underneath. Breakfast is eggs with a handful of spinach, which is protein first and greens at meal one, so today&#x27;s task is already half done before eight in the morning. Lunch is whatever you planned, with a side salad or a handful of greens stirred into soup. That&#x27;s the tick. Dinner is whatever you like. Nothing else is required. The themes stack gently; nobody is asked to do all seven at once, and by Day Seven most people find that three or four of them have quietly become part of the day.</p>
+<h4><time>7:00</time>Daily Tips for Staying on Track</h4>
+<p>Four tips that make the difference between a challenge that happens and one that doesn&#x27;t.</p>
+<p>Anchor each task to something you already do. Water after brushing your teeth. Greens when you make your coffee. Fermented food with dinner. Habits attach to existing routines far more easily than to good intentions. Write the anchor in the tracker next to each day.</p>
+<p>Prepare the night before. Put the pitcher by the sink. Put the eggs in the fridge door where you&#x27;ll see them. Put the sauerkraut on the top shelf at eye level. Module One taught you that environmental cues drive behavior; this week you&#x27;re building cues that work for you.</p>
+<p>Pair it with someone. Text a friend, your partner, or a forum buddy each day with the word &quot;done.&quot; Accountability doesn&#x27;t have to be a lecture. It can be one word.</p>
+<p>And tick the box, physically, with a pen. It sounds trivial. It isn&#x27;t. The tick is a small reward, and small rewards are how the brain marks a behavior worth keeping.</p>
+<p>Alongside the tick, write two numbers each evening: your energy at three in the afternoon and your mood at nine at night, on a scale of one to ten. That&#x27;s it, two numbers, and the tracker has the boxes. At the end of the week you&#x27;ll have fourteen data points, and I&#x27;d bet the afternoon energy line rises after the protein-first breakfast on Day Two. Those numbers are how you&#x27;ll know the challenge worked in your body, not just on paper.</p>
+<p>Now, what happens when you miss a day, because someone will. Researchers Janet Polivy and Peter Herman documented something they called the what-the-hell effect: a person breaks a food rule, decides the day is ruined, and eats far more than they otherwise would have. The rule wasn&#x27;t the problem. The all-or-nothing story was. And here&#x27;s the antidote, from a study by Claire Adams and Mark Leary in the Journal of Social and Clinical Psychology: people who were guided to respond to a slip with self-compassion ate less afterward than people who weren&#x27;t. Kindness, not discipline, is what gets you back on track. So if you miss Day Four, you don&#x27;t restart. You do Day Five. The tracker has a line for exactly this: &quot;I missed a day, and here&#x27;s what I&#x27;ll do next.&quot; Fill it in and keep going.</p>
+<p>If you menstruate, notice where this week falls in your cycle. The days before a period often bring stronger cravings, lower energy, and a bigger appetite; that&#x27;s hormones, not a failure of resolve. If the challenge lands on those days, keep the tasks and lower the bar: the sugar swap counts even if it&#x27;s followed by the chocolate, and the water still counts on a day you feel bloated. And write it in the tracker, because the cycle pattern is exactly the kind of information Module Seven will ask you to use.</p>
+<h4><time>10:00</time>Motivation and Heart-led Close</h4>
+<p>I want to talk to you about motivation for a moment, because motivation is unreliable and I don&#x27;t want you depending on it. Some mornings you&#x27;ll feel great about this. Some mornings you&#x27;ll be tired and the pitcher will look like a chore. Both are normal. The challenge is designed so that on the tired mornings, the task is small enough to do anyway. Drink the water. Tick the box. That&#x27;s all. You&#x27;re not building willpower this week. You&#x27;re building proof: proof that you can do one thing for your body every day for seven days. Proof is what you&#x27;ll lean on in Module Three, and Four, and every week after this course ends.</p>
+<p>And when Day Seven is done, don&#x27;t try to keep all seven themes going. Pick two, the two that felt easiest or made the biggest difference, and carry only those into next week. Most people choose the morning water and the protein-first breakfast. Two kept habits beat seven abandoned ones, and once those two are automatic, you&#x27;ll add a third without being told to.</p>
+<p>And remember what this is for. Every glass of water, every green leaf, every spoon of sauerkraut is a small piece of the environment in which an egg and a sperm are being built right now. Seven days from now, that environment will be a little cleaner, a little steadier, a little kinder. That&#x27;s not nothing. That&#x27;s the beginning of a family.</p>
+<h4><time>11:20</time>Action Handoff</h4>
+<p>Download the Challenge Tracker and start tomorrow morning. Complete the daily tasks for fifty XP, fill in the reflection page on Day Seven for thirty, and share your wins in the forum for twenty. Finishing this training earns your Module Two bonus. Then take a breath, because Module Three is where we get moving, gently, joyfully, and together. I&#x27;m so proud of the way you&#x27;ve shown up for this module. See you there.</p></div></div>
+      <div class="tx-gate"><div class="icon-badge" style="margin:0 auto 16px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div><h3>Members can read the full lesson</h3><p class="muted">Join free to unlock every lesson, worksheet and progress tracker.</p><div class="btn-row" style="justify-content:center"><a class="btn btn--rose" href="../signup.html?next=course/module-2-lesson-8.html">Join free</a><a class="btn btn--ghost" href="../login.html?next=course/module-2-lesson-8.html">Sign in</a></div></div></div>
+
+      <div class="mod-pager"><a class="prev" href="../course/module-2-lesson-7.html"><small>← Previous</small><strong>Supplements for Pre-Conception</strong></a><a class="next" href="../course/module-3-lesson-1.html"><small>Next →</small><strong>Gentle Yoga for Fertility</strong></a></div>
+    </div>
+    <aside class="sticky">
+      <div class="side-card"><h4>Lesson downloads</h4><a class="dl" href="../downloads/module-2/M2T8_Challenge_Tracker.pdf" download data-gated data-cat="m2"><span class="ft pdf">PDF</span><span><strong>Challenge Tracker</strong><small>PDF · 41 KB</small></span><span class="lock" title="Members only"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span></a></div>
+      <div class="side-card"><h4>Cynthia’s note</h4><p style="margin:0;font:italic 400 1.1rem/1.5 var(--serif)">Track wins and adjustments.</p></div>
+      <div class="side-card"><h4>Module 2 lessons</h4><a class="dl" href="../course/module-2-lesson-1.html" data-lesson-row="m2-l1" style=""><span class="ft" style="background:var(--m2)">1</span><span><strong>Fertility-Boosting Foods</strong><small>11 min · 90 XP</small></span></a><a class="dl" href="../course/module-2-lesson-2.html" data-lesson-row="m2-l2" style=""><span class="ft" style="background:var(--m2)">2</span><span><strong>Managing Sugar Cravings</strong><small>9 min · 90 XP</small></span></a><a class="dl" href="../course/module-2-lesson-3.html" data-lesson-row="m2-l3" style=""><span class="ft" style="background:var(--m2)">3</span><span><strong>Hydration and Detox Drinks</strong><small>8 min · 70 XP</small></span></a><a class="dl" href="../course/module-2-lesson-4.html" data-lesson-row="m2-l4" style=""><span class="ft" style="background:var(--m2)">4</span><span><strong>Gut Health for Conception</strong><small>12 min · 90 XP</small></span></a><a class="dl" href="../course/module-2-lesson-5.html" data-lesson-row="m2-l5" style=""><span class="ft" style="background:var(--m2)">5</span><span><strong>Meal Planning Templates</strong><small>10 min · 80 XP</small></span></a><a class="dl" href="../course/module-2-lesson-6.html" data-lesson-row="m2-l6" style=""><span class="ft" style="background:var(--m2)">6</span><span><strong>Addressing Food Sensitivities</strong><small>11 min · 90 XP</small></span></a><a class="dl" href="../course/module-2-lesson-7.html" data-lesson-row="m2-l7" style=""><span class="ft" style="background:var(--m2)">7</span><span><strong>Supplements for Pre-Conception</strong><small>9 min · 70 XP</small></span></a><a class="dl" href="../course/module-2-lesson-8.html" data-lesson-row="m2-l8" style="border-color:var(--m2)"><span class="ft" style="background:var(--m2)">8</span><span><strong>Nutrition Integration Challenge</strong><small>12 min · 100 XP</small></span></a>
+        <a class="link-arrow" href="../course/module-2.html" style="margin-top:8px">Back to module</a></div>
+    </aside>
+  </div>
+</section>
+</main>
+<footer class="site-footer">
+  <div class="container">
+    <div class="foot-news">
+      <div><h3>The Cradle Letter</h3><p>Gentle weekly notes from Cynthia — recipes, craving tools and encouragement for your journey.</p></div>
+      <form class="inline-form-wrap" data-form="newsletter" data-subject="New Cradle Letter subscriber: {name}" data-ok="You're subscribed — welcome to the Cradle Letter!" data-autoresponse="Thank you for subscribing to the Cradle Letter from Cradle Your Cravings. Cynthia's gentle weekly notes will arrive in your inbox soon.">
+        <div class="inline-form">
+          <label class="sr-only" for="nl-email-1">Email address</label>
+          <input id="nl-email-1" type="email" name="Email" placeholder="Your email address" required autocomplete="email" />
+          <input class="hp" type="text" name="_honey" tabindex="-1" autocomplete="off" aria-hidden="true" />
+          <input type="hidden" name="Form" value="Newsletter (footer)" />
+          <button class="btn btn--light" type="submit"><span class="spinner"></span>Subscribe</button>
+        </div>
+        <div class="form-status" role="status" aria-live="polite"></div>
+      </form>
+    </div>
+    <div class="foot-top">
+      <div class="foot-brand">
+        <a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#D08B7B"/><stop offset="1" stop-color="#D9A85D"/></linearGradient></defs><circle cx="24" cy="24" r="24" fill="#3D4F44"/><path d="M11 25c0 7.2 5.8 13 13 13s13-5.8 13-13" fill="none" stroke="url(#lg)" stroke-width="3.2" stroke-linecap="round"/><path d="M24 29c-4-2.6-7-5.6-7-9a3.8 3.8 0 0 1 7-2 3.8 3.8 0 0 1 7 2c0 3.4-3 6.4-7 9z" fill="#F6E2D8"/><circle cx="24" cy="11" r="2" fill="#D9A85D"/></svg><span class="brand-text"><strong>Cradle Your Cravings</strong><small>with Cynthia Myers-Morrison, EdD</small></span></a>
+        <p>Baby Steps: your health journey toward conception. Calm cravings, nourish your body and build a loving foundation for the family you're dreaming of.</p>
+        <div class="socials">
+          <a href="https://www.instagram.com/cindyjmm/" target="_blank" rel="noopener" aria-label="Instagram"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg></a>
+          <a href="https://www.facebook.com/cynthia.myersmorrison/" target="_blank" rel="noopener" aria-label="Facebook"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h-2.5A4.5 4.5 0 0 0 8 7.5V10H5v4h3v7h4v-7h3l1-4h-4V7.5a.5.5 0 0 1 .5-.5H15z"/></svg></a>
+          <a href="https://www.linkedin.com/in/cynthiamyersmorrison/" target="_blank" rel="noopener" aria-label="LinkedIn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 10v7M8 7v.01M12 17v-4a2 2 0 0 1 4 0v4M12 10v7"/></svg></a>
+          <a href="https://www.youtube.com/playlist?list=PLnEgmO43ZcYJq27_qXtongO6kxT7-tJmy" target="_blank" rel="noopener" aria-label="YouTube"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 5 3-5 3z" fill="currentColor"/></svg></a>
+        </div>
+      </div>
+      <div><h4>Program</h4><ul>
+        <li><a href="../program.html">Program overview</a></li>
+        <li><a href="../course/index.html">Course dashboard</a></li>
+        <li><a href="../course/welcome.html">Course Home</a></li>
+        <li><a href="../course/bonuses.html">Bonus trainings</a></li>
+        <li><a href="../course/replays.html">Coaching replays</a></li>
+      </ul></div>
+      <div><h4>Modules</h4><ul>
+        <li><a href="../course/module-1.html">1. Foundations of Family Wellness</a></li><li><a href="../course/module-2.html">2. Nutrition for Optimal Fertility</a></li><li><a href="../course/module-3.html">3. Exercise</a></li><li><a href="../course/module-4.html">4. Stress Management</a></li><li><a href="../course/module-5.html">5. Toxin Elimination</a></li><li><a href="../course/module-6.html">6. Family Connection</a></li><li><a href="../course/module-7.html">7. Integration</a></li>
+      </ul></div>
+      <div><h4>Community</h4><ul>
+        <li><a href="../signup.html">Join free</a></li>
+        <li><a href="../team.html">Join the team</a></li>
+        <li><a href="../assessment.html">Trigger Assessment</a></li>
+        <li><a href="../resources.html">Free resources</a></li>
+        <li><a href="../login.html">Member sign in</a></li>
+      </ul></div>
+      <div><h4>Cynthia</h4><ul>
+        <li><a href="../about.html">About Cynthia</a></li>
+        <li><a href="../faq.html">FAQ</a></li>
+        <li><a href="../contact.html">Contact</a></li>
+        <li><a href="mailto:cynthiajmm@gmail.com">cynthiajmm@gmail.com</a></li>
+        <li><a href="tel:+12153537034">+1 (215) 353-7034</a></li>
+      </ul></div>
+    </div>
+    <div class="foot-bottom">
+      <span>© <span data-year>2026</span> Cradle Your Cravings · A program by Cynthia Myers-Morrison, EdD</span>
+      <span><a href="../privacy.html">Privacy</a> · <a href="../terms.html">Terms</a> · <a href="../faq.html#medical">Medical disclaimer</a></span>
+    </div>
+  </div>
+</footer>
+<script src="../assets/js/course-data.js"></script>
+<script src="../assets/js/app.js"></script>
+
+</body>
+</html>

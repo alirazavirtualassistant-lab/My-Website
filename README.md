@@ -14,15 +14,20 @@ https://alirazavirtualassistant-lab.github.io/my-website/
 
 The source lives in [`site/`](site/) and is served as-is (no build step).
 
-### 🧁 Cradle Your Cravings — separate client preview
+### 🧁 Cradle Your Cravings — Baby Steps course site
 
-A second, independent site preview lives in its own subfolder and publishes to its **own URL**, leaving everything above untouched:
+A second, independent site lives in its own subfolder and publishes to its **own URL**:
 
 ```
 https://alirazavirtualassistant-lab.github.io/my-website/cradle-your-cravings/
 ```
 
-Source: [`site/cradle-your-cravings/`](site/cradle-your-cravings/). Share this link with the client. It is fully self-contained (relative links/assets) and does not affect the myersmorrison.com preview.
+It's the full **Baby Steps: Your Health Journey Toward Conception** website: 76 pages covering the program,
+7 modules, 52 lessons/sessions, 54 downloads, a member dashboard with XP, a free assessment, and
+signup, join-the-team, contact and newsletter forms that **email cynthiajmm@gmail.com**.
+
+- Generated from [`tools/cradle/`](tools/cradle/) → `python3 tools/cradle/build.py`
+- Details, including the one-time FormSubmit activation: [`site/cradle-your-cravings/README.md`](site/cradle-your-cravings/README.md)
 
 ## 💳 Payments policy — unchanged from the live site
 
