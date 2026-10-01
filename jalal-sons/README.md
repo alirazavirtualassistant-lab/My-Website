@@ -111,6 +111,21 @@ uploads/      product photos (writable, script execution blocked)
 storage/logs/ application logs (writable, no web access)
 ```
 
+## Earning from ads (optional)
+
+Admin > Settings > **Ads & income**:
+
+1. **Google AdSense**: apply at google.com/adsense with your live domain (AdSense needs a
+   real domain, original content and the policy pages, which this site already has). Paste the
+   publisher id (`ca-pub-...`), set *Show ads* to 1, create one "display ad" unit per position and
+   paste each slot id. The site serves `/ads.txt` for you. Positions: homepage top and middle,
+   shop grid and sidebar, product page bottom, and above the footer.
+2. **Sponsor banner**: sell the banner space directly to a fabric brand or boutique. Upload their
+   image, add their link and choose the positions. It shows wherever no AdSense slot is set.
+
+Tip: ads earn a few rupees per thousand views; selling suits earns far more. The slots are placed
+away from Add to Cart and Checkout on purpose. Leave *Show ads* at 0 until traffic grows.
+
 ## Security notes
 
 - Every query uses prepared statements; `ORDER BY` columns are whitelisted.

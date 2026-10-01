@@ -62,5 +62,18 @@ INSERT INTO `settings` (`setting_key`, `setting_value`) VALUES
   ('facebook_url',          ''),
   ('instagram_url',         ''),
   ('tiktok_url',            ''),
+  ('announcement_text',     'Free delivery on orders above Rs. 5,000 | Cash on Delivery across Pakistan'),
+  ('ads_enabled',           '0'),
+  ('adsense_client',        ''),
+  ('adsense_slot_home_top', ''),
+  ('adsense_slot_home_mid', ''),
+  ('adsense_slot_shop_feed',''),
+  ('adsense_slot_shop_side',''),
+  ('adsense_slot_product_bottom',''),
+  ('adsense_slot_footer',   ''),
+  ('sponsor_banner_image',  ''),
+  ('sponsor_banner_link',   ''),
+  ('sponsor_banner_alt',    'Sponsored'),
+  ('sponsor_banner_positions','home_mid,footer'),
   ('meta_description',      'Jalal Sons Cloth House, Lahore. Party wear, casual wear, unstitched suits and fabrics for women. Cash on delivery across Pakistan.')
 ON DUPLICATE KEY UPDATE `setting_key` = VALUES(`setting_key`);

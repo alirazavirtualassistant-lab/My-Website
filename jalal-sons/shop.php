@@ -167,6 +167,7 @@ require __DIR__ . '/includes/header.php';
               <a class="btn btn-outline-gold btn-sm" href="<?= e($category ? shop_url(array_filter(['category' => $filters['category'], 'subcategory' => $filters['subcategory']])) : url('shop.php')) ?>">Clear all</a>
             </div>
           </form>
+          <div class="d-none d-lg-block"><?= ad_slot('shop_side', 'sidebar') ?></div>
         </div>
       </div>
     </aside>
@@ -193,8 +194,14 @@ require __DIR__ . '/includes/header.php';
 
       <?php if ($products): ?>
         <div class="product-grid cols-3">
-          <?php foreach ($products as $p) { require __DIR__ . '/includes/product-card.php'; } ?>
+          <?php foreach (array_slice($products, 0, 6) as $p) { require __DIR__ . '/includes/product-card.php'; } ?>
         </div>
+        <?php if (count($products) > 6): ?>
+          <?= ad_slot('shop_feed') ?>
+          <div class="product-grid cols-3 mt-3">
+            <?php foreach (array_slice($products, 6) as $p) { require __DIR__ . '/includes/product-card.php'; } ?>
+          </div>
+        <?php endif; ?>
         <?= pagination_links($pg) ?>
       <?php else: ?>
         <div class="empty-state">

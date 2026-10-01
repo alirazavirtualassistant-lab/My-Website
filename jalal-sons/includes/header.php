@@ -37,7 +37,7 @@ $storeLd = [
 ];
 ?>
 <!doctype html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en" data-bs-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -45,6 +45,9 @@ $storeLd = [
 <meta name="description" content="<?= e($metaDescription) ?>">
 <link rel="canonical" href="<?= e($canonical) ?>">
 <meta name="theme-color" content="#0B0B0C">
+<?php if (ads_enabled() && adsense_client() !== ''): ?>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=<?= e(adsense_client()) ?>" crossorigin="anonymous"></script>
+<?php endif; ?>
 <meta property="og:type" content="<?= e($ogType) ?>">
 <meta property="og:site_name" content="<?= e($storeName) ?>">
 <meta property="og:title" content="<?= e($fullTitle) ?>">
@@ -70,6 +73,9 @@ $storeLd = [
 <body class="<?= e($bodyClass ?? '') ?>" data-base-url="<?= e(url('')) ?>" data-csrf="<?= e(Csrf::token()) ?>">
 <a class="visually-hidden-focusable" href="#main">Skip to content</a>
 
+<?php if (setting('announcement_text')): ?>
+<div class="announcement-bar"><?= e(setting('announcement_text')) ?></div>
+<?php endif; ?>
 <div class="top-strip d-none d-sm-block">
   <div class="container">
     <a href="<?= e(tel_link()) ?>"><?= icon('phone') ?> <?= e(setting('phone', '')) ?></a>

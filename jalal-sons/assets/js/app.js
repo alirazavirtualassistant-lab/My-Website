@@ -172,6 +172,13 @@
   /* ---------- shop filters: submit on change ---------- */
   $$('[data-autosubmit]').forEach((el) => el.addEventListener('change', () => el.form.requestSubmit()));
 
+  /* ---------- Google AdSense: request each unit (no inline scripts, CSP friendly) ---------- */
+  const adUnits = $$('ins.adsbygoogle');
+  if (adUnits.length) {
+    window.adsbygoogle = window.adsbygoogle || [];
+    adUnits.forEach(() => { try { window.adsbygoogle.push({}); } catch (e) { /* blocked by an ad blocker: ignore */ } });
+  }
+
   /* ---------- checkout: phone formatting hint ---------- */
   const phone = $('#phone');
   if (phone) phone.addEventListener('blur', () => { phone.value = phone.value.replace(/[\s\-()]/g, ''); });

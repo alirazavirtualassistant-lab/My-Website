@@ -11,7 +11,8 @@ require_once __DIR__ . '/includes/bootstrap.php';
 $newArrivals = Product::latest(8);
 $onSale = Product::onSale(4);
 $featured = Product::featured(4);
-$lines = Category::subcategories(null, true);
+$lines = Category::linesWithCovers();
+$liveCount = Product::count(true);
 
 $pageTitle = (string) setting('store_name', 'Jalal Sons Cloth House');
 $metaDescription = (string) setting('meta_description', '');
@@ -34,6 +35,11 @@ require __DIR__ . '/includes/header.php';
         <a class="btn btn-gold" href="<?= e($bannerHref) ?>"><?= e(setting('banner_button_text', 'Shop the collection')) ?></a>
         <a class="btn btn-outline-gold" href="<?= e(whatsapp_link('Assalam o Alaikum, I would like to ask about your collection.')) ?>" target="_blank" rel="noopener"><?= icon('whatsapp') ?> WhatsApp us</a>
       </div>
+      <div class="hero-stats">
+        <div><strong><?= qty($liveCount) ?>+</strong> styles in stock</div>
+        <div><strong>COD</strong> cash on delivery</div>
+        <div><strong>7 days</strong> easy exchange</div>
+      </div>
     </div>
     <div class="hero-media">
       <div class="frame">
@@ -49,16 +55,34 @@ require __DIR__ . '/includes/header.php';
   </div>
 </section>
 
-<section class="section pt-4 pt-lg-5">
+<div class="container">
+  <div class="trust-row">
+    <div class="trust-item"><?= icon('truck') ?><div><strong>Cash on Delivery</strong><span>All over Pakistan</span></div></div>
+    <div class="trust-item"><?= icon('refresh') ?><div><strong>7-day exchange</strong><span>Unused, with tags</span></div></div>
+    <div class="trust-item"><?= icon('whatsapp') ?><div><strong>WhatsApp support</strong><span>Order help in minutes</span></div></div>
+    <div class="trust-item"><?= icon('pin') ?><div><strong>Real shop in Lahore</strong><span>Visit us at Bhatta Chowk</span></div></div>
+  </div>
+  <?= ad_slot('home_top') ?>
+</div>
+
+<section class="section pt-3 pt-lg-4">
   <div class="container">
-    <div class="section-head"><span class="eyebrow">What we carry</span><h2>Our product lines</h2></div>
+    <div class="section-head"><span class="eyebrow">What we carry</span><h2>Shop by category</h2></div>
     <?= divider() ?>
     <div class="line-tiles">
       <?php foreach ($lines as $line): ?>
-        <a class="line-tile" href="<?= e(shop_url(['category' => $line['category_slug'], 'subcategory' => $line['slug']])) ?>">
-          <span class="ring"><?= icon($line['icon'] ?: 'kameez') ?></span>
-          <span class="label"><?= e($line['name']) ?></span>
-        </a>
+        <?php if ($line['cover']): ?>
+          <a class="cat-tile" href="<?= e(shop_url(['category' => $line['category_slug'], 'subcategory' => $line['slug']])) ?>">
+            <img src="<?= e(image_url($line['cover'])) ?>" alt="" width="600" height="750" loading="lazy">
+            <span class="cap"><span class="label"><?= e($line['name']) ?></span><span class="count"><?= qty($line['product_count']) ?> style<?= (int) $line['product_count'] === 1 ? '' : 's' ?> &rsaquo;</span></span>
+          </a>
+        <?php else: ?>
+          <a class="line-tile" href="<?= e(shop_url(['category' => $line['category_slug'], 'subcategory' => $line['slug']])) ?>">
+            <span class="ring"><?= icon($line['icon'] ?: 'kameez') ?></span>
+            <span class="label"><?= e($line['name']) ?></span>
+            <span class="count">Coming soon</span>
+          </a>
+        <?php endif; ?>
       <?php endforeach; ?>
     </div>
   </div>
@@ -73,6 +97,7 @@ require __DIR__ . '/includes/header.php';
         <?php foreach ($newArrivals as $p) { require __DIR__ . '/includes/product-card.php'; } ?>
       </div>
       <div class="text-center mt-4"><a class="btn btn-outline-gold" href="<?= e(shop_url(['sort' => 'newest'])) ?>">View all products</a></div>
+      <?= ad_slot('home_mid') ?>
     <?php else: ?>
       <div class="empty-state">New stock is being added. Please check back soon or <a href="<?= e(whatsapp_link()) ?>">ask on WhatsApp</a>.</div>
     <?php endif; ?>
@@ -104,7 +129,20 @@ require __DIR__ . '/includes/header.php';
 </section>
 <?php endif; ?>
 
-<section class="section pt-0" id="visit">
+<section class="section section-alt" id="why-us">
+  <div class="container">
+    <div class="section-head"><span class="eyebrow">Why women in Lahore shop with us</span><h2>Shop with confidence</h2></div>
+    <?= divider() ?>
+    <div class="row g-3 text-center">
+      <div class="col-6 col-lg-3"><div class="card-dark h-100"><span class="ring mx-auto mb-2"><?= icon('check') ?></span><h3 class="h6">Same stock as the shop</h3><p class="small text-muted-js mb-0">What you see in stock online is really on our shelves.</p></div></div>
+      <div class="col-6 col-lg-3"><div class="card-dark h-100"><span class="ring mx-auto mb-2"><?= icon('star') ?></span><h3 class="h6">Branded &amp; hand-picked</h3><p class="small text-muted-js mb-0">Party, casual, unstitched and fabrics chosen by <?= e(setting('proprietor', 'Ali Raza')) ?>.</p></div></div>
+      <div class="col-6 col-lg-3"><div class="card-dark h-100"><span class="ring mx-auto mb-2"><?= icon('truck') ?></span><h3 class="h6">Pay on delivery</h3><p class="small text-muted-js mb-0">No advance payment. Delivery charge <?= e(money(setting('delivery_charge', 0))) ?><?php if ((float) setting('free_delivery_threshold', 0) > 0): ?>, free above <?= e(money(setting('free_delivery_threshold'))) ?><?php endif; ?>.</p></div></div>
+      <div class="col-6 col-lg-3"><div class="card-dark h-100"><span class="ring mx-auto mb-2"><?= icon('whatsapp') ?></span><h3 class="h6">Order on WhatsApp</h3><p class="small text-muted-js mb-0">Prefer chatting? Every product has a one-tap WhatsApp order button.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="section pt-0 mt-4" id="visit">
   <div class="container">
     <div class="section-head"><span class="eyebrow">Madina Park, Bhatta Chowk</span><h2>Visit the shop</h2></div>
     <?= divider() ?>

@@ -442,3 +442,53 @@ function render_404(): never
     require ROOT_PATH . '/404.php';
     exit;
 }
+
+// ---------------------------------------------------------------- ads & income
+
+/** True when the owner has switched ads on in Settings. */
+function ads_enabled(): bool
+{
+    return (string) setting('ads_enabled', '0') === '1';
+}
+
+/** Google AdSense publisher id (ca-pub-...), or '' when not configured. */
+function adsense_client(): string
+{
+    $id = trim((string) setting('adsense_client', ''));
+    return preg_match('/^ca-pub-\d{10,20}$/', $id) ? $id : '';
+}
+
+/**
+ * Renders an ad position. Order of preference:
+ *  1. Google AdSense unit, when a publisher id and a slot id for this position exist
+ *  2. The sponsor banner (image + link sold directly to a local brand)
+ * Positions: home_top, home_mid, shop_feed, shop_side, product_bottom, footer.
+ * Returns '' when ads are off, so templates can call it freely.
+ */
+function ad_slot(string $position, string $class = ''): string
+{
+    if (!ads_enabled()) {
+        return '';
+    }
+    $allowed = ['home_top', 'home_mid', 'shop_feed', 'shop_side', 'product_bottom', 'footer'];
+    if (!in_array($position, $allowed, true)) {
+        return '';
+    }
+    $client = adsense_client();
+    $slot = trim((string) setting('adsense_slot_' . $position, ''));
+    if ($client !== '' && preg_match('/^\d{6,16}$/', $slot)) {
+        return '<div class="ad-slot ' . e($class) . '" data-ad-position="' . e($position) . '"><span class="ad-label">Advertisement</span>'
+             . '<ins class="adsbygoogle" data-ad-client="' . e($client) . '" data-ad-slot="' . e($slot) . '" data-ad-format="auto" data-full-width-responsive="true"></ins></div>';
+    }
+    $img = (string) setting('sponsor_banner_image', '');
+    $link = (string) setting('sponsor_banner_link', '');
+    $positions = array_filter(array_map('trim', explode(',', (string) setting('sponsor_banner_positions', 'home_mid,footer'))));
+    if ($img !== '' && in_array($position, $positions, true) && is_file(ROOT_PATH . '/' . ltrim($img, '/'))) {
+        $inner = '<img src="' . e(url($img)) . '" alt="' . e(setting('sponsor_banner_alt', 'Sponsored')) . '" loading="lazy" width="970" height="250">';
+        $wrap = preg_match('#^https?://#i', $link)
+            ? '<a class="sponsor-banner" href="' . e($link) . '" target="_blank" rel="noopener sponsored">' . $inner . '</a>'
+            : '<div class="sponsor-banner">' . $inner . '</div>';
+        return '<div class="ad-slot ' . e($class) . '"><span class="ad-label">Sponsored</span>' . $wrap . '</div>';
+    }
+    return '';
+}

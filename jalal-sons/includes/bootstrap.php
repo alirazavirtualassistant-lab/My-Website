@@ -113,22 +113,27 @@ if (PHP_SAPI !== 'cli' && session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// ---------------------------------------------------------------- settings cache (per request)
+Settings::load();
+
 // ---------------------------------------------------------------- security headers
 if (PHP_SAPI !== 'cli' && !headers_sent()) {
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: SAMEORIGIN');
     header('Referrer-Policy: strict-origin-when-cross-origin');
     header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+    // Google AdSense needs its own hosts; they are only allowed once a publisher id is configured.
+    $ads = ads_enabled() && adsense_client() !== '';
+    $adScript = $ads ? ' https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.doubleclick.net https://www.googletagservices.com https://adservice.google.com https://fundingchoicesmessages.google.com' : '';
+    $adFrame  = $ads ? ' https://*.googlesyndication.com https://*.doubleclick.net https://www.google.com https://fundingchoicesmessages.google.com' : '';
+    $adConnect = $ads ? ' https://*.googlesyndication.com https://*.doubleclick.net https://*.google.com https://*.gstatic.com' : '';
     header("Content-Security-Policy: "
         . "default-src 'self'; "
-        . "script-src 'self' https://cdn.jsdelivr.net; "
+        . "script-src 'self' https://cdn.jsdelivr.net" . $adScript . "; "
         . "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
         . "font-src 'self' https://fonts.gstatic.com data:; "
         . "img-src 'self' data: https:; "
-        . "connect-src 'self'; "
-        . "frame-src https://www.google.com https://maps.google.com; "
+        . "connect-src 'self'" . $adConnect . "; "
+        . "frame-src https://www.google.com https://maps.google.com" . $adFrame . "; "
         . "base-uri 'self'; form-action 'self' https://wa.me; frame-ancestors 'self'; object-src 'none'");
 }
-
-// ---------------------------------------------------------------- settings cache (per request)
-Settings::load();

@@ -75,6 +75,23 @@ final class Category
         return array_values($tree);
     }
 
+    /**
+     * Active cloth types with a cover photo (newest live product's image)
+     * and live product count, for the homepage category tiles.
+     */
+    public static function linesWithCovers(): array
+    {
+        return Database::fetchAll(
+            "SELECT s.*, c.slug AS category_slug, c.name AS category_name,
+                    (SELECT COUNT(*) FROM products p WHERE p.subcategory_id = s.id AND p.is_active = 1 AND p.deleted_at IS NULL) AS product_count,
+                    (SELECT i.thumb_path FROM products p JOIN product_images i ON i.product_id = p.id
+                      WHERE p.subcategory_id = s.id AND p.is_active = 1 AND p.deleted_at IS NULL
+                      ORDER BY i.is_primary DESC, p.created_at DESC LIMIT 1) AS cover
+             FROM subcategories s JOIN categories c ON c.id = s.category_id
+             WHERE s.is_active = 1 AND c.is_active = 1 ORDER BY c.sort_order, s.sort_order"
+        );
+    }
+
     /** Creates or updates a category; returns its id. */
     public static function save(array $data, ?int $id = null): int
     {

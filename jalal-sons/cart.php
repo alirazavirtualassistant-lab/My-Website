@@ -66,7 +66,7 @@ require __DIR__ . '/includes/header.php';
           <div class="cart-line">
             <a href="<?= e(product_url(['slug' => $it['slug']])) ?>"><img src="<?= e(image_url($it['image'])) ?>" alt="" width="90" height="120" loading="lazy"></a>
             <div>
-              <a class="fw-semibold text-ivory" href="<?= e(product_url(['slug' => $it['slug']])) ?>" style="color:var(--js-ivory)"><?= e($it['name']) ?></a>
+              <a class="fw-semibold text-ivory" href="<?= e(product_url(['slug' => $it['slug']])) ?>"><?= e($it['name']) ?></a>
               <div class="small text-muted-js"><?= e($it['label']) ?> &middot; <?= e($it['sku']) ?></div>
               <div class="price mt-1"><?= e(money($it['price'])) ?><?= $it['sale_unit'] === 'meter' ? ' <span class="unit">/ meter</span>' : '' ?><?php if ($it['price'] < $it['base_price']): ?><span class="price-old"><?= e(money($it['base_price'])) ?></span><?php endif; ?></div>
               <?php $st = stock_state($it['stock']); if ($st['key'] !== 'in'): ?><div class="stock-indicator <?= $st['key'] ?> small mt-1"><?= e($st['label']) ?></div><?php endif; ?>

@@ -9,7 +9,10 @@ $socials = array_filter([
     'TikTok'    => (string) setting('tiktok_url', ''),
 ]);
 ?>
+<?php $footerAd = ad_slot('footer'); if ($footerAd): ?><div class="container"><?= $footerAd ?></div><?php endif; ?>
 </main>
+
+<a class="float-wa" href="<?= e(whatsapp_link('Assalam o Alaikum, I would like to ask about your collection.')) ?>" target="_blank" rel="noopener" aria-label="Chat with us on WhatsApp"><?= icon('whatsapp') ?></a>
 
 <footer class="site-footer">
   <svg class="sprig tl" viewBox="0 0 100 100" aria-hidden="true"><path d="M10 90 Q20 40 70 20 M20 80 q-5-15 10-20 M30 65 q-4-14 12-18 M42 50 q-2-14 14-15 M20 80 q15-5 20 8 M30 65 q14-4 18 10 M42 50 q14-2 16 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>

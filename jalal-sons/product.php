@@ -90,7 +90,7 @@ require __DIR__ . '/includes/header.php';
         <?php if ($onSale): ?><span class="price-old"><?= e(money($product['base_price'])) ?></span><span class="badge-js sale ms-2"><?= discount_percent($product) ?>% off</span><?php endif; ?>
       </div>
 
-      <form method="post" action="<?= e(url('cart.php')) ?>" id="buyForm" class="mb-4" data-low="<?= $lowThreshold ?>" data-wa-base="<?= e($waBase) ?>" data-wa-number="<?= e(phone_to_intl((string) setting('whatsapp_number', ''))) ?>" data-url="<?= e($productUrl) ?>">
+      <form method="post" action="<?= e(url('cart.php')) ?>" id="buyForm" class="mb-4 buy-box" data-low="<?= $lowThreshold ?>" data-wa-base="<?= e($waBase) ?>" data-wa-number="<?= e(phone_to_intl((string) setting('whatsapp_number', ''))) ?>" data-url="<?= e($productUrl) ?>">
         <?= Csrf::field() ?>
         <input type="hidden" name="action" value="add">
         <script type="application/json" id="variantData"><?= json_encode($variantJson, JSON_UNESCAPED_UNICODE) ?></script>
@@ -178,6 +178,8 @@ require __DIR__ . '/includes/header.php';
       </div>
     </div>
   </div>
+
+  <?= ad_slot('product_bottom') ?>
 
   <?php if ($related): ?>
   <section class="section pb-0">

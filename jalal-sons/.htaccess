@@ -29,6 +29,7 @@ ErrorDocument 404 /404.php
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule ^shop/([a-z0-9\-]+)/?$ shop.php?category=$1 [L,QSA]
     RewriteRule ^sitemap\.xml$ sitemap.php [L]
+    RewriteRule ^ads\.txt$ ads.php [L]
 </IfModule>
 
 # --- Security headers (PHP also sends these; this covers static files)

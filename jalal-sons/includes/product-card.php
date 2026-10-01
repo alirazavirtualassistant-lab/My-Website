@@ -20,6 +20,7 @@ $pSale = is_on_sale($p);
         <?php if ($pState['key'] === 'low'): ?><span class="badge-js low"><?= e($pState['label']) ?></span><?php endif; ?>
       <?php endif; ?>
     </div>
+    <?php if ($pStock > 0): ?><span class="btn btn-gold btn-sm w-100 quick">View options</span><?php endif; ?>
   </a>
   <div class="body">
     <?php if (!empty($p['brand'])): ?><span class="brand-label"><?= e($p['brand']) ?></span><?php endif; ?>
@@ -27,7 +28,7 @@ $pSale = is_on_sale($p);
     <span class="small text-muted-js"><?= e($p['subcategory_name'] ?? '') ?><?= !empty($p['fabric']) ? ' &middot; ' . e($p['fabric']) : '' ?></span>
     <div class="price-wrap">
       <span class="price"><?= e(money($p['price'] ?? effective_price($p))) ?><?php if (($p['sale_unit'] ?? '') === 'meter'): ?> <span class="unit">/ meter</span><?php endif; ?></span>
-      <?php if ($pSale): ?><span class="price-old"><?= e(money($p['base_price'])) ?></span><?php endif; ?>
+      <?php if ($pSale): ?><span class="price-old"><?= e(money($p['base_price'])) ?></span><span class="save-tag w-100">Save <?= e(money((float) $p['base_price'] - (float) ($p['price'] ?? effective_price($p)))) ?></span><?php endif; ?>
     </div>
   </div>
 </article>
