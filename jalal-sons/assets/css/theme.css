@@ -130,6 +130,7 @@ a:hover { text-decoration: underline; text-underline-offset: .2em; }
 @media (min-width: 992px) and (max-width: 1199.98px) {
   .header-row { flex-wrap: wrap; padding-bottom: 0; }
   .main-nav { order: 3; flex-basis: 100%; justify-content: center; margin-left: 0; border-top: 1px solid var(--js-graphite); min-height: 44px; }
+  .header-actions { margin-left: auto; }
 }
 @media (min-width: 1200px) { .main-nav > a, .main-nav .dropdown > a { padding: .5rem .75rem; font-size: .8rem; } }
 @media (min-width: 1300px) { .search-form { display: flex; } .search-form .form-control { width: 170px; } }
