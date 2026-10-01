@@ -1,0 +1,16 @@
+# Local configuration (credentials)
+/config/config.php
+
+# Uploaded product photos and logs are runtime data
+/uploads/products/*
+!/uploads/products/.gitkeep
+/storage/logs/*
+!/storage/logs/.gitkeep
+
+# Composer (only needed for optional XLSX export)
+/vendor/
+composer.lock
+
+# OS / editor noise
+.DS_Store
+Thumbs.db

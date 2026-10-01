@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width="600" height="800" role="img" aria-label="Fabrics placeholder">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#151517"/><stop offset="1" stop-color="#0B0B0C"/></linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F1D98A"/><stop offset=".45" stop-color="#D4AF37"/><stop offset="1" stop-color="#9A7B2C"/></linearGradient>
+    <linearGradient id="cloth" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7A2748"/><stop offset="1" stop-color="#0B0B0C" stop-opacity=".85"/></linearGradient>
+  </defs>
+  <rect width="600" height="800" fill="url(#bg)"/>
+  <rect x="18" y="18" width="564" height="764" fill="none" stroke="url(#gold)" stroke-width="2"/>
+  <path d="M300 170 l-40 40 -60 20 -30 330 q130 60 260 0 l-30 -330 -60 -20 z" fill="url(#cloth)" stroke="url(#gold)" stroke-width="2"/>
+  <path d="M260 210 q40 50 80 0" fill="none" stroke="url(#gold)" stroke-width="3"/>
+  <path d="M170 230 l-70 120 60 30 M430 230 l70 120 -60 30" fill="none" stroke="url(#gold)" stroke-width="2"/>
+  <text x="300" y="665" text-anchor="middle" font-family="Georgia, serif" font-size="30" letter-spacing="6" fill="#D4AF37">JS</text>
+  <text x="300" y="705" text-anchor="middle" font-family="Georgia, serif" font-size="18" letter-spacing="3" fill="#A89F8C">Fabrics</text>
+</svg>
