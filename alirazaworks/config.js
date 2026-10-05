@@ -9,7 +9,7 @@ window.SITE_CONFIG = {
   upworkUrl: "https://www.upwork.com/freelancers/~018ab487fe87cfd865",
 
   /* LinkedIn profile (leave empty to hide the LinkedIn links) */
-  linkedinUrl: "https://www.linkedin.com/in/alirazaworks/",
+  linkedinUrl: "https://www.linkedin.com/in/aliraza100/",
 
   /* Public contact email shown on the site */
   email: "alirazavirtualassistant@gmail.com",
