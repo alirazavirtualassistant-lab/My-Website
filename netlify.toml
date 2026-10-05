@@ -1,0 +1,9 @@
+# Netlify configuration for alirazaworks.com
+# The site is a static folder: no build step, publish the folder as-is.
+[build]
+  base    = ""
+  publish = "alirazaworks"
+  command = ""
+
+# Security headers and caching also live in alirazaworks/_headers;
+# redirects for the old multi-page URLs live in alirazaworks/_redirects.

@@ -1,0 +1,17 @@
+/index.html        /            301
+/about             /#about      301
+/about.html        /#about      301
+/services          /#services   301
+/services.html     /#services   301
+/skills            /#about      301
+/skills.html       /#about      301
+/portfolio         /#work       301
+/portfolio.html    /#work       301
+/booking           /#contact    301
+/booking.html      /#contact    301
+/payment           /#contact    301
+/payment.html      /#contact    301
+/contact           /#contact    301
+/contact.html      /#contact    301
+/upwork            https://www.upwork.com/freelancers/~018ab487fe87cfd865  302
+/*                 /404.html    404

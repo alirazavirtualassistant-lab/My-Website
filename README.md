@@ -1,4 +1,16 @@
-# myersmorrison.com — Enhanced Staging Preview
+# My-Website
+
+Two things live in this repository:
+
+## 1. alirazaworks.com — Ali Raza's portfolio (`alirazaworks/`)
+
+The personal site for alirazaworks.com: a single-page, dark, futuristic portfolio for Ali Raza (data analytics,
+dashboards, automation). Hosted on **Netlify**; `netlify.toml` at the repository root publishes the `alirazaworks`
+folder with no build step. See [`alirazaworks/README.md`](alirazaworks/README.md) for how to edit links, copy and images.
+
+## 2. Client staging previews (`site/`)
+
+### myersmorrison.com — Enhanced Staging Preview
 
 A fast, accessible, responsive **enhanced rebuild** of [myersmorrison.com](https://www.myersmorrison.com/) for **Cynthia Myers-Morrison, EdD** — Certified Food Addiction Professional, author, and Vice Chair of the Food Addiction Institute.
 
