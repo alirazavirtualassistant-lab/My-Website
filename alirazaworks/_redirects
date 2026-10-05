@@ -1,4 +1,5 @@
-/index.html        /            301
+# Old multi-page URLs keep working: everything lives on the single page now.
+/index.html        /            301!
 /about             /#about      301
 /about.html        /#about      301
 /services          /#services   301
@@ -13,5 +14,14 @@
 /payment.html      /#contact    301
 /contact           /#contact    301
 /contact.html      /#contact    301
+
+# Old sample downloads moved to /samples/
+/case_studies/22_PowerBI_Project_Case_Study.docx      /samples/Ali-Raza-Power-BI-Case-Study.docx            301
+/case_studies/26_Process_Improvement_Case_Study.docx  /samples/Ali-Raza-Process-Improvement-Case-Study.docx 301
+/code_samples/36_Sales_Forecast_ML.py                 /samples/Ali-Raza-Sales-Forecast.py                   301
+/documents/03_Market_Analysis_Report.docx             /samples/Ali-Raza-Market-Analysis-Report.docx         301
+/spreadsheets/11_Sales_Dashboard.xlsx                 /samples/Ali-Raza-Sales-Dashboard.xlsx                301
+/spreadsheets/30_HR_Analytics_Dashboard.xlsx          /samples/Ali-Raza-HR-Analytics-Dashboard.xlsx         301
+
 /upwork            https://www.upwork.com/freelancers/~018ab487fe87cfd865  302
 /*                 /404.html    404

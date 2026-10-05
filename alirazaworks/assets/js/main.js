@@ -2,7 +2,7 @@
 (function () {
   "use strict";
 
-  var cfg = window.SITE_CONFIG || {};
+  var cfg = window.SITE_CONFIG || null;
   var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var finePointer = window.matchMedia("(pointer: fine)").matches;
 
@@ -12,6 +12,9 @@
 
   /* ---------- Config-driven links ---------- */
   function applyLinks() {
+    /* If config.js did not load, keep the hrefs already written in the HTML. */
+    if (!cfg) return;
+
     /* Upwork: if the URL is missing, fall back to the contact section rather than a dead link */
     var upwork = isPlaceholder(cfg.upworkUrl) ? "#contact" : cfg.upworkUrl;
     $all('[data-link="upwork"]').forEach(function (a) {
@@ -62,6 +65,17 @@
     });
   }
 
+  /* Tell assistive tech which links open a new tab */
+  function newTabHints() {
+    $all('a[target="_blank"]').forEach(function (a) {
+      if (a.querySelector(".sr-only")) return;
+      var s = document.createElement("span");
+      s.className = "sr-only";
+      s.textContent = " (opens in a new tab)";
+      a.appendChild(s);
+    });
+  }
+
   /* ---------- Live Lahore clock ---------- */
   function clock() {
     var el = document.getElementById("pkTime");
@@ -87,15 +101,29 @@
 
     function setMenu(open) {
       if (!toggle || !menu) return;
+      var wasOpen = menu.classList.contains("open");
       toggle.setAttribute("aria-expanded", open ? "true" : "false");
       toggle.setAttribute("aria-label", open ? "Close menu" : "Open menu");
       menu.classList.toggle("open", open);
       document.body.style.overflow = open ? "hidden" : "";
+      /* keep keyboard and screen-reader focus inside the overlay while it is open */
+      $all("main, .footer, .fab, .skip-link, .marquee").forEach(function (el) {
+        if (open) { el.setAttribute("inert", ""); el.setAttribute("aria-hidden", "true"); }
+        else { el.removeAttribute("inert"); el.removeAttribute("aria-hidden"); }
+      });
+      if (open) {
+        var first = menu.querySelector("a");
+        if (first) first.focus();
+      } else if (wasOpen && document.activeElement && (menu.contains(document.activeElement) || document.activeElement === document.body)) {
+        toggle.focus();
+      }
     }
     if (toggle && menu) {
       toggle.addEventListener("click", function () { setMenu(toggle.getAttribute("aria-expanded") !== "true"); });
       $all("a", menu).forEach(function (a) { a.addEventListener("click", function () { setMenu(false); }); });
-      document.addEventListener("keydown", function (e) { if (e.key === "Escape") setMenu(false); });
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && menu.classList.contains("open")) { setMenu(false); toggle.focus(); }
+      });
       var mq = window.matchMedia("(min-width: 901px)");
       if (mq.addEventListener) mq.addEventListener("change", function (e) { if (e.matches) setMenu(false); });
     }
@@ -103,14 +131,17 @@
     /* active link highlighting */
     var links = $all(".nav-links a[href^='#']");
     var sections = links.map(function (a) { return document.querySelector(a.getAttribute("href")); }).filter(Boolean);
+    var hero = document.getElementById("top");
     if ("IntersectionObserver" in window && sections.length) {
       var spy = new IntersectionObserver(function (entries) {
         entries.forEach(function (entry) {
           if (!entry.isIntersecting) return;
+          if (entry.target === hero) { links.forEach(function (a) { a.classList.remove("active"); }); return; }
           links.forEach(function (a) { a.classList.toggle("active", a.getAttribute("href") === "#" + entry.target.id); });
         });
       }, { rootMargin: "-40% 0px -55% 0px", threshold: 0 });
       sections.forEach(function (s) { spy.observe(s); });
+      if (hero) spy.observe(hero);
     }
   }
 
@@ -127,7 +158,7 @@
     function format(v) {
       return prefix + v.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + suffix;
     }
-    if (!duration || isNaN(target)) { el.textContent = format(target || 0); return; }
+    if (!duration || isNaN(target)) { el.textContent = format(isNaN(target) ? 0 : target); return; }
     function frame(ts) {
       if (!start) start = ts;
       var p = Math.min(1, (ts - start) / duration);
@@ -158,6 +189,26 @@
     }, { threshold: 0.12, rootMargin: "0px 0px -8% 0px" });
     items.forEach(function (el) { io.observe(el); });
     counters.forEach(function (el) { if (!el.closest(".reveal")) io.observe(el); });
+
+    /* Safety net: anything the visitor has already scrolled past is shown, whatever the observer saw. */
+    var pending = items.slice();
+    var ticking = false;
+    function sweep() {
+      ticking = false;
+      pending = pending.filter(function (el) {
+        if (el.classList.contains("in")) return false;
+        if (el.getBoundingClientRect().bottom < 0) {
+          el.classList.add("in");
+          $all("[data-count]", el).forEach(runCounter);
+          io.unobserve(el);
+          return false;
+        }
+        return true;
+      });
+      if (!pending.length) window.removeEventListener("scroll", onScroll);
+    }
+    function onScroll() { if (!ticking) { ticking = true; requestAnimationFrame(sweep); } }
+    window.addEventListener("scroll", onScroll, { passive: true });
   }
 
   /* ---------- Card spotlight + cursor glow ---------- */
@@ -190,12 +241,21 @@
     document.addEventListener("pointerleave", function () { glow.classList.remove("on"); });
   }
 
-  /* ---------- Marquee: duplicate track for a seamless loop ---------- */
+  /* ---------- Marquee: seamless loop + pause control ---------- */
   function marquee() {
     var track = document.getElementById("marquee");
     if (!track || track.dataset.dup) return;
     track.dataset.dup = "1";
     track.innerHTML += track.innerHTML;
+
+    var wrap = track.closest(".marquee");
+    var btn = document.getElementById("marqueeToggle");
+    if (!wrap || !btn) return;
+    btn.addEventListener("click", function () {
+      var paused = wrap.classList.toggle("paused");
+      btn.setAttribute("aria-pressed", paused ? "true" : "false");
+      btn.setAttribute("aria-label", paused ? "Resume the scrolling list of tools" : "Pause the scrolling list of tools");
+    });
   }
 
   /* ---------- Contact form: Netlify Forms (AJAX) + WhatsApp hand-off ---------- */
@@ -207,18 +267,21 @@
     function show(text, isError) {
       msg.textContent = text;
       msg.classList.toggle("error", !!isError);
-      msg.classList.add("show");
+      try { msg.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
     }
     function value(name) { var el = f.elements[name]; return el && el.value ? el.value.trim() : ""; }
+    var sending = false;
 
     f.addEventListener("submit", function (e) {
       if (!window.fetch || !window.FormData || !window.URLSearchParams) return; /* plain POST to Netlify */
       e.preventDefault();
+      if (sending) return;
       if (!f.checkValidity()) { f.reportValidity(); return; }
 
       var btn = f.querySelector('button[type="submit"]');
       var original = btn.innerHTML;
-      btn.disabled = true;
+      sending = true;
+      btn.setAttribute("aria-disabled", "true");
       btn.textContent = "Sending…";
 
       fetch("/", {
@@ -230,15 +293,16 @@
         f.reset();
         show("Thanks, your brief is in. I'll reply within one business day.");
       }).catch(function () {
-        show("Couldn't send just now. Use the WhatsApp button or email " + (cfg.email || "alirazavirtualassistant@gmail.com") + ".", true);
+        show("Couldn't send just now. Use the WhatsApp button or email " + ((cfg && cfg.email) || "alirazavirtualassistant@gmail.com") + ".", true);
       }).then(function () {
-        btn.disabled = false;
+        sending = false;
+        btn.removeAttribute("aria-disabled");
         btn.innerHTML = original;
       });
     });
 
     var waBtn = document.getElementById("waSend");
-    var wa = digits(cfg.whatsapp);
+    var wa = digits(cfg ? cfg.whatsapp : "923454371509");
     if (waBtn && wa) {
       waBtn.addEventListener("click", function () {
         if (!f.checkValidity()) { f.reportValidity(); return; }
@@ -256,15 +320,20 @@
     if (y) y.textContent = String(new Date().getFullYear());
   }
 
+  function safely(fn) {
+    try { fn(); } catch (e) { if (window.console && console.error) console.error(e); }
+  }
+
   function init() {
-    applyLinks();
-    clock();
-    nav();
-    marquee();
-    reveal();
-    pointerEffects();
-    form();
-    year();
+    safely(reveal);          /* first: content must never stay hidden because of a later error */
+    safely(applyLinks);
+    safely(newTabHints);
+    safely(clock);
+    safely(nav);
+    safely(marquee);
+    safely(pointerEffects);
+    safely(form);
+    safely(year);
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

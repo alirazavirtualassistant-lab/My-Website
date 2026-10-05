@@ -13,7 +13,7 @@ Description:
     forecast that accounts for trend, day-of-week, and holiday effects.
 
 Usage:
-    python 36_Sales_Forecast_ML.py --input sales_history.csv --weeks 8
+    python Ali-Raza-Sales-Forecast.py --input sales_history.csv --weeks 8
 
 Dependencies:
     pip install pandas scikit-learn lightgbm holidays matplotlib joblib
