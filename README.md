@@ -24,6 +24,19 @@ https://alirazavirtualassistant-lab.github.io/my-website/cradle-your-cravings/
 
 Source: [`site/cradle-your-cravings/`](site/cradle-your-cravings/). Share this link with the client. It is fully self-contained (relative links/assets) and does not affect the myersmorrison.com preview.
 
+## 🎓 Cradle Your Cravings Academy (course platform)
+
+The full course-selling platform (Next.js 16 + Supabase/Stripe/Mux/Resend with
+mock adapters for demo mode) lives in [`academy/`](academy/). It is a separate
+app from the static previews above and deploys to Vercel (Root Directory:
+`academy`). See [`academy/README.md`](academy/README.md) for setup, the
+non-technical [`academy/ADMIN_GUIDE.md`](academy/ADMIN_GUIDE.md), and
+[`academy/LAUNCH_CHECKLIST.md`](academy/LAUNCH_CHECKLIST.md).
+
+```bash
+cd academy && cp .env.example .env.local && npm install && npm run dev
+```
+
 ## 💳 Payments policy — unchanged from the live site
 
 Per the owner's instruction, **all payment links match the existing live site** — there is **no Stripe/PayPal** added:

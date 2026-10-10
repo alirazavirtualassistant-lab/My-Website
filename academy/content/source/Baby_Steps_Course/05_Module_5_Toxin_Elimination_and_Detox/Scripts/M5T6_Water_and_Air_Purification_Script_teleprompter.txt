@@ -1,0 +1,43 @@
+M5T6: WATER AND AIR PURIFICATION — 10 MIN
+
+— 0:00–0:30  HOOK —
+
+This glass of water looks clean, and in most places in the developed world it's safe by law. Safe by law and ideal for conception are not the same standard. The difference lives in things you can't see: what the pipes are made of, what the farms upstream sprayed, and a family of chemicals that are now in the water of most of the planet. Today we look at what's in your water and your air, and what's actually worth doing about it.
+
+— 0:30–3:30  ISSUES: WHAT'S IN THE TAP AND THE AIR —
+
+Water first. Four things matter most for us. Lead, which enters water from old pipes and solder, and which has no safe level; the CDC and the World Health Organization are unambiguous, and lead affects fertility in both sexes and harms a developing brain. Nitrates, from agricultural runoff, a concern in rural areas with wells. Disinfection by-products, formed when chlorine meets organic matter. And PFAS, the "forever chemicals" used in nonstick coatings and stain repellents, now found in the blood of nearly everyone tested. A Danish study in Human Reproduction by Fei and colleagues found that women with higher blood levels of two common PFAS took longer to become pregnant. The U.S. Environmental Protection Agency has since set enforceable limits for several PFAS in drinking water, which tells you how seriously regulators now take them.
+
+Air next. The World Health Organization's air quality guidelines set limits for fine particulate matter because of its effects on the heart, the lungs, and, increasingly clearly, on pregnancy. A study in Fertility and Sterility by Leiser and colleagues, using data from Utah, found that short-term spikes in air pollution were associated with a higher risk of pregnancy loss in the following week. Indoors, the air carries what we discussed in Training Three: VOCs from products, dust with flame retardants and phthalates, and in some homes, radon, a radioactive gas from the ground that's the second leading cause of lung cancer and is easy to test for. Cooking on gas adds nitrogen dioxide; a kitchen extractor vented outside helps.
+
+The first step is always to find out. In the United States, your water utility must publish an annual Consumer Confidence Report; search your town's name and that phrase. The Environmental Working Group's Tap Water Database lets you enter a zip code and see what was detected. Many other countries publish similar reports. If you're on a well, test it yearly; your local health department can tell you how. And a radon test kit costs very little and takes a few days.
+
+Bottled water is worth a mention, because many people switch to it when they get worried, and it isn't the answer. Bottled water is often just filtered tap water, it's stored in plastic that can leach, especially when warm, and it's expensive and wasteful. A certified filter at home gives you better water for a fraction of the cost, in a glass or stainless bottle you carry. If your tap water is genuinely unsafe, a filter certified for the specific problem is still the better route.
+
+— 3:30–8:30  SOLUTIONS —
+
+Water solutions, in order of cost. An activated-carbon pitcher, the kind that sits in the fridge, reduces chlorine, taste, and some VOCs, and the certified models reduce lead too. The key word is certified: look for NSF/ANSI standard 42 for taste and chlorine, 53 for lead and specific contaminants, and, for PFAS, either 53 with PFAS listed or the newer 58 for reverse osmosis. A pitcher without a certification is a jug.
+
+An under-sink carbon block filter does the same job better and faster, with a dedicated tap, and lasts months rather than weeks. Certified models handle lead, many pesticides, and some PFAS.
+
+Reverse osmosis is the most thorough: it pushes water through a membrane that removes PFAS, nitrates, lead, arsenic, fluoride, and most of everything else. Two caveats: it wastes some water, and it removes minerals, so many systems add a remineralization stage, and you'll want to keep eating your mineral-rich vegetables. If your report shows PFAS or nitrates, this is the one.
+
+Whole-house filters and shower filters are optional extras. If your water is heavily chlorinated and your skin complains, a shower filter is a small comfort; it isn't a fertility priority.
+
+Air solutions. Ventilation first, because it's free: ten minutes of cross-breeze a day, the extractor over the stove, and windows open while cleaning. Then a HEPA air purifier in the bedroom, where you spend a third of your life; true HEPA removes fine particles including much of the dust we care about, and a carbon layer helps with VOCs. Size it to the room; the box will say. Run it on low all night. Avoid anything that produces ozone; some "ionizing" purifiers do, and ozone is itself a lung irritant. And the plants. I love houseplants, and I'll tell you the truth: a study in the Journal of Exposure Science and Environmental Epidemiology reviewed the research and found you'd need hundreds of plants per square meter to match the effect of simply opening a window. Keep the plants for joy. Buy the purifier for the air.
+
+A few more air habits that cost nothing. Don't idle the car in an attached garage. Store paint, solvents, and fuel outside the living space. Let dry-cleaned clothes air out before they come inside; the solvent off-gasses. Choose low-VOC paint when you decorate, and paint well before, not during, the months you're trying to conceive. And if there's a smoker in your life, the single largest air improvement available is that they smoke outside, away from the door, and never in the car with you.
+
+Humidity between thirty and fifty percent discourages mold and dust mites; a cheap hygrometer tells you where you are. And if your radon test comes back high, the fix is a ventilation system installed by a professional, and it's worth every penny.
+
+— 8:30–9:30  SETUP AND HEART-LED CLOSE —
+
+Your setup path: read your water report this week. Choose one change you can afford now, a certified pitcher or a bedroom HEPA purifier for most people, and put it in place. The Filter Recommendations PDF has a decision table that matches what your report shows to the filter that handles it, a certification cheat sheet, and a setup checklist, including the one thing everyone forgets: change the filter on schedule. A filter past its life can release what it collected.
+
+If cost is the barrier, here's how I'd prioritize. Free first: read the report, ventilate daily, shoes off, cooking with the extractor on. Then the cheapest effective purchase: a certified pitcher, typically the price of a couple of takeaway meals, replaced on schedule. Then a bedroom HEPA purifier, which is a larger one-time cost but lasts years. Reverse osmosis only if your report shows the contaminants it's for. Start where you are. A pitcher on the counter today is better than a whole-house system next year.
+
+Pure water and pure air are foundational, and they're a gift that outlasts the ninety days: the same tap and the same bedroom air will belong to your child. Invest wisely, start here, and let it be one of the ways you build generational health.
+
+— 9:30–10:00  ACTION HANDOFF —
+
+Download the Filter Recommendations, research one filter against your water report for forty XP, and implement one change, a filter, a purifier, or a daily ventilation habit, for thirty. Then meet me in Training Seven for the seven-day detox challenge that brings this whole module home.

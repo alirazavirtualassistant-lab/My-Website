@@ -1,0 +1,80 @@
+/*
+  Enter/exit motion for the Radix-based primitives, keyed on data-slot/data-state.
+  Imported once from src/app/layout.tsx. Reduced-motion users get the global
+  override in globals.css (animation-duration: 0.01ms).
+*/
+@keyframes cyc-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes cyc-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes cyc-pop-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes cyc-pop-out {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+}
+@keyframes cyc-float-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes cyc-float-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(4px) scale(0.98); }
+}
+@keyframes cyc-slide-in-right { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes cyc-slide-out-right { from { transform: translateX(0); } to { transform: translateX(100%); } }
+@keyframes cyc-slide-in-left { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+@keyframes cyc-slide-out-left { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+@keyframes cyc-slide-in-top { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+@keyframes cyc-slide-out-top { from { transform: translateY(0); } to { transform: translateY(-100%); } }
+@keyframes cyc-slide-in-bottom { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes cyc-slide-out-bottom { from { transform: translateY(0); } to { transform: translateY(100%); } }
+@keyframes cyc-accordion-down {
+  from { height: 0; }
+  to { height: var(--radix-accordion-content-height); }
+}
+@keyframes cyc-accordion-up {
+  from { height: var(--radix-accordion-content-height); }
+  to { height: 0; }
+}
+
+[data-slot="dialog-overlay"][data-state="open"],
+[data-slot="sheet-overlay"][data-state="open"] { animation: cyc-fade-in 180ms ease-out; }
+[data-slot="dialog-overlay"][data-state="closed"],
+[data-slot="sheet-overlay"][data-state="closed"] { animation: cyc-fade-out 150ms ease-in; }
+
+[data-slot="dialog-content"][data-state="open"] { animation: cyc-pop-in 200ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+[data-slot="dialog-content"][data-state="closed"] { animation: cyc-pop-out 150ms ease-in; }
+
+[data-slot="sheet-content"][data-side="right"][data-state="open"] { animation: cyc-slide-in-right 260ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+[data-slot="sheet-content"][data-side="right"][data-state="closed"] { animation: cyc-slide-out-right 200ms ease-in; }
+[data-slot="sheet-content"][data-side="left"][data-state="open"] { animation: cyc-slide-in-left 260ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+[data-slot="sheet-content"][data-side="left"][data-state="closed"] { animation: cyc-slide-out-left 200ms ease-in; }
+[data-slot="sheet-content"][data-side="top"][data-state="open"] { animation: cyc-slide-in-top 260ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+[data-slot="sheet-content"][data-side="top"][data-state="closed"] { animation: cyc-slide-out-top 200ms ease-in; }
+[data-slot="sheet-content"][data-side="bottom"][data-state="open"] { animation: cyc-slide-in-bottom 260ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+[data-slot="sheet-content"][data-side="bottom"][data-state="closed"] { animation: cyc-slide-out-bottom 200ms ease-in; }
+
+[data-slot="dropdown-menu-content"][data-state="open"],
+[data-slot="dropdown-menu-sub-content"][data-state="open"],
+[data-slot="popover-content"][data-state="open"],
+[data-slot="select-content"][data-state="open"],
+[data-slot="tooltip-content"][data-state="delayed-open"],
+[data-slot="tooltip-content"][data-state="instant-open"] { animation: cyc-float-in 160ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+[data-slot="dropdown-menu-content"][data-state="closed"],
+[data-slot="dropdown-menu-sub-content"][data-state="closed"],
+[data-slot="popover-content"][data-state="closed"],
+[data-slot="select-content"][data-state="closed"],
+[data-slot="tooltip-content"][data-state="closed"] { animation: cyc-float-out 120ms ease-in; }
+
+[data-slot="accordion-content"][data-state="open"] { animation: cyc-accordion-down 220ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+[data-slot="accordion-content"][data-state="closed"] { animation: cyc-accordion-up 180ms ease-in; }
+
+/* Sonner toaster hooks (classes applied via toastOptions.classNames). */
+[data-sonner-toaster] { --font-sans: inherit; }

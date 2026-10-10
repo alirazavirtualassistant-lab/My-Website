@@ -1,0 +1,230 @@
+{
+  "version": 1,
+  "generated_at": "2026-01-01T00:00:00.000Z",
+  "source": { "zip": null, "sheet": "fixture (not real course content)" },
+  "course": {
+    "slug": "fixture-course",
+    "title": "Fixture course (seed self-test)",
+    "subtitle": "Not real content",
+    "description": "A tiny CoursePackage used only to exercise scripts/seed.ts. It is never shown to learners.",
+    "short_description": "Seed self-test fixture.",
+    "thumbnail_path": null,
+    "illustration": "seedling",
+    "status": "draft",
+    "publish_at": null,
+    "level": "All levels",
+    "language": "en",
+    "topics": ["nutrition"],
+    "badge": null,
+    "partner_seat_enabled": true,
+    "certificate_enabled": true,
+    "lifetime_access": true,
+    "access_days": null,
+    "what_you_learn": ["Fixture outcome one", "Fixture outcome two"],
+    "requirements": [],
+    "who_for": [],
+    "faq": [{ "q": "Is this real?", "a": "No, it is a test fixture." }],
+    "duration_weeks": 1
+  },
+  "modules": [
+    {
+      "code": "M0",
+      "kind": "home",
+      "title": "Course Home",
+      "description": "Fixture home module.",
+      "notes": "",
+      "position": 0,
+      "drip_days": 0,
+      "completion_xp": 5,
+      "header_image_path": null,
+      "illustration": null,
+      "required_for_certificate": true,
+      "resources": [
+        {
+          "file_path": "fixture-course/00_Course_Home/Resources/Fixture_Guide.pdf",
+          "label": "Fixture Guide",
+          "file_name": "Fixture_Guide.pdf",
+          "type": "pdf",
+          "size_bytes": 1024,
+          "position": 0
+        }
+      ],
+      "lessons": [
+        {
+          "code": "M0T1",
+          "title": "Welcome (fixture)",
+          "series": null,
+          "description": "Fixture welcome lesson.",
+          "notes": "",
+          "planned_video_filename": "M0_Welcome.mp4",
+          "video_provider": "none",
+          "video_asset_id": null,
+          "video_playback_id": null,
+          "video_url": null,
+          "captions_path": null,
+          "thumbnail_path": null,
+          "duration_sec": 180,
+          "transcript": "Fixture transcript.",
+          "transcript_source_file": null,
+          "audio_slots": [],
+          "is_preview": true,
+          "is_intro": false,
+          "position": 0,
+          "drip_days_override": null,
+          "status": "published",
+          "publish_at": null,
+          "doctor_callout": false,
+          "quiz_key": "fixture-survey",
+          "resources": [],
+          "action_steps": [
+            {
+              "label": "Complete pre-actions",
+              "source_label": "Complete pre-actions (60 XP)",
+              "kind": "implementation",
+              "xp": 60,
+              "requires_upload": false,
+              "upload_type": null,
+              "link": { "type": "survey", "quiz_key": "fixture-survey" },
+              "position": 0,
+              "sub_items": [
+                { "key": "intro", "label": "Introduce yourself", "xp": 10 },
+                { "key": "whitelist", "label": "Whitelist support email", "xp": 10 },
+                { "key": "survey", "label": "Complete the survey", "xp": 40 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "M1",
+      "kind": "core",
+      "title": "Module 1 (fixture)",
+      "description": "Fixture core module.",
+      "notes": "",
+      "position": 1,
+      "drip_days": 0,
+      "completion_xp": 10,
+      "header_image_path": null,
+      "illustration": null,
+      "required_for_certificate": true,
+      "resources": [],
+      "lessons": [
+        {
+          "code": "M1T0",
+          "title": "Module introduction (fixture)",
+          "series": null,
+          "description": "",
+          "notes": "",
+          "planned_video_filename": null,
+          "video_provider": "none",
+          "video_asset_id": null,
+          "video_playback_id": null,
+          "video_url": null,
+          "captions_path": null,
+          "thumbnail_path": null,
+          "duration_sec": 300,
+          "transcript": "",
+          "transcript_source_file": null,
+          "audio_slots": [],
+          "is_preview": false,
+          "is_intro": true,
+          "position": 0,
+          "drip_days_override": null,
+          "status": "published",
+          "publish_at": null,
+          "doctor_callout": false,
+          "quiz_key": null,
+          "resources": [],
+          "action_steps": []
+        },
+        {
+          "code": "M1T1",
+          "title": "Training one (fixture)",
+          "series": null,
+          "description": "",
+          "notes": "",
+          "planned_video_filename": null,
+          "video_provider": "none",
+          "video_asset_id": null,
+          "video_playback_id": null,
+          "video_url": null,
+          "captions_path": null,
+          "thumbnail_path": null,
+          "duration_sec": 600,
+          "transcript": "",
+          "transcript_source_file": null,
+          "audio_slots": [{ "key": "summary", "label": "Audio summary", "file_path": null }],
+          "is_preview": false,
+          "is_intro": false,
+          "position": 1,
+          "drip_days_override": null,
+          "status": "published",
+          "publish_at": null,
+          "doctor_callout": true,
+          "quiz_key": null,
+          "resources": [
+            {
+              "file_path": "fixture-course/01_Module_1/Resources/M1T1_Worksheet.pdf",
+              "label": "Worksheet",
+              "file_name": "M1T1_Worksheet.pdf",
+              "type": "pdf",
+              "size_bytes": 2048,
+              "position": 0
+            }
+          ],
+          "action_steps": [
+            {
+              "label": "Share one takeaway in the forum",
+              "source_label": "Share one takeaway in the forum (20 XP)",
+              "kind": "implementation",
+              "xp": 20,
+              "requires_upload": false,
+              "upload_type": null,
+              "link": { "type": "forum" },
+              "position": 0,
+              "sub_items": null
+            },
+            {
+              "label": "Upload a photo of your plate",
+              "source_label": "Upload a photo of your plate (10 XP)",
+              "kind": "optional",
+              "xp": 10,
+              "requires_upload": true,
+              "upload_type": "photo",
+              "link": { "type": "upload", "upload_type": "photo" },
+              "position": 1,
+              "sub_items": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "quizzes": [
+    {
+      "key": "fixture-survey",
+      "title": "Fixture survey",
+      "intro": "Four short questions.",
+      "questions": [
+        { "key": "why", "type": "paragraph", "text": "What is your big why?", "required": true },
+        { "key": "partner", "type": "choice", "text": "With a partner?", "options": ["Yes", "No"], "required": true }
+      ],
+      "scoring": { "kind": "none" },
+      "confirmation": "Thank you.",
+      "source_file": null
+    }
+  ],
+  "forum_categories": [
+    { "slug": "general", "title": "General", "description": "", "position": 0, "module_code": null },
+    { "slug": "module-1", "title": "Module 1", "description": "", "position": 1, "module_code": "M1" }
+  ],
+  "stats": {
+    "lesson_count": 3,
+    "resource_count": 2,
+    "transcript_count": 1,
+    "total_video_sec": 1080,
+    "total_xp": 115,
+    "xp_by_module": { "M0": 65, "M1": 40 }
+  }
+}
