@@ -7,7 +7,7 @@ import "server-only";
  * `getLearnerOverview()` request in `src/lib/usecases/progress.ts`.
  */
 import { getServices } from "@/services";
-import type { Badge, Certificate, Course, Enrollment, Lesson, Role } from "@/lib/types";
+import type { Badge, Certificate, Course, Enrollment, Role } from "@/lib/types";
 import { todayKey } from "@/lib/utils";
 import { COURSE_GOALS, ledgerTotal, levelForXp, type LevelProgress } from "@/lib/domain/xp";
 import { effectiveStreak, isStreakAlive } from "@/lib/domain/streaks";
@@ -18,30 +18,9 @@ import { getCourseTree, listPublishedCourses, lessonSlug } from "@/lib/usecases/
 import { getLearnerCourseState, type LearnerCourseState } from "@/lib/usecases/progress";
 import { listCertificatesForUser } from "@/lib/usecases/certificates";
 import { pickContinue, type ContinuePick } from "./pick-continue";
+import type { BadgeGroup, BadgeItem, PreviewLessonLink, StreakView, UnlockItem } from "./types";
 
-export type BadgeGroup = "goal" | "module" | "streak";
-
-export interface BadgeItem {
-  key: string;
-  title: string;
-  /** Verbatim badge description (course goals come from the Welcome Guide). */
-  description: string;
-  icon: string;
-  group: BadgeGroup;
-  earned: boolean;
-  awardedAt: string | null;
-  courseId: string | null;
-}
-
-export interface StreakView {
-  /** Days in a row as of today (0 when the streak lapsed). */
-  current: number;
-  longest: number;
-  /** Last activity was today or yesterday. */
-  alive: boolean;
-  /** The learner has already shown up today. */
-  activeToday: boolean;
-}
+export type { BadgeGroup, BadgeItem, PreviewLessonLink, StreakView, UnlockItem };
 
 export interface LearnerOverview {
   xpTotal: number;
@@ -120,17 +99,6 @@ export async function loadLearnerOverview(userId: string, timeZone?: string | nu
   };
 }
 
-export interface UnlockItem {
-  courseSlug: string;
-  courseTitle: string;
-  moduleCode: string;
-  moduleTitle: string;
-  lessonCount: number;
-  unlocksAt: string;
-  /** "opens tomorrow", "opens in 4 days" … */
-  phrase: string;
-}
-
 export interface EnrolledCourseView {
   course: Course;
   enrollment: Enrollment;
@@ -140,13 +108,6 @@ export interface EnrolledCourseView {
   /** Soonest locked module for this enrolment, or null when everything is open. */
   nextUnlock: UnlockItem | null;
   certificate: Certificate | null;
-}
-
-export interface PreviewLessonLink {
-  courseSlug: string;
-  courseTitle: string;
-  lesson: Pick<Lesson, "id" | "title" | "code" | "duration_sec">;
-  href: string;
 }
 
 export interface DashboardData {
