@@ -78,7 +78,9 @@ const HEADER_MATCHERS: Array<[ColumnKey, (h: string) => boolean]> = [
 /** Parses a workbook from memory. Throws with a readable message when the course sheet is missing or malformed. */
 export async function parseCourseSheet(data: Buffer | ArrayBuffer, fileName = "course-sheet.xlsx"): Promise<ParsedSheet> {
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(data as Buffer);
+  // exceljs declares its own `Buffer extends ArrayBuffer`; at runtime it accepts a Node Buffer.
+  const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
+  await wb.xlsx.load(buffer as unknown as ArrayBuffer);
   const ws = findWorksheet(wb, COURSE_SHEET_NAME) ?? wb.worksheets[0];
   if (!ws) throw new Error(`${fileName}: workbook has no worksheets`);
   const rows = rowsFromMatrix(worksheetToMatrix(ws));
