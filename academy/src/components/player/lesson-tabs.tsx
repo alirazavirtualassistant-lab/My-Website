@@ -39,7 +39,10 @@ function LessonTabs({ overview, transcript, resources, steps, notes, discussion,
   React.useEffect(() => {
     const apply = () => {
       const h = window.location.hash.replace(/^#/, "");
-      if (isTab(h)) setTab(h);
+      if (!isTab(h)) return;
+      setTab(h);
+      // The panel mounts after the state change; scroll once it exists.
+      requestAnimationFrame(() => document.getElementById(h)?.scrollIntoView({ block: "start", behavior: "smooth" }));
     };
     apply();
     window.addEventListener("hashchange", apply);

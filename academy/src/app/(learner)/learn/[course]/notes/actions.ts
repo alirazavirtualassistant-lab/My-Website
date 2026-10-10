@@ -5,13 +5,7 @@ import { requireUser } from "@/lib/auth/session";
 import { getCourseBySlug, getCourseTree } from "@/lib/usecases/catalog";
 import { listAllNotes, notesToMarkdown } from "@/lib/usecases/notes";
 import { slugify } from "@/lib/utils";
-
-export interface NotesExportResult {
-  ok: boolean;
-  error?: string;
-  filename?: string;
-  markdown?: string;
-}
+import type { NotesExportResult } from "@/components/player/types";
 
 /** Builds the Markdown export of every note the learner has in a course. The client turns it into a download. */
 export async function exportNotesAction(input: { courseSlug: string }): Promise<NotesExportResult> {

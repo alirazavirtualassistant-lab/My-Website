@@ -135,6 +135,13 @@ export interface SimpleResult {
   error?: string;
 }
 
+export interface NotesExportResult {
+  ok: boolean;
+  error?: string;
+  filename?: string;
+  markdown?: string;
+}
+
 export interface TestimonialFormState {
   status: "idle" | "error" | "success";
   errors?: Record<string, string>;
