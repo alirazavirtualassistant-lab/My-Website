@@ -44,7 +44,7 @@ function ResetPasswordForm({ token, welcome }: ResetPasswordFormProps) {
         <FormErrorSummary summary={state.summary} />
         <FormStack>
           <PasswordField id="rp-password" label={welcome ? "Password" : "New password"} autoComplete="new-password" error={errors.password} showStrength required />
-          <PasswordField id="rp-confirm" name="confirm" label="Type it again" autoComplete="new-password" error={errors.confirm} hint=" " required />
+          <PasswordField id="rp-confirm" name="confirm" label="Type it again" autoComplete="new-password" error={errors.confirm} required />
         </FormStack>
         <SubmitButton size="lg" className="w-full" pendingLabel="Saving…">
           {welcome ? "Save password and continue" : "Save new password"}
