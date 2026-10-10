@@ -81,7 +81,7 @@ export default async function CertificatePage({ params }: { params: Promise<{ id
             Download and share
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">The PDF is A4 landscape and prints beautifully. The verify link works for anyone, with no sign-in.</p>
-          <CertificateActions className="mt-4" pdfPath={links.pdfPath} linkedInUrl={links.linkedInUrl} verifyUrl={links.verifyUrl} revoked={revoked} />
+          <CertificateActions className="mt-4" pdfPath={links.pdfPath} linkedInUrl={links.linkedInUrl} verifyUrl={links.verifyUrl} verifyPath={links.verifyPath} revoked={revoked} />
         </section>
         <section aria-labelledby="details-heading" className="card-soft p-5 sm:p-6">
           <h2 id="details-heading" className="text-xl">

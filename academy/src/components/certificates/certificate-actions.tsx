@@ -11,6 +11,8 @@ export interface CertificateActionsProps extends React.ComponentProps<"div"> {
   pdfPath: string;
   linkedInUrl: string;
   verifyUrl: string;
+  /** Path of the verify page (defaults to the path of `verifyUrl`). */
+  verifyPath?: string;
   /** Downloads are disabled for revoked certificates. */
   revoked?: boolean;
   size?: "sm" | "md";
@@ -28,7 +30,15 @@ function LinkedInIcon(props: React.ComponentProps<"svg">) {
 }
 
 /** Download PDF · Share on LinkedIn · Copy verify link. */
-function CertificateActions({ pdfPath, linkedInUrl, verifyUrl, revoked = false, size = "md", stacked = false, className, ...props }: CertificateActionsProps) {
+function pathOf(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url;
+  }
+}
+
+function CertificateActions({ pdfPath, linkedInUrl, verifyUrl, verifyPath, revoked = false, size = "md", stacked = false, className, ...props }: CertificateActionsProps) {
   const [copied, setCopied] = React.useState(false);
   const timer = React.useRef<number | null>(null);
 
@@ -87,7 +97,7 @@ function CertificateActions({ pdfPath, linkedInUrl, verifyUrl, revoked = false, 
         {copied ? "Copied" : "Copy verify link"}
       </Button>
       <Button asChild variant="link" size={size} className="px-1">
-        <Link href={new URL(verifyUrl).pathname}>Open verify page</Link>
+        <Link href={verifyPath ?? pathOf(verifyUrl)}>Open verify page</Link>
       </Button>
     </div>
   );

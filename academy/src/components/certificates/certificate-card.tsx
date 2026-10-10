@@ -61,7 +61,7 @@ function CertificateCard({ certificate, courseSlug, compact = false, className, 
           </div>
         </div>
       </div>
-      <CertificateActions size="sm" pdfPath={links.pdfPath} linkedInUrl={links.linkedInUrl} verifyUrl={links.verifyUrl} revoked={revoked} />
+      <CertificateActions size="sm" pdfPath={links.pdfPath} linkedInUrl={links.linkedInUrl} verifyUrl={links.verifyUrl} verifyPath={links.verifyPath} revoked={revoked} />
     </article>
   );
 }
