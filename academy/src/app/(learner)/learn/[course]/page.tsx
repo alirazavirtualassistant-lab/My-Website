@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Award, FileDown, Lock, MessageSquare, PlayCircle, Sparkles, Users } from "lucide-react";
-import { getServices } from "@/services";
 import { signedUrlFor } from "@/lib/usecases/uploads";
 import { lessonSlug } from "@/lib/usecases/catalog";
 import { formatHoursMinutes, pluralize } from "@/lib/utils";
@@ -14,7 +13,7 @@ import { MedicalDisclaimer } from "@/components/shared/medical-disclaimer";
 import { CourseModules, type OverviewModule } from "@/components/player/course-modules";
 import { moduleArt } from "@/components/player/format";
 import type { ResourceView } from "@/components/player/types";
-import { buildCurriculum, courseHref, lessonHref, loadCourse, moduleUnlock, previewHref } from "./_lib/load";
+import { courseHref, lessonHref, loadCourse, moduleUnlock, previewHref } from "./_lib/load";
 
 export const dynamic = "force-dynamic";
 
@@ -213,7 +212,6 @@ export default async function CourseOverviewPage({ params }: { params: Params })
       <CourseModules modules={modules} hasAccess={hasAccess} />
 
       <MedicalDisclaimer />
-      <span className="sr-only">{curriculum.totalLessons} lessons in this course</span>
     </div>
   );
 }

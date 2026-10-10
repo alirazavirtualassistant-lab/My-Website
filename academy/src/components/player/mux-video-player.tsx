@@ -49,9 +49,10 @@ function MuxVideoPlayer({ lessonId, lessonTitle, playbackId, tokens, startSec, n
   const flushPing = React.useCallback(
     (useBeacon = false) => {
       const el = ref.current;
-      if (!el) return;
-      const position = Math.floor(el.currentTime ?? 0);
+      // After unmount the element is gone; fall back to the last observed position.
+      const position = Math.floor(el ? (el.currentTime ?? 0) : lastTimeRef.current);
       const watched = Math.floor(watchedRef.current);
+      if (!el && watched === 0 && position === 0) return;
       watchedRef.current = 0;
       if (useBeacon) {
         try {

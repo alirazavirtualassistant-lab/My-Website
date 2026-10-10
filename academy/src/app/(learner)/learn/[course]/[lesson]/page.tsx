@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, ArrowRight, CalendarClock, Lock } from "lucide-react";
 import { getServices } from "@/services";
 import { getCurrentUser, isAdminRole } from "@/lib/auth/session";
-import { findLessonBySlug, lessonSlug } from "@/lib/usecases/catalog";
+import { findLessonBySlug, getCourseBySlug, lessonSlug } from "@/lib/usecases/catalog";
 import { categoryForLesson, presentAuthor } from "@/lib/usecases/community";
 import { listNotes } from "@/lib/usecases/notes";
 import { getQuizResponses } from "@/lib/usecases/progress";
@@ -39,8 +39,13 @@ export const dynamic = "force-dynamic";
 type Params = Promise<{ course: string; lesson: string }>;
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
-  const { course, lesson } = await params;
-  return { title: `${lesson.toUpperCase()} · ${course}`, robots: { index: false } };
+  const { course: slug, lesson: lessonParam } = await params;
+  const course = await getCourseBySlug(slug);
+  if (!course) return { title: "Lesson", robots: { index: false } };
+  const { db } = await getServices();
+  const code = lessonParam.toLowerCase().replace(/-/g, "_");
+  const lesson = (await db.from("lessons").list({ where: { course_id: course.id } })).find((l) => l.code.toLowerCase() === code);
+  return { title: lesson ? `${lesson.title} · ${course.title}` : course.title, robots: { index: false } };
 }
 
 export default async function LessonPage({ params }: { params: Params }) {

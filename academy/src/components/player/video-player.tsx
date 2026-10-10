@@ -62,6 +62,8 @@ function VideoPlayer({ lessonId, lessonTitle, src, captions, poster, startSec, n
   const [countdown, setCountdown] = React.useState<number | null>(null);
   const [announce, setAnnounce] = React.useState("");
 
+  const readCaptionsRef = React.useRef<boolean>(!!captions);
+
   // Watched-time accounting between pings.
   const lastTimeRef = React.useRef(0);
   const watchedRef = React.useRef(0);
@@ -70,9 +72,10 @@ function VideoPlayer({ lessonId, lessonTitle, src, captions, poster, startSec, n
   const flushPing = React.useCallback(
     (useBeacon = false) => {
       const v = videoRef.current;
-      if (!v) return;
-      const position = v.currentTime;
+      // After unmount the element is gone; fall back to the last observed position.
+      const position = v ? v.currentTime : lastTimeRef.current;
       const watched = watchedRef.current;
+      if (!v && watched === 0 && position === 0) return;
       watchedRef.current = 0;
       lastPingAtRef.current = Date.now();
       if (useBeacon) {
@@ -183,8 +186,10 @@ function VideoPlayer({ lessonId, lessonTitle, src, captions, poster, startSec, n
     const v = videoRef.current;
     if (!v || !captions) return;
     const track = v.textTracks?.[0];
-    const next = !captionsOn;
+    // Derive from the live track so the keyboard handler (bound once) never sees stale state.
+    const next = track ? track.mode !== "showing" : !readCaptionsRef.current;
     if (track) track.mode = next ? "showing" : "hidden";
+    readCaptionsRef.current = next;
     setCaptionsOn(next);
     setAnnounce(next ? "Captions on" : "Captions off");
   }
