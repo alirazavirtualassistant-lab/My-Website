@@ -60,13 +60,13 @@ export function courseProgress(tree: Pick<CourseTree, "modules">, rows: Readonly
   let totalLessons = 0;
   let requiredCompleted = 0;
   let requiredTotal = 0;
-  for (const module of tree.modules) {
-    const lessons = module.lessons.filter((l) => isLessonPublished(l, now));
+  for (const mod of tree.modules) {
+    const lessons = mod.lessons.filter((l) => isLessonPublished(l, now));
     const completed = lessons.filter((l) => done.has(l.id)).length;
-    byModule[module.id] = { completed, total: lessons.length, percent: percentOf(completed, lessons.length) };
+    byModule[mod.id] = { completed, total: lessons.length, percent: percentOf(completed, lessons.length) };
     completedLessons += completed;
     totalLessons += lessons.length;
-    if (module.required_for_certificate) {
+    if (mod.required_for_certificate) {
       requiredCompleted += completed;
       requiredTotal += lessons.length;
     }
@@ -109,11 +109,11 @@ export interface LessonOrderOptions {
 export function lessonOrder(tree: Pick<CourseTree, "modules">, opts: LessonOrderOptions = {}): OrderedLesson[] {
   const modules = [...tree.modules].sort((a, b) => a.position - b.position);
   const out: OrderedLesson[] = [];
-  for (const module of modules) {
-    const lessons = [...module.lessons].sort((a, b) => a.position - b.position);
+  for (const mod of modules) {
+    const lessons = [...mod.lessons].sort((a, b) => a.position - b.position);
     for (const lesson of lessons) {
       if (!opts.includeUnpublished && !isLessonPublished(lesson, opts.now)) continue;
-      out.push({ module, lesson, index: out.length });
+      out.push({ module: mod, lesson, index: out.length });
     }
   }
   return out;
@@ -142,9 +142,9 @@ export function nextLessonAfter(treeOrOrder: Pick<CourseTree, "modules"> | Reado
 }
 
 export function findLesson(tree: Pick<CourseTree, "modules">, lessonId: string): { module: TreeModule; lesson: TreeLesson } | null {
-  for (const module of tree.modules) {
-    const lesson = module.lessons.find((l) => l.id === lessonId);
-    if (lesson) return { module, lesson };
+  for (const mod of tree.modules) {
+    const lesson = mod.lessons.find((l) => l.id === lessonId);
+    if (lesson) return { module: mod, lesson };
   }
   return null;
 }

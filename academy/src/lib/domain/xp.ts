@@ -47,11 +47,11 @@ export function computeCourseXp(tree: Pick<CourseTree, "modules">): CourseXp {
   const byModuleCode: Record<string, number> = {};
   const byLesson: Record<string, number> = {};
   let total = 0;
-  for (const module of tree.modules) {
-    for (const lesson of module.lessons) byLesson[lesson.id] = computeLessonXp(lesson.action_steps);
-    const moduleXp = computeModuleXp(module, module.lessons);
-    byModule[module.id] = moduleXp;
-    byModuleCode[module.code] = (byModuleCode[module.code] ?? 0) + moduleXp;
+  for (const mod of tree.modules) {
+    for (const lesson of mod.lessons) byLesson[lesson.id] = computeLessonXp(lesson.action_steps);
+    const moduleXp = computeModuleXp(mod, mod.lessons);
+    byModule[mod.id] = moduleXp;
+    byModuleCode[mod.code] = (byModuleCode[mod.code] ?? 0) + moduleXp;
     total += moduleXp;
   }
   return { total, byModule, byModuleCode, byLesson };

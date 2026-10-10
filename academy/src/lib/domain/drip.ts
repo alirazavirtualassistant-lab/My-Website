@@ -105,10 +105,10 @@ export function upcomingUnlocks<M extends DripModule & Partial<Pick<Module, "pos
 ): Array<UpcomingUnlock<M>> {
   if (!enrollmentIsCurrent(enrollment, now) || enrollment.unlock_all) return [];
   const out: Array<UpcomingUnlock<M>> = [];
-  for (const module of modules) {
-    const unlocksAt = unlockDate(enrollment, module.drip_days);
+  for (const mod of modules) {
+    const unlocksAt = unlockDate(enrollment, mod.drip_days);
     if (unlocksAt.getTime() <= now.getTime()) continue;
-    out.push({ module, unlocksAt, daysUntil: calendarDaysUntil(unlocksAt, now, timeZone) });
+    out.push({ module: mod, unlocksAt, daysUntil: calendarDaysUntil(unlocksAt, now, timeZone) });
   }
   return out.sort((a, b) => a.unlocksAt.getTime() - b.unlocksAt.getTime() || (a.module.position ?? 0) - (b.module.position ?? 0));
 }

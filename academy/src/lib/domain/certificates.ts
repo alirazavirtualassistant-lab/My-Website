@@ -30,9 +30,9 @@ export function certificateRequirements(
   const missingLessonIds: string[] = [];
   let requiredTotal = 0;
   let requiredCompleted = 0;
-  for (const module of tree.modules) {
-    if (!module.required_for_certificate) continue;
-    for (const lesson of module.lessons) {
+  for (const mod of tree.modules) {
+    if (!mod.required_for_certificate) continue;
+    for (const lesson of mod.lessons) {
       if (!isLessonPublished(lesson, now)) continue;
       requiredTotal += 1;
       if (done.has(lesson.id)) requiredCompleted += 1;
