@@ -29,8 +29,6 @@ export default async function CourseOverviewPage({ params }: { params: Params })
   const { course: slug } = await params;
   const { course, state, courseXpEarned } = await loadCourse(slug, courseHref(slug));
   const hasAccess = state.access.allowed;
-  const curriculum = buildCurriculum(course, state);
-  const { storage } = await getServices();
   const currentModuleId = state.next?.moduleId ?? null;
   const completedIds = new Set(state.progress.filter((p) => p.completed_at).map((p) => p.lesson_id));
 
@@ -69,12 +67,14 @@ export default async function CourseOverviewPage({ params }: { params: Params })
           lessons: m.lessons.map((l) => {
             const ls = state.lessons[l.id];
             const unlocked = ls?.unlocked ?? false;
+            // Enrolled learners can always open the lesson page (locked ones show the unlock date);
+            // visitors only get the free previews.
             const href = hasAccess ? lessonHref(course.slug, l) : l.is_preview ? previewHref(course.slug, l) : null;
             return {
               id: l.id,
               code: l.code,
               title: l.title,
-              href: unlocked || (hasAccess && !unlocked) ? href : l.is_preview ? href : null,
+              href,
               durationSec: l.duration_sec,
               completed: completedIds.has(l.id),
               unlocked,
@@ -91,8 +91,6 @@ export default async function CourseOverviewPage({ params }: { params: Params })
   const started = state.summary.completedLessons > 0 || state.progress.length > 0;
   const previews = state.tree.modules.flatMap((m) => m.lessons.filter((l) => l.is_preview));
   const totalSec = state.tree.modules.reduce((n, m) => n + m.lessons.reduce((s, l) => s + l.duration_sec, 0), 0);
-  const thumbnailUrl = course.thumbnail_path ? (/^https?:\/\//i.test(course.thumbnail_path) ? course.thumbnail_path : storage.getPublicUrl({ bucket: "public-assets", path: course.thumbnail_path })) : null;
-  void thumbnailUrl;
 
   return (
     <div className="flex flex-col gap-10">
