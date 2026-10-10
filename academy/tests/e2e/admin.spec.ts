@@ -77,10 +77,9 @@ test.describe("admin panel", () => {
     if (await add.isVisible()) await add.click();
     await page.fill('input[name="name"]', "E2E Assistant");
     await page.fill('input[name="email"]', email);
-    const role = page.locator('select[name="role"]').first();
-    if (await role.count()) await role.selectOption("assistant");
-    const pw = page.locator('input[name="password"]').first();
-    if (await pw.count()) await pw.fill("Assist!e2e1");
+    // Role defaults to assistant. Choose "Set a temporary password now" so the password field appears.
+    await page.getByLabel(/set a temporary password now/i).click();
+    await page.locator('input[name="password"]').first().fill("Assist!e2e1");
     await page.locator('form:has(input[name="email"]) button[type="submit"]').first().click();
     await expect(page.getByText("E2E Assistant").first()).toBeVisible({ timeout: 30_000 });
     await signOut(page);

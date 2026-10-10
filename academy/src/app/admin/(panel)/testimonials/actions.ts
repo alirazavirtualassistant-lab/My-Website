@@ -19,7 +19,7 @@ const testimonialSchema = z.object({
   rating: z
     .string()
     .trim()
-    .transform((v) => (v === "" ? null : Number(v)))
+    .transform((v) => (v === "" || v === "__none__" ? null : Number(v)))
     .pipe(z.number().int().min(1, "Rating is 1 to 5.").max(5, "Rating is 1 to 5.").nullable()),
   course_id: z
     .string()
