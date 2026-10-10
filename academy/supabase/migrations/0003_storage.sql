@@ -38,7 +38,15 @@ on conflict (id) do update set
 -- same SQL works on every plan; tune them in the dashboard (Storage → bucket)
 -- or add `file_size_limit` / `allowed_mime_types` to the insert above.
 
-alter table storage.objects enable row level security;
+-- Already enabled on Supabase (and postgres may not own storage.objects there),
+-- so tolerate a privilege error; the local shim needs the ALTER to take effect.
+do $$
+begin
+  alter table storage.objects enable row level security;
+exception when insufficient_privilege then
+  raise notice 'storage.objects: RLS is managed by Supabase, skipping enable';
+end;
+$$;
 
 -- Helper: first path segment of an object name ("<uid>/photo.jpg" → "<uid>").
 -- Supabase ships storage.foldername(); split_part keeps this file portable.
