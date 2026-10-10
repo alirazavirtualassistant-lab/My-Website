@@ -49,7 +49,26 @@ function TranscriptPanel({ transcript, lessonTitle, lessonCode, className }: Tra
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const matches = React.useMemo(() => findMatches(parsed, query), [parsed, query]);
 
-  React.useEffect(() => setActive(0), [query]);
+  // Highlight segments for every block, numbered globally so they line up with `matches`.
+  const segmentsBySection = React.useMemo(() => {
+    const out: TextSegment[][][] = [];
+    let index = 0;
+    for (const section of parsed.sections) {
+      const blocks: TextSegment[][] = [];
+      for (const block of section.blocks) {
+        const segments = splitMatches(block.text, query, index);
+        for (const s of segments) if (s.match) index += 1;
+        blocks.push(segments);
+      }
+      out.push(blocks);
+    }
+    return out;
+  }, [parsed, query]);
+
+  function updateQuery(next: string) {
+    setQuery(next);
+    setActive(0);
+  }
 
   React.useEffect(() => {
     if (!matches.length) return;
@@ -87,9 +106,6 @@ function TranscriptPanel({ transcript, lessonTitle, lessonCode, className }: Tra
     return <p className={cn("text-sm text-muted-foreground", className)}>The transcript for this lesson has not been added yet.</p>;
   }
 
-  // Number matches globally so highlight indices line up with `matches`.
-  let runningIndex = 0;
-
   return (
     <div id="transcript" className={cn("flex flex-col gap-4", className)}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -98,7 +114,7 @@ function TranscriptPanel({ transcript, lessonTitle, lessonCode, className }: Tra
           <Input
             type="search"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => updateQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
@@ -118,7 +134,7 @@ function TranscriptPanel({ transcript, lessonTitle, lessonCode, className }: Tra
               <Button type="button" size="icon" variant="ghost" className="size-7" aria-label="Next match" onClick={() => step(1)} disabled={!matches.length}>
                 <ChevronDown aria-hidden="true" />
               </Button>
-              <Button type="button" size="icon" variant="ghost" className="size-7" aria-label="Clear search" onClick={() => setQuery("")}>
+              <Button type="button" size="icon" variant="ghost" className="size-7" aria-label="Clear search" onClick={() => updateQuery("")}>
                 <X aria-hidden="true" />
               </Button>
             </div>
@@ -141,7 +157,7 @@ function TranscriptPanel({ transcript, lessonTitle, lessonCode, className }: Tra
 
       <div ref={containerRef} className="prose-cyc max-w-none">
         {parsed.title ? <p className="eyebrow">{parsed.title}</p> : null}
-        {parsed.sections.map((section) => (
+        {parsed.sections.map((section, si) => (
           <section key={section.id} id={section.id} aria-label={section.label ?? undefined} className="transcript-line">
             {section.heading ? (
               <h3 className="transcript-heading flex flex-wrap items-center gap-2">
@@ -167,8 +183,7 @@ function TranscriptPanel({ transcript, lessonTitle, lessonCode, className }: Tra
               </h3>
             ) : null}
             {section.blocks.map((block, j) => {
-              const segments = splitMatches(block.text, query, runningIndex);
-              runningIndex += segments.filter((s) => s.match).length;
+              const segments = segmentsBySection[si]?.[j] ?? [{ text: block.text, match: false }];
               return block.kind === "cue" ? (
                 <p key={j} className="transcript-line text-sm text-muted-foreground italic">
                   <Highlighted segments={segments} activeIndex={active} />
