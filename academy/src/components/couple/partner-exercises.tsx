@@ -41,10 +41,7 @@ function PartnerExercises({ rows, meLabel, partnerLabel }: PartnerExercisesProps
               Lesson
             </th>
             <th scope="col" className="w-16 px-2 py-2.5 text-center">
-              <span className="sr-only sm:not-sr-only">You</span>
-              <span className="sm:hidden" aria-hidden="true">
-                You
-              </span>
+              You
             </th>
             <th scope="col" className="w-16 px-2 py-2.5 text-center">
               {partnerLabel ? <span className="line-clamp-1">{partnerLabel.split(" ")[0]}</span> : <span className="text-muted-foreground/70">Partner</span>}
