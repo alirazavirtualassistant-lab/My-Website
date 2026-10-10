@@ -47,8 +47,9 @@ export function normaliseCode(code: string): string {
  */
 export function codePrefixOf(name: string): string | null {
   const base = name.replace(/^.*[\\/]/, "").replace(/\.[^.]+$/, "");
-  const m = /^([A-Za-z]+_?[A-Za-z]*\d+(?:_?[A-Za-z]\d*)*[a-z]?)(?=[\s_\-.]|$)/.exec(base);
-  if (!m) return null;
+  // <LETTERS><digits?><_?T<digits><letter?>>? e.g. M0, M1T1, M1T10a, BONUS_T2a, REPLAY_T1
+  const m = /^([A-Za-z]+\d*(?:_?[Tt]\d+[a-z]?)?)(?=[\s_\-.]|$)/.exec(base);
+  if (!m || !/\d/.test(m[1])) return null;
   return normaliseCode(m[1]);
 }
 
