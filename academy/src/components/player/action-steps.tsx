@@ -42,8 +42,13 @@ export interface ActionStepsProps {
 function ActionSteps({ steps, courseId, defaultName, xpEarned, xpTotal, extras, className }: ActionStepsProps) {
   const [rows, setRows] = React.useState(steps);
   const [earned, setEarned] = React.useState(xpEarned);
-  React.useEffect(() => setRows(steps), [steps]);
-  React.useEffect(() => setEarned(xpEarned), [xpEarned]);
+  // Re-derive from the server after a refresh (props change) — the React "adjust state on prop change" pattern.
+  const [prevSteps, setPrevSteps] = React.useState(steps);
+  if (prevSteps !== steps) {
+    setPrevSteps(steps);
+    setRows(steps);
+    setEarned(xpEarned);
+  }
 
   const patch = React.useCallback((stepId: string, p: Partial<ActionStepView>) => {
     setRows((prev) => prev.map((r) => (r.id === stepId ? { ...r, ...p } : r)));

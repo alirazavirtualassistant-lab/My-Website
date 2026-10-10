@@ -150,7 +150,9 @@ export default async function LessonPage({ params }: { params: Params }) {
   const quizHrefFor = (key: string) => `${lessonHref(course.slug, lesson)}/quiz/${key}`;
   const forumHref = category ? `/community/${course.slug}/new?category=${encodeURIComponent(category.slug)}&lesson=${encodeURIComponent(lesson.code)}` : `/community/${course.slug}/new?lesson=${encodeURIComponent(lesson.code)}`;
   const linkedQuizKeys = new Set(lesson.action_steps.map((s) => ("quiz_key" in s.link ? s.link.quiz_key : null)).filter(Boolean));
-  let reviewStepId: string | null = null;
+  // A lesson-level quiz that no step links to (M7T5 "Review Survey & Adjust Goals") attaches to the first matching step.
+  const reviewStep = lesson.quiz_key && !linkedQuizKeys.has(lesson.quiz_key) ? (lesson.action_steps.find((s) => s.link.type === "none" && /survey|quiz/i.test(s.label)) ?? null) : null;
+  const reviewStepId: string | null = reviewStep?.id ?? null;
   const steps: ActionStepView[] = await Promise.all(
     lesson.action_steps.map(async (s) => {
       const c = completionByStep.get(s.id) ?? null;
@@ -159,8 +161,7 @@ export default async function LessonPage({ params }: { params: Params }) {
       if ("quiz_key" in s.link) {
         quizHref = quizHrefFor(s.link.quiz_key);
         title = quizTitle(s.link.quiz_key);
-      } else if (s.link.type === "none" && lesson.quiz_key && !linkedQuizKeys.has(lesson.quiz_key) && !reviewStepId && /survey|quiz/i.test(s.label)) {
-        reviewStepId = s.id;
+      } else if (s.id === reviewStepId && lesson.quiz_key) {
         quizHref = quizHrefFor(lesson.quiz_key);
         title = quizTitle(lesson.quiz_key);
       }

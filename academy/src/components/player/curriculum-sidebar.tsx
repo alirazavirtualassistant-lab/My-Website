@@ -28,10 +28,12 @@ function CurriculumSidebar({ data, currentLessonId, onNavigate, className }: Cur
   const now = new Date();
   const currentModuleId = data.modules.find((m) => m.lessons.some((l) => l.id === currentLessonId))?.id ?? null;
   const [open, setOpen] = React.useState<Record<string, boolean>>(() => Object.fromEntries(data.modules.map((m) => [m.id, m.id === currentModuleId || m.kind === "home"])));
-
-  React.useEffect(() => {
-    if (currentModuleId) setOpen((prev) => (prev[currentModuleId] ? prev : { ...prev, [currentModuleId]: true }));
-  }, [currentModuleId]);
+  // When the learner navigates to a lesson in another module, make sure that module is expanded.
+  const [prevModuleId, setPrevModuleId] = React.useState(currentModuleId);
+  if (prevModuleId !== currentModuleId) {
+    setPrevModuleId(currentModuleId);
+    if (currentModuleId && !open[currentModuleId]) setOpen({ ...open, [currentModuleId]: true });
+  }
 
   return (
     <nav aria-label="Course curriculum" className={cn("flex flex-col", className)}>
