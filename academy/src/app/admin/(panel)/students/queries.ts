@@ -57,7 +57,7 @@ export async function getStudentDetail(userId: string): Promise<StudentDetail | 
       completedLessons: state.summary.completedLessons,
       totalLessons: state.summary.totalLessons,
       xp: state.xpEntries.filter((e) => e.course_id === courseId).reduce((n, e) => n + e.amount, 0),
-      level: state.level.label,
+      level: state.level.level.label,
     });
   }
 

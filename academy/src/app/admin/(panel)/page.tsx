@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { BookOpen, FolderInput } from "lucide-react";
 import { getAdminDashboardStats } from "@/lib/usecases/admin";
-import { getSession } from "@/lib/auth/session";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -16,9 +15,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Admin dashboard", robots: { index: false, follow: false } };
 
 export default async function AdminDashboardPage({ searchParams }: { searchParams: Promise<{ denied?: string }> }) {
-  const [{ denied }, stats, session] = await Promise.all([searchParams, getAdminDashboardStats(), getSession()]);
-  const firstName = session?.email ? undefined : undefined;
-  void firstName;
+  const [{ denied }, stats] = await Promise.all([searchParams, getAdminDashboardStats()]);
   return (
     <div className="mx-auto w-full max-w-7xl space-y-8">
       <PageHeader
