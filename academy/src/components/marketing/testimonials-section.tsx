@@ -35,7 +35,8 @@ function TestimonialsSection({ testimonials, emptyTitle = "Learner stories will 
     );
   }
   return (
-    <ul data-slot="testimonials" className={cn("grid gap-4 md:grid-cols-2 lg:grid-cols-3", className)} {...props}>
+    <div data-slot="testimonials" className={className} {...props}>
+      <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {testimonials.map((t) => (
         <li key={t.id} className="card-soft flex flex-col gap-4 p-6">
           {t.rating !== null ? <Stars rating={t.rating} /> : null}
@@ -46,7 +47,8 @@ function TestimonialsSection({ testimonials, emptyTitle = "Learner stories will 
           </footer>
         </li>
       ))}
-    </ul>
+      </ul>
+    </div>
   );
 }
 

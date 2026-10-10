@@ -66,10 +66,10 @@ function SignUpForm({ next, demoMailbox }: SignUpFormProps) {
   );
 }
 
-function ConsentLabel() {
+function LegalLinks() {
   return (
-    <>
-      I agree to the{" "}
+    <span className="text-xs text-muted-foreground">
+      Read the{" "}
       <Link href="/terms" className="font-semibold text-rose-strong underline-offset-4 hover:underline" target="_blank" rel="noopener">
         terms
       </Link>{" "}
@@ -77,8 +77,8 @@ function ConsentLabel() {
       <Link href="/privacy" className="font-semibold text-rose-strong underline-offset-4 hover:underline" target="_blank" rel="noopener">
         privacy policy
       </Link>
-      .
-    </>
+      <span className="sr-only"> (each opens in a new tab)</span>.
+    </span>
   );
 }
 
@@ -110,11 +110,12 @@ function PasswordSignUp({ next, demoMailbox, onSwitch }: { next: string; demoMai
         <div className="grid gap-1.5">
           <div className="flex items-start gap-2.5">
             <Checkbox id="su-consent" name="consent" className="mt-0.5" aria-invalid={errors.consent ? true : undefined} aria-describedby={errors.consent ? "su-consent-error" : undefined} />
-            <Label htmlFor="su-consent" className="inline font-normal leading-snug">
-              <span>
-                <ConsentLabel />
-              </span>
-            </Label>
+            <div className="grid gap-0.5">
+              <Label htmlFor="su-consent" className="font-normal leading-snug">
+                I agree to the terms and privacy policy
+              </Label>
+              <LegalLinks />
+            </div>
           </div>
           {errors.consent ? (
             <p id="su-consent-error" role="alert" className="text-xs font-medium text-danger">

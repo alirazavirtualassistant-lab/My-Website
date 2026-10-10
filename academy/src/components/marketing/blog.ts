@@ -49,7 +49,7 @@ export async function listBlogPosts(): Promise<BlogPostMeta[]> {
   }
   const posts = (await Promise.all(files.map(readPost))).filter((p): p is BlogPost => p !== null);
   return posts
-    .map(({ body: _body, ...meta }) => meta)
+    .map((p): BlogPostMeta => ({ slug: p.slug, title: p.title, description: p.description, date: p.date, author: p.author, tags: p.tags }))
     .sort((a, b) => b.date.localeCompare(a.date));
 }
 

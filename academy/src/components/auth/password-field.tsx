@@ -3,8 +3,8 @@
 import * as React from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { PASSWORD_MIN_LENGTH } from "@/lib/auth/password";
 import { passwordStrength } from "./logic";
 
@@ -18,45 +18,70 @@ export interface PasswordFieldProps {
   required?: boolean;
   /** Live strength meter + rule hint (sign-up, reset, change). */
   showStrength?: boolean;
-  optionalText?: string;
   className?: string;
 }
 
 const METER_COLORS = ["bg-line", "bg-danger", "bg-warning", "bg-sage", "bg-sage-strong"] as const;
 
-/** Password input with a show/hide toggle and an optional strength meter. */
-function PasswordField({ id, name = "password", label = "Password", autoComplete, error, hint, required, showStrength = false, optionalText = "", className }: PasswordFieldProps) {
+/**
+ * Password input with a show/hide toggle and an optional strength meter.
+ * Wires label / hint / error / meter ids by hand because the toggle button
+ * has to sit inside the control's box.
+ */
+function PasswordField({ id, name = "password", label = "Password", autoComplete, error, hint, required, showStrength = false, className }: PasswordFieldProps) {
   const [visible, setVisible] = React.useState(false);
   const [value, setValue] = React.useState("");
   const strength = showStrength ? passwordStrength(value) : null;
+  const hintId = `${id}-hint`;
+  const errorId = `${id}-error`;
   const meterId = `${id}-strength`;
-  const defaultHint = showStrength ? `At least ${PASSWORD_MIN_LENGTH} characters with a letter and a number.` : undefined;
+  const resolvedHint = hint ?? (showStrength ? `At least ${PASSWORD_MIN_LENGTH} characters with a letter and a number.` : undefined);
+  const describedBy = [error ? errorId : null, resolvedHint ? hintId : null, showStrength ? meterId : null].filter(Boolean).join(" ") || undefined;
 
   return (
-    <div className={cn("grid gap-1.5", className)}>
-      <FormField id={id} label={label} error={error} hint={hint ?? defaultHint} required={required} optionalText={optionalText}>
-        <div className="relative">
-          <Input
-            type={visible ? "text" : "password"}
-            name={name}
-            autoComplete={autoComplete}
-            required={required}
-            className="pr-11"
-            aria-describedby={showStrength ? meterId : undefined}
-            onChange={showStrength ? (e) => setValue(e.target.value) : undefined}
-            spellCheck={false}
-          />
-          <button
-            type="button"
-            onClick={() => setVisible((v) => !v)}
-            aria-pressed={visible}
-            aria-label={visible ? "Hide password" : "Show password"}
-            className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-lg text-muted-foreground hover:text-rose-strong focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          >
-            {visible ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}
-          </button>
-        </div>
-      </FormField>
+    <div data-slot="form-field" className={cn("grid gap-1.5", className)}>
+      <Label htmlFor={id}>
+        <span>{label}</span>
+        {required ? (
+          <span aria-hidden="true" className="text-rose-strong">
+            *
+          </span>
+        ) : null}
+      </Label>
+      <div className="relative">
+        <Input
+          id={id}
+          type={visible ? "text" : "password"}
+          name={name}
+          autoComplete={autoComplete}
+          required={required}
+          aria-required={required || undefined}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy}
+          className="pr-11"
+          onChange={showStrength ? (e) => setValue(e.target.value) : undefined}
+          spellCheck={false}
+        />
+        <button
+          type="button"
+          onClick={() => setVisible((v) => !v)}
+          aria-pressed={visible}
+          aria-label={visible ? "Hide password" : "Show password"}
+          className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-lg text-muted-foreground hover:text-rose-strong focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          {visible ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}
+        </button>
+      </div>
+      {resolvedHint ? (
+        <p id={hintId} data-slot="form-hint" className="text-xs text-muted-foreground">
+          {resolvedHint}
+        </p>
+      ) : null}
+      {error ? (
+        <p id={errorId} data-slot="form-error" role="alert" className="text-xs font-medium text-danger">
+          {error}
+        </p>
+      ) : null}
       {showStrength && strength ? (
         <div id={meterId} className="grid gap-1">
           <div className="grid grid-cols-4 gap-1" aria-hidden="true">

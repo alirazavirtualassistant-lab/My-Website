@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-html-link-for-pages -- global-error replaces the root layout; plain anchors keep it dependency-free */
 "use client";
 
 import * as React from "react";

@@ -16,13 +16,13 @@ export interface AllAccessToggleProps {
  * the server and passed in; this only decides which one is visible.
  */
 function AllAccessToggle({ monthly, annual, annualNote, defaultInterval = "month" }: AllAccessToggleProps) {
-  const [interval, setInterval] = React.useState<"month" | "year">(defaultInterval);
+  const [interval, setBilling] = React.useState<"month" | "year">(defaultInterval);
   const btn = (value: "month" | "year", label: string) => (
     <button
       type="button"
       role="radio"
       aria-checked={interval === value}
-      onClick={() => setInterval(value)}
+      onClick={() => setBilling(value)}
       className={cn(
         "h-9 flex-1 rounded-md px-4 text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background focus-visible:outline-none",
         interval === value ? "bg-card text-rose-strong shadow-soft" : "text-muted-foreground hover:text-foreground",

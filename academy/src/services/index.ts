@@ -47,7 +47,6 @@ const factories: Record<"mock" | "supabase", Pick<Factories, "db" | "auth" | "st
 };
 
 declare global {
-  // eslint-disable-next-line no-var
   var __cycServices: Promise<Services> | undefined;
 }
 

@@ -91,3 +91,68 @@ things are the way they are. Newest at the bottom of each section.
   and the footer, and accepted once (stored on the profile) before the first
   lesson plays.
 - All legal text is placeholder and tagged `[LEGAL REVIEW NEEDED]`.
+
+## Domain logic (drip, XP, streaks, quizzes, pricing)
+
+- Drip boundary: content opens at exactly `started_at + N days` (inclusive);
+  `expires_at` is exclusive. A revoked or expired enrollment stays locked even
+  with `unlock_all`. "Opens today / tomorrow" wording uses calendar days in the
+  learner's timezone when known (UTC otherwise).
+- Step XP with sub-items: the step's XP is the inclusive total; each sub-item
+  awards once (`ref_id = "<stepId>:<key>"`), the remainder awards when all
+  sub-items are done. For the 60-XP pre-actions step (10 + 10 + 40) the
+  remainder is zero.
+- Only published lessons count for progress, ordering and certificate
+  eligibility; scheduled lessons count once their publish date passes.
+- Quiz scoring: scale and yes/no items are always required on summed quizzes;
+  the Elimination Guide's family-history item scores 3 for "yes". Section
+  scores exist for every section; the band texts are verbatim from the PDFs.
+- Pricing: USD is exact; other display currencies round to whole units using
+  the placeholder rates in `site.ts`. For payment plans `price_cents` is the
+  per-instalment charge. Coupons never discount below zero.
+- Access: subscription access is status-only (`active` or `trialing`);
+  `past_due` is denied. A partner-seat learner cannot invite another partner.
+- Level thresholds (Seedling 0 / Sprout 1,000 / Bloom 2,500 / Harvest 4,000)
+  are set against 4,085 course XP plus 300 XP of course-goal bonuses.
+
+## Database and RLS
+
+- Enum-like columns are `text` with CHECK constraints; arrays are `text[]`;
+  structured fields are `jsonb`. `quiz_responses` keeps retake history (the
+  survey is revisited in Module 7).
+- `handle_new_user()` never takes `role` from sign-up metadata; the first admin
+  is created via `/admin/register` with the setup code (or by updating the
+  row).
+- Learners cannot write `xp_ledger`, `user_badges` or `streaks` directly (the
+  server awards XP); forum reading requires an active enrollment in that
+  course; billing, settings and team writes require the owner role
+  (`admin`), while `assistant` can read everything and moderate content.
+- Admins see `quiz_completion_status` (who completed what, when), never the
+  answers; notes and learner uploads are invisible to admins by policy.
+- Local validation: `scripts/db-check.ts` applies the migrations twice to a
+  throwaway Postgres (with shims for `auth.uid()` and storage tables) and runs
+  a 23-check RLS smoke test.
+
+## Adapters
+
+- Mock checkout sessions keep their amounts/mode as extra JSON only in mock
+  mode; on Supabase the amounts come from the linked order.
+- Stripe: promo-code entry and a server-applied coupon are mutually exclusive
+  (Stripe rule); a coupon without a Stripe promotion code is applied as a
+  one-off `amount_off` coupon equal to the server-side discount so Stripe
+  charges exactly the quoted total. Stripe v23 field changes are handled
+  (subscription period end from items, invoice subscription from `parent`).
+- Mux playback tokens are RS256 JWTs valid for two hours; webhooks are
+  verified with the `mux-signature` header (5-minute tolerance).
+- `sendTemplate(name, to, props)` never throws; every email (mock or Resend)
+  is recorded in `email_events`, and job emails carry a `job_key` so the daily
+  cron is idempotent.
+
+## App shell
+
+- The root layout mounts the toaster, cookie consent, analytics loader and
+  demo ribbon once; route-group layouts add only their header/shell.
+- Error boundaries use Next 16's `retry`. The UI showcase at `/_dev/ui`
+  (and its `%5Fdev` alias) is for QA and should be deleted before launch.
+- Admin pages live under the `src/app/admin/(panel)` route group so that
+  `/admin/register` (first-admin bootstrap) stays outside the role gate.

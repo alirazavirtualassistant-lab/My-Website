@@ -77,7 +77,7 @@ function Hero({ ctaHref, featured, className, ...props }: HeroProps) {
                 <Stat icon={<Clock />} label="of video" value={formatHoursMinutes(featured.stats.total_video_sec)} />
                 <Stat icon={<BookOpen />} label="lessons" value={String(featured.stats.lesson_count)} />
                 <Stat icon={<FileText />} label="resources" value={String(featured.stats.resource_count)} />
-                <Stat icon={<Layers />} label="modules + bonuses" value={String(featured.stats.module_count)} />
+                <Stat icon={<Layers />} label="core modules" value={String(featured.stats.module_count)} />
               </div>
               <div className="mt-5 flex items-center justify-between border-t border-border pt-4">
                 {featured.course.price ? <Price price={featured.course.price} size="md" showSaleBadge /> : <span className="text-sm text-muted-foreground">Enrolment opens soon</span>}

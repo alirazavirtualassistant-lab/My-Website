@@ -1,7 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-export interface AuthCardProps extends React.ComponentProps<"section"> {
+export interface AuthCardProps extends Omit<React.ComponentProps<"section">, "title"> {
   eyebrow?: React.ReactNode;
   title: React.ReactNode;
   description?: React.ReactNode;

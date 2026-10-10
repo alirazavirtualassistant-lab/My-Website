@@ -29,6 +29,8 @@ function DemoGooglePicker({ accounts, next }: { accounts: DemoGoogleAccount[]; n
     <AuthCard eyebrow="Demo mode" title="Choose an account" description="This stands in for Google's account picker. Nothing leaves this demo.">
       <form action={action} noValidate className="grid gap-5" aria-busy={pending}>
         <input type="hidden" name="next" value={next} />
+        {/* First submit button in DOM order = implicit (Enter key) submission → uses the typed email, not the first account. */}
+        <button type="submit" tabIndex={-1} aria-hidden="true" className="hidden" />
         <FormErrorSummary summary={state.summary} />
         <ul className="divide-y divide-border rounded-lg border border-border bg-card" aria-label="Demo accounts">
           {accounts.map((account) => (

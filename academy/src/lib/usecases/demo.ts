@@ -19,7 +19,6 @@ const BOOTSTRAP_MARKER = "bootstrap:v1";
  * course, demo accounts and a demo enrollment with some progress.
  */
 declare global {
-  // eslint-disable-next-line no-var
   var __cycBootstrapped: Promise<void> | undefined;
 }
 

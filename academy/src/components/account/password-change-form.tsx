@@ -29,7 +29,7 @@ function Inner({ hasPassword, onSaved }: { hasPassword: boolean; onSaved: () => 
   if (!hasPassword) {
     return (
       <p className="text-sm text-muted-foreground">
-        This account doesn't have a password yet. Use <span className="font-semibold text-foreground">Forgot password</span> from the sign-in page to set one, or keep signing in with a magic link or Google.
+        This account doesn’t have a password yet. Use <span className="font-semibold text-foreground">Forgot password</span> from the sign-in page to set one, or keep signing in with a magic link or Google.
       </p>
     );
   }

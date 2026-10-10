@@ -68,8 +68,8 @@ function VerifyRunner({ token, next, demoMailbox }: { token: string; next: strin
             <CircleCheck className="size-5" />
           </span>
           <div>
-            <p className="font-serif text-xl leading-tight font-medium">You're verified</p>
-            <p className="mt-1 text-sm text-foreground/90">Thank you{state.email ? `, ${state.email}` : ""}. Everything is set — let's take the first step.</p>
+            <p className="font-serif text-xl leading-tight font-medium">You’re verified</p>
+            <p className="mt-1 text-sm text-foreground/90">Thank you{state.email ? `, ${state.email}` : ""}. Everything is set — let’s take the first step.</p>
           </div>
         </div>
         <Button asChild size="lg" className="w-full">
@@ -87,7 +87,7 @@ function VerifyRunner({ token, next, demoMailbox }: { token: string; next: strin
             <MailWarning className="size-5" />
           </span>
           <div>
-            <p className="font-serif text-xl leading-tight font-medium text-foreground">That link didn't work</p>
+            <p className="font-serif text-xl leading-tight font-medium text-foreground">That link didn’t work</p>
             <p className="mt-1 text-sm text-foreground/90">{state.errors?.form ?? "It may have expired or already been used. We can send you a fresh one."}</p>
           </div>
         </div>

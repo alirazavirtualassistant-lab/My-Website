@@ -179,7 +179,11 @@ function CourseCatalog({ courses, initialFilters }: CourseCatalogProps) {
   }, []);
 
   React.useEffect(() => {
-    const next = filtersToSearchParams(filters).toString();
+    // Keep unrelated params (utm_*, etc.) and only rewrite ours.
+    const sp = new URLSearchParams(window.location.search);
+    for (const key of ["q", "topic", "level", "duration", "price", "sort"]) sp.delete(key);
+    filtersToSearchParams(filters).forEach((value, key) => sp.set(key, value));
+    const next = sp.toString();
     const current = window.location.search.replace(/^\?/, "");
     if (next !== current) window.history.replaceState(window.history.state, "", next ? `${pathname}?${next}` : pathname);
   }, [filters, pathname]);
@@ -192,6 +196,7 @@ function CourseCatalog({ courses, initialFilters }: CourseCatalogProps) {
       <div id="catalog-results">
         <CourseGrid
           courses={visible}
+          headingLevel="h2"
           emptyAction={
             <Button
               type="button"

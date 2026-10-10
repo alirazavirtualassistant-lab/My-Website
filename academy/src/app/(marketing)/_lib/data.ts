@@ -152,7 +152,7 @@ export async function loadLegal(slug: LegalSlug): Promise<LegalDocument> {
     }
   }
   const lines = raw.replace(/\r\n?/g, "\n").split("\n");
-  let title = page.title;
+  let title: string = page.title;
   const firstIdx = lines.findIndex((l) => l.trim() !== "");
   if (firstIdx !== -1 && /^#\s+/.test(lines[firstIdx])) {
     title = lines[firstIdx].replace(/^#\s+/, "").trim() || page.title;

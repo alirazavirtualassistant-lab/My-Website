@@ -8,6 +8,7 @@
  *   ?error=…&error_description=…   provider error → /sign-in?error=oauth
  */
 import { NextResponse, type NextRequest } from "next/server";
+import { env } from "@/lib/env";
 import { getServices } from "@/services";
 import { safeRedirectPath } from "@/lib/utils";
 
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
   const code = url.searchParams.get("code");
   const tokenHash = url.searchParams.get("token_hash");
   const type = (url.searchParams.get("type") ?? "").toLowerCase();
-  const to = (path: string) => NextResponse.redirect(new URL(path, url.origin), 303);
+  const to = (path: string) => NextResponse.redirect(new URL(path, env.siteUrl), 303);
 
   if (url.searchParams.get("error")) {
     console.warn("[auth/callback] provider error", url.searchParams.get("error"), url.searchParams.get("error_description"));

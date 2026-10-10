@@ -22,8 +22,8 @@ export const footerLinks = {
   legal: [
     { label: "Terms", href: "/terms" },
     { label: "Privacy", href: "/privacy" },
-    { label: "Refund Policy", href: "/refunds" },
-    { label: "Medical Disclaimer", href: "/disclaimer" },
+    { label: "Refund Policy", href: "/refund-policy" },
+    { label: "Medical Disclaimer", href: "/medical-disclaimer" },
     { label: "Cookie Policy", href: "/cookies" },
   ],
 } as const;

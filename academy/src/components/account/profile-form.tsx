@@ -34,6 +34,20 @@ function useToastOnSuccess(stamp: number | undefined, message: string | undefine
   }, [stamp, message]);
 }
 
+const noopSubscribe = () => () => {};
+function readDeviceTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** Device time zone, hydration-safe (empty on the server and during hydration). */
+function useDeviceTimeZone(): string {
+  return React.useSyncExternalStore(noopSubscribe, readDeviceTimeZone, () => "");
+}
+
 function ProfileForm({ profile, timeZones }: ProfileFormProps) {
   const [state, action] = useActionState(updateProfileAction, idleState);
   const errors = state.errors ?? {};
@@ -41,16 +55,8 @@ function ProfileForm({ profile, timeZones }: ProfileFormProps) {
 
   const [preview, setPreview] = React.useState<string | null>(null);
   const [fileError, setFileError] = React.useState<string | null>(null);
-  const [detected, setDetected] = React.useState<string>("");
+  const detected = useDeviceTimeZone();
   const selectRef = React.useRef<HTMLSelectElement>(null);
-
-  React.useEffect(() => {
-    try {
-      setDetected(Intl.DateTimeFormat().resolvedOptions().timeZone ?? "");
-    } catch {
-      setDetected("");
-    }
-  }, []);
 
   React.useEffect(() => {
     return () => {
@@ -127,7 +133,7 @@ function ProfileForm({ profile, timeZones }: ProfileFormProps) {
             <Label htmlFor="pf-email">Email</Label>
             <Input id="pf-email" type="email" value={profile.email} readOnly aria-describedby="pf-email-hint" className="bg-muted-bg/60" />
             <p id="pf-email-hint" className="text-xs text-muted-foreground">
-              Your sign-in email. To change it, write to us from the Contact page and we'll help.
+              Your sign-in email. To change it, write to us from the Contact page and we’ll help.
             </p>
           </div>
 
@@ -155,7 +161,7 @@ function ProfileForm({ profile, timeZones }: ProfileFormProps) {
               aria-invalid={errors.timezone ? true : undefined}
               className={selectClass}
             >
-              <option value="">Use my device's time zone</option>
+              <option value="">Use my device’s time zone</option>
               {timeZones.map((group) => (
                 <optgroup key={group.region} label={group.region}>
                   {group.zones.map((zone) => (
