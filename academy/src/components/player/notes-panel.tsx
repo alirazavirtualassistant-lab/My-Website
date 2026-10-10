@@ -150,8 +150,7 @@ function NoteEditor({ note, lessonId, courseId, hasPlayer, onSeek, onDelete }: {
   const [body, setBody] = React.useState(note.body);
   const [status, setStatus] = React.useState<"saved" | "dirty" | "saving" | "error">("saved");
   const timer = React.useRef<number | null>(null);
-  const latest = React.useRef(body);
-  latest.current = body;
+  const latest = React.useRef(note.body);
 
   React.useEffect(() => {
     return () => {
@@ -160,6 +159,7 @@ function NoteEditor({ note, lessonId, courseId, hasPlayer, onSeek, onDelete }: {
   }, []);
 
   function schedule(next: string) {
+    latest.current = next;
     setBody(next);
     setStatus("dirty");
     if (timer.current) window.clearTimeout(timer.current);

@@ -46,17 +46,17 @@ function PlayerStoreProvider({ initialCompletedIds, totalLessons, children }: Pl
   const [hasPlayer, setHasPlayer] = React.useState(false);
   const bridgeRef = React.useRef<PlayerBridge | null>(null);
 
-  // Keep in sync when the server re-renders with fresh data (router.refresh()).
+  // Keep in sync when the server re-renders with fresh data (router.refresh()):
+  // the "adjust state when a prop changes" pattern, no effect needed.
   const serverKey = initialCompletedIds.join("|");
-  React.useEffect(() => {
-    setCompletedIds((prev) => {
-      const next = new Set(initialCompletedIds);
-      // Preserve optimistic additions that the server has not confirmed yet.
-      for (const id of prev) next.add(id);
-      return next;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverKey]);
+  const [prevServerKey, setPrevServerKey] = React.useState(serverKey);
+  if (prevServerKey !== serverKey) {
+    setPrevServerKey(serverKey);
+    const next = new Set(initialCompletedIds);
+    // Preserve optimistic additions that the server has not confirmed yet.
+    for (const id of completedIds) next.add(id);
+    setCompletedIds(next);
+  }
 
   const markCompleted = React.useCallback((lessonId: string) => {
     setCompletedIds((prev) => (prev.has(lessonId) ? prev : new Set([...prev, lessonId])));

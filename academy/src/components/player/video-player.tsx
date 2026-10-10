@@ -166,7 +166,6 @@ function VideoPlayer({ lessonId, lessonTitle, src, captions, poster, startSec, n
     if (countdown === null) return;
     if (countdown <= 0) {
       if (nextHref) router.push(nextHref);
-      setCountdown(null);
       return;
     }
     const id = window.setTimeout(() => setCountdown((c) => (c === null ? null : c - 1)), 1000);

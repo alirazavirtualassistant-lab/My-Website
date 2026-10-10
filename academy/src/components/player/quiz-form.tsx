@@ -55,6 +55,18 @@ function QuizForm({ quiz, lessonId, lessonHref, step, previous, className }: Qui
 
   const set = (key: string, value: string | number | null) => setAnswers((a) => ({ ...a, [key]: value }));
 
+  // Questions with a section heading wherever the section changes.
+  const rows = React.useMemo(() => {
+    const out: Array<{ q: QuizQuestion; heading: string | null }> = [];
+    let current: string | undefined;
+    for (const q of quiz.questions) {
+      const heading = q.section && q.section !== current ? sectionLabel(quiz, q.section) : null;
+      if (q.section) current = q.section;
+      out.push({ q, heading });
+    }
+    return out;
+  }, [quiz]);
+
   function validate(): string[] {
     const missing: string[] = [];
     for (const q of quiz.questions) {
@@ -144,7 +156,6 @@ function QuizForm({ quiz, lessonId, lessonHref, step, previous, className }: Qui
     );
   }
 
-  let currentSection: string | undefined;
   return (
     <form onSubmit={submit} noValidate className={cn("flex flex-col gap-8", className)} aria-describedby={errors.size ? "quiz-errors" : undefined}>
       {errors.size ? (
@@ -152,9 +163,7 @@ function QuizForm({ quiz, lessonId, lessonHref, step, previous, className }: Qui
           Please answer the {errors.size === 1 ? "highlighted question" : `${errors.size} highlighted questions`} to continue.
         </p>
       ) : null}
-      {quiz.questions.map((q, i) => {
-        const heading = q.section && q.section !== currentSection ? sectionLabel(quiz, q.section) : null;
-        currentSection = q.section ?? currentSection;
+      {rows.map(({ q, heading }, i) => {
         const invalid = errors.has(q.key);
         return (
           <React.Fragment key={q.key}>
