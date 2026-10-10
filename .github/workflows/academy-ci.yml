@@ -1,0 +1,29 @@
+name: Academy CI
+
+on:
+  push:
+    paths: ["academy/**", ".github/workflows/academy-ci.yml"]
+  pull_request:
+    paths: ["academy/**", ".github/workflows/academy-ci.yml"]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: academy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: academy/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build
+        env:
+          DEMO_MODE: "true"
+          AUTH_SECRET: ci-only-secret

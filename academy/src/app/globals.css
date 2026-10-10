@@ -1,0 +1,348 @@
+@import "tailwindcss";
+@import "@fontsource-variable/cormorant-garamond";
+@import "@fontsource-variable/nunito-sans";
+
+/*
+  Cradle Your Cravings design tokens.
+  Matched to the course PDFs: cream paper, dusty-rose headings, soft-gold rules,
+  warm ink body text, sage for success/progress. Dark mode = deep warm charcoal.
+*/
+:root {
+  --cream: #fbf6ef;
+  --cream-2: #f4ecdf;
+  --paper: #ffffff;
+  --rose: #b5656b;
+  --rose-strong: #9a4f56; /* AA on cream for small text */
+  --rose-soft: #f3e3e3;
+  --gold: #d9b36c;
+  --gold-soft: #f6ecd6;
+  --ink: #2e2a27;
+  --muted: #6f6660; /* 4.9:1 on cream */
+  --sage: #8fa88a;
+  --sage-strong: #5f7a5b; /* AA on cream */
+  --sage-soft: #e6eee3;
+  --sky-soft: #e4ebf0;
+  --line: #e8dfd0;
+  --danger: #a4423f;
+  --danger-soft: #f7e2e0;
+  --warning: #9a6b13;
+  --warning-soft: #f9efd6;
+  --radius: 14px;
+  --shadow-soft: 0 1px 2px rgba(46, 42, 39, 0.04), 0 8px 24px -12px rgba(46, 42, 39, 0.18);
+  --shadow-card: 0 1px 0 rgba(46, 42, 39, 0.03), 0 12px 32px -16px rgba(46, 42, 39, 0.22);
+  --ring: #b5656b;
+
+  --background: var(--cream);
+  --foreground: var(--ink);
+  --card: var(--paper);
+  --card-foreground: var(--ink);
+  --popover: var(--paper);
+  --popover-foreground: var(--ink);
+  --primary: var(--rose);
+  --primary-foreground: #ffffff;
+  --secondary: var(--cream-2);
+  --secondary-foreground: var(--ink);
+  --muted-bg: var(--cream-2);
+  --muted-foreground: var(--muted);
+  --accent: var(--gold-soft);
+  --accent-foreground: var(--ink);
+  --destructive: var(--danger);
+  --border: var(--line);
+  --input: var(--line);
+  --success: var(--sage-strong);
+  --success-bg: var(--sage-soft);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --cream: #1f1b19;
+    --cream-2: #2a2522;
+    --paper: #26211e;
+    --rose: #d08a8f;
+    --rose-strong: #e0a3a7;
+    --rose-soft: #3a2a2b;
+    --gold: #e2c17f;
+    --gold-soft: #3a3225;
+    --ink: #f3ece2;
+    --muted: #b7aca1;
+    --sage: #a3bb9d;
+    --sage-strong: #b5cbaf;
+    --sage-soft: #2a332a;
+    --sky-soft: #26303a;
+    --line: #3b332e;
+    --danger: #e08a86;
+    --danger-soft: #3d2927;
+    --warning: #e3b969;
+    --warning-soft: #3a3222;
+    --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+    --shadow-card: 0 1px 0 rgba(0, 0, 0, 0.2), 0 12px 32px -16px rgba(0, 0, 0, 0.6);
+    --primary-foreground: #1f1b19;
+  }
+}
+
+:root[data-theme="dark"] {
+  --cream: #1f1b19;
+  --cream-2: #2a2522;
+  --paper: #26211e;
+  --rose: #d08a8f;
+  --rose-strong: #e0a3a7;
+  --rose-soft: #3a2a2b;
+  --gold: #e2c17f;
+  --gold-soft: #3a3225;
+  --ink: #f3ece2;
+  --muted: #b7aca1;
+  --sage: #a3bb9d;
+  --sage-strong: #b5cbaf;
+  --sage-soft: #2a332a;
+  --sky-soft: #26303a;
+  --line: #3b332e;
+  --danger: #e08a86;
+  --danger-soft: #3d2927;
+  --warning: #e3b969;
+  --warning-soft: #3a3222;
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 1px 0 rgba(0, 0, 0, 0.2), 0 12px 32px -16px rgba(0, 0, 0, 0.6);
+  --primary-foreground: #1f1b19;
+}
+
+@theme inline {
+  --color-cream: var(--cream);
+  --color-cream-2: var(--cream-2);
+  --color-paper: var(--paper);
+  --color-rose: var(--rose);
+  --color-rose-strong: var(--rose-strong);
+  --color-rose-soft: var(--rose-soft);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-sage: var(--sage);
+  --color-sage-strong: var(--sage-strong);
+  --color-sage-soft: var(--sage-soft);
+  --color-sky-soft: var(--sky-soft);
+  --color-line: var(--line);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted-bg: var(--muted-bg);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+
+  --font-serif: "Cormorant Garamond Variable", "Cormorant Garamond", Georgia, "Times New Roman", serif;
+  --font-sans: "Nunito Sans Variable", "Nunito Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 10px);
+
+  --shadow-soft: var(--shadow-soft);
+  --shadow-card: var(--shadow-card);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  .font-serif {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+  }
+  h1 {
+    font-size: clamp(2.25rem, 2vw + 1.5rem, 3.5rem);
+  }
+  h2 {
+    font-size: clamp(1.75rem, 1.4vw + 1.2rem, 2.5rem);
+  }
+  h3 {
+    font-size: clamp(1.35rem, 0.6vw + 1.1rem, 1.75rem);
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+  ::selection {
+    background: var(--rose-soft);
+    color: var(--ink);
+  }
+}
+
+@layer components {
+  /* Letter-spaced small caps eyebrow, as in the PDFs' "BABY STEPS: YOUR HEALTH JOURNEY…" */
+  .eyebrow {
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--rose-strong);
+  }
+  .gold-rule {
+    height: 1px;
+    background: linear-gradient(90deg, var(--gold), transparent);
+  }
+  .gold-rule-center {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  }
+  .card-soft {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-soft);
+  }
+  .prose-cyc {
+    max-width: 68ch;
+    color: var(--foreground);
+  }
+  .prose-cyc p {
+    margin-block: 0.9em;
+  }
+  .prose-cyc h2 {
+    margin-top: 2em;
+    margin-bottom: 0.6em;
+    color: var(--rose-strong);
+  }
+  .prose-cyc h3 {
+    margin-top: 1.6em;
+    margin-bottom: 0.5em;
+  }
+  .prose-cyc ul,
+  .prose-cyc ol {
+    padding-left: 1.4em;
+    margin-block: 0.9em;
+  }
+  .prose-cyc ul {
+    list-style: disc;
+  }
+  .prose-cyc ol {
+    list-style: decimal;
+  }
+  .prose-cyc li {
+    margin-block: 0.3em;
+  }
+  .prose-cyc a {
+    color: var(--rose-strong);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .prose-cyc blockquote {
+    border-left: 3px solid var(--gold);
+    padding-left: 1em;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 1.15em;
+    color: var(--muted);
+  }
+  .prose-cyc hr {
+    border: 0;
+    height: 1px;
+    background: var(--gold);
+    opacity: 0.6;
+    margin-block: 2em;
+  }
+  .prose-cyc table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95em;
+  }
+  .prose-cyc th,
+  .prose-cyc td {
+    border-bottom: 1px solid var(--border);
+    padding: 0.5em 0.6em;
+    text-align: left;
+    vertical-align: top;
+  }
+  .transcript-line {
+    scroll-margin-top: 6rem;
+  }
+  .transcript-heading {
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--rose-strong);
+    margin-top: 1.6em;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .text-pretty {
+    text-wrap: pretty;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .animate-fade-up {
+    animation: fade-up 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
