@@ -42,7 +42,6 @@ function OrderConfirmation({ orderId, status, finalize, supportEmail, intervalMs
     let attempts = 0;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    setTimedOut(false);
     const tick = async () => {
       if (cancelled) return;
       attempts += 1;
@@ -89,6 +88,7 @@ function OrderConfirmation({ orderId, status, finalize, supportEmail, intervalMs
           <div className="flex flex-wrap justify-center gap-2">
             <Button
               onClick={() => {
+                setTimedOut(false);
                 setRound((r) => r + 1);
                 router.refresh();
               }}

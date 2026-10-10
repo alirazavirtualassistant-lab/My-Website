@@ -28,7 +28,7 @@ function PartnerInviteForm({ action, courseSlug, defaultEmail = "", submitLabel 
       <input type="hidden" name="course" value={courseSlug} />
       {state.status === "error" && state.errors?.form ? (
         <Alert variant="destructive" className="mb-4">
-          <AlertTitle>We couldn't send that</AlertTitle>
+          <AlertTitle>We couldn’t send that</AlertTitle>
           <AlertDescription>
             <p>{state.errors.form}</p>
           </AlertDescription>

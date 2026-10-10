@@ -92,7 +92,7 @@ function MockCheckoutForm({ sessionId, successPath, cancelPath, payLabel, email 
           <Input id={FIELDS[3].id} defaultValue={FIELDS[3].value} readOnly autoComplete={FIELDS[3].autoComplete} aria-describedby="mock-fields-hint" />
         </div>
         <p id="mock-fields-hint" className="text-xs text-muted-foreground">
-          Pre-filled with Stripe's test card. Fields are read-only.
+          Pre-filled with Stripe’s test card. Fields are read-only.
           {email ? (
             <>
               {" "}

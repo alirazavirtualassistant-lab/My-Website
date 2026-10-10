@@ -23,7 +23,7 @@ function RedeemForm({ action, token, label, pendingLabel, icon, className }: Red
       <input type="hidden" name="token" value={token} />
       {state.status === "error" ? (
         <Alert variant="destructive" className="mb-4">
-          <AlertTitle>That didn't work</AlertTitle>
+          <AlertTitle>That didn’t work</AlertTitle>
           <AlertDescription>
             <p>{state.message}</p>
           </AlertDescription>

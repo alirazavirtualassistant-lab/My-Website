@@ -20,6 +20,9 @@ import { newId, nowIso, slugify } from "@/lib/utils";
 import { getCourseTree } from "./catalog";
 import { logAudit } from "./users";
 import { guessType, storeCourseFile, storePublicAsset, validateUpload } from "./uploads";
+import { normaliseCode, suggestLessonCode, suggestModuleCode } from "@/components/admin/courses/codes";
+
+export { normaliseCode, suggestLessonCode, suggestModuleCode };
 
 /**
  * Admin courses CMS: the application API behind /admin/courses. Every mutation
@@ -358,34 +361,6 @@ export interface ModuleInput {
   completion_xp: number;
   required_for_certificate: boolean;
   illustration: string | null;
-}
-
-export function normaliseCode(input: string): string {
-  return input.trim().toUpperCase().replace(/[^A-Z0-9_]/g, "");
-}
-
-/** Next free module code for a course: M<n> after the highest existing M<n>. */
-export function suggestModuleCode(existing: Array<Pick<Module, "code">>): string {
-  let max = -1;
-  for (const m of existing) {
-    const match = /^M(\d+)$/.exec(m.code);
-    if (match) max = Math.max(max, Number(match[1]));
-  }
-  return `M${max + 1}`;
-}
-
-/** Next free lesson code inside a module: <MODULE>T<n>. */
-export function suggestLessonCode(moduleCode: string, existing: Array<Pick<Lesson, "code">>): string {
-  const prefix = `${moduleCode}_T`;
-  let max = 0;
-  for (const l of existing) {
-    const plain = new RegExp(`^${moduleCode}T(\\d+)[a-z]?$`).exec(l.code);
-    const underscore = new RegExp(`^${moduleCode}_T(\\d+)[a-z]?$`).exec(l.code);
-    const n = plain?.[1] ?? underscore?.[1];
-    if (n) max = Math.max(max, Number(n));
-  }
-  const usesUnderscore = existing.some((l) => l.code.startsWith(prefix));
-  return `${moduleCode}${usesUnderscore ? "_T" : "T"}${max + 1}`;
 }
 
 export async function createModule(actorId: string, courseId: string, input: ModuleInput): Promise<Module> {
