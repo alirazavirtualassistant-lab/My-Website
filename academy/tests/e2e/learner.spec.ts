@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { DEMO, signIn, acceptDisclaimerIfShown, signOut } from "./helpers";
+import { DEMO, signIn, signUp, uniqueEmail, acceptDisclaimerIfShown, signOut } from "./helpers";
 
 test.describe("dashboard, community and certificates", () => {
   test("My Learning shows continue hero, XP, level, streak, unlocks and badges", async ({ page }) => {
@@ -54,10 +54,25 @@ test.describe("dashboard, community and certificates", () => {
 
   test("admin can unlock all modules for a learner; completing every required lesson issues a certificate", async ({ page }) => {
     test.setTimeout(600_000);
-    // 1) admin unlocks drip for the demo learner
+    // Use a fresh learner so the demo learner's drip state stays intact for the other suites.
+    const email = uniqueEmail("cert");
+    await signUp(page, { name: "Cert Learner", email, password: "Passw0rd!cert" });
+    await page.goto("/courses/baby-steps");
+    await page.getByRole("button", { name: /buy now/i }).first().click();
+    await expect(page).toHaveURL(/\/checkout/, { timeout: 30_000 });
+    const consent = page.locator('[role="checkbox"], input[type="checkbox"]').first();
+    if ((await consent.getAttribute("aria-checked")) !== "true" && !(await consent.isChecked().catch(() => false))) await consent.click();
+    await page.getByRole("button", { name: /pay securely/i }).click();
+    await expect(page).toHaveURL(/\/checkout\/mock\//, { timeout: 30_000 });
+    await page.getByRole("button", { name: /^pay/i }).first().click();
+    await expect(page).toHaveURL(/\/checkout\/success/, { timeout: 30_000 });
+    await expect(page.getByText(/start learning/i).first()).toBeVisible({ timeout: 30_000 });
+    await signOut(page);
+
+    // 1) admin unlocks the weekly drip for that learner
     await signIn(page, DEMO.admin.email, DEMO.admin.password);
-    await page.goto("/admin/students?q=learner%40demo");
-    await page.getByRole("link", { name: /Demo Learner/ }).first().click();
+    await page.goto(`/admin/students?q=${encodeURIComponent(email)}`);
+    await page.getByRole("link", { name: /Cert Learner/ }).first().click();
     await expect(page).toHaveURL(/\/admin\/students\//);
     // The enrollment table streams in after the shell; wait for the control before acting.
     const unlock = page.getByRole("button", { name: /^(unlock all|all unlocked)$/i }).first();
@@ -69,7 +84,7 @@ test.describe("dashboard, community and certificates", () => {
     await signOut(page);
 
     // 2) learner completes every required lesson (M0–M7)
-    await signIn(page, DEMO.learner.email, DEMO.learner.password);
+    await signIn(page, email, "Passw0rd!cert");
     const codes = ["m0"];
     const perModule: Record<number, number> = { 1: 5, 2: 8, 3: 6, 4: 7, 5: 7, 6: 6, 7: 6 };
     for (let m = 1; m <= 7; m++) for (let t = 0; t <= perModule[m]; t++) codes.push(`m${m}t${t}`);
@@ -96,7 +111,7 @@ test.describe("dashboard, community and certificates", () => {
     if (verifyHref) {
       await signOut(page);
       await page.goto(verifyHref);
-      await expect(page.getByText(/Demo Learner/).first()).toBeVisible();
+      await expect(page.getByText(/Cert Learner/).first()).toBeVisible();
       await expect(page.getByText(/verified|valid/i).first()).toBeVisible();
     }
   });
