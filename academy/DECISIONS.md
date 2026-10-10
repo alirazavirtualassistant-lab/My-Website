@@ -152,7 +152,8 @@ things are the way they are. Newest at the bottom of each section.
 
 - The root layout mounts the toaster, cookie consent, analytics loader and
   demo ribbon once; route-group layouts add only their header/shell.
-- Error boundaries use Next 16's `retry`. The UI showcase at `/_dev/ui`
-  (and its `%5Fdev` alias) is for QA and should be deleted before launch.
+- Error boundaries use Next 16's `retry`. The temporary UI showcase route used
+  during the build was removed before the production build (it could not be
+  prerendered).
 - Admin pages live under the `src/app/admin/(panel)` route group so that
   `/admin/register` (first-admin bootstrap) stays outside the role gate.

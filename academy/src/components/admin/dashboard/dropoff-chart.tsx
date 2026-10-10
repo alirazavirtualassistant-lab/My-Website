@@ -69,7 +69,7 @@ function DropoffChart({ data }: { data: AdminDashboardStats["dropoff"] }) {
                 </TableHeader>
                 <TableBody>
                   {rows.map((r) => (
-                    <TableRow key={r.lesson_code}>
+                    <TableRow key={r.lesson_id ?? r.lesson_code}>
                       <TableCell className="font-mono text-xs">{r.lesson_code}</TableCell>
                       <TableCell className="max-w-[24rem] truncate">{r.lesson_title}</TableCell>
                       <TableCell className="text-right tabular-nums">{r.reached}</TableCell>

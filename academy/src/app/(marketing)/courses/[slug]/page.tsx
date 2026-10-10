@@ -41,7 +41,8 @@ const loadCourse = cache(async (slug: string) => {
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { slug } = await params;
   const data = await loadCourse(slug);
-  if (!data) return { title: "Course not found", robots: { index: false } };
+  // Throwing here (before streaming starts) makes the response a real 404.
+  if (!data) notFound();
   const { course } = data;
   return {
     title: course.title,
@@ -348,7 +349,7 @@ export default async function CourseLandingPage({ params, searchParams }: { para
           </div>
 
           <div id="enrol" className="scroll-mt-24 lg:sticky lg:top-24 lg:self-start">
-            <PurchaseCard course={course} stats={stats} product={product} plan={plan} allAccess={allAccess} enrolled={enrolled} resourceSummary={summary} />
+            <PurchaseCard course={course} stats={stats} product={product} plan={plan} allAccess={allAccess} enrolled={enrolled} resourceSummary={summary} defaultCoupon={typeof query.coupon === "string" ? query.coupon.toUpperCase().slice(0, 40) : null} />
           </div>
         </Container>
       </Section>

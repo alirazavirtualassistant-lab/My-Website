@@ -1,15 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { useActionState } from "react";
 import { Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast } from "@/components/ui/toaster";
-import { idleState } from "@/components/auth/types";
 import { compEnrollAction } from "@/app/admin/(panel)/students/actions";
-import { messageOf } from "./form-state";
+import { useAdminAction } from "./use-admin-action";
 
 export interface EnrollFormProps {
   userId: string;
@@ -18,14 +15,8 @@ export interface EnrollFormProps {
 
 /** "Enroll in course" (complimentary access) — goes through the same grantEnrollment path as a purchase. */
 function EnrollForm({ userId, courses }: EnrollFormProps) {
-  const [state, action, pending] = useActionState(compEnrollAction, idleState);
+  const [state, action, pending] = useAdminAction(compEnrollAction);
   const [courseId, setCourseId] = React.useState<string>(courses[0]?.id ?? "");
-  React.useEffect(() => {
-    if (!state.stamp) return;
-    const message = messageOf(state);
-    if (state.status === "error") toast.error(message ?? "Something went wrong.");
-    else if (message) toast.success(message);
-  }, [state]);
   if (courses.length === 0) {
     return <p className="text-sm text-muted-foreground">This student already has access to every course.</p>;
   }

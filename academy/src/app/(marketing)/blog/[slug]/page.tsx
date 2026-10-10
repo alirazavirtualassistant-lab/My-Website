@@ -47,7 +47,7 @@ async function renderBody(body: string): Promise<React.ReactNode[]> {
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { slug } = await params;
   const post = await getBlogPost(slug);
-  if (!post) return { title: "Post not found", robots: { index: false } };
+  if (!post) notFound();
   return {
     title: post.title,
     description: post.description,

@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { FormField, FormRow, FormStack } from "@/components/ui/form-field";
@@ -9,13 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { toast } from "@/components/ui/toaster";
 import { FormErrorSummary } from "@/components/auth/form-error-summary";
 import { SubmitButton } from "@/components/auth/submit-button";
-import { idleState } from "@/components/auth/types";
 import type { Testimonial } from "@/lib/types";
 import { saveTestimonialAction } from "@/app/admin/(panel)/testimonials/actions";
-import { messageOf } from "@/components/admin/students/form-state";
+import { useAdminAction } from "@/components/admin/students/use-admin-action";
 
 export interface TestimonialFormDialogProps {
   testimonial: Testimonial | null;
@@ -28,15 +25,9 @@ const NONE = "__none__";
 /** Add (manual, with permission) or edit a testimonial. Manual additions are approved straight away. */
 function TestimonialFormDialog({ testimonial, courses, trigger }: TestimonialFormDialogProps) {
   const [open, setOpen] = React.useState(false);
-  const [state, action] = useActionState(saveTestimonialAction, idleState);
+  const [state, action] = useAdminAction(saveTestimonialAction, { toastError: false, onSuccess: () => setOpen(false) });
   const errors = state.errors ?? {};
   const id = React.useId();
-  React.useEffect(() => {
-    if (!state.stamp || state.status === "error") return;
-    const message = messageOf(state);
-    if (message) toast.success(message);
-    setOpen(false);
-  }, [state]);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>

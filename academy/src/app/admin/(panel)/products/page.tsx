@@ -12,7 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ActionButton } from "@/components/admin/students/action-button";
-import { TYPE_LABELS } from "@/components/admin/products/product-form";
+import { TYPE_LABELS } from "@/components/admin/products/product-types";
 import { listProductRows } from "./queries";
 import { setProductActiveAction } from "./actions";
 

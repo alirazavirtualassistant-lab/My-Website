@@ -170,7 +170,23 @@ export async function markLessonComplete(userId: string, lessonId: string, role?
     const after = await runCompletionChecks(tx, userId, lesson.course_id, lesson.module_id);
     const tree = await getCourseTree(lesson.course_id);
     const progress = await repo.list({ where: { user_id: userId, course_id: lesson.course_id } });
-    const next = tree && access.enrollment ? nextLesson(tree, progress, access.enrollment, new Date()) : null;
+    // "Continue" prefers the lesson that follows this one in course order (when it is
+    // unlocked), and only then falls back to the first unlocked, incomplete lesson.
+    let next: { module: { id: string }; lesson: Lesson } | null = null;
+    if (tree && access.enrollment) {
+      const now = new Date();
+      const ordered = lessonOrder(tree);
+      const idx = ordered.findIndex((o) => o.lesson.id === lessonId);
+      const following = idx >= 0 ? ordered[idx + 1] : undefined;
+      if (following) {
+        const unlocked = access.via === "admin" || isUnlocked(access.enrollment, lessonDripDays(following.lesson, following.module), now);
+        if (unlocked) next = { module: { id: following.module.id }, lesson: following.lesson };
+      }
+      if (!next) {
+        const fallback = nextLesson(tree, progress, access.enrollment, now);
+        if (fallback) next = { module: { id: fallback.module.id }, lesson: fallback.lesson };
+      }
+    }
     return { lessonCompleted: true, ...after, nextLesson: next ? { moduleId: next.module.id, lesson: next.lesson } : null };
   });
 }

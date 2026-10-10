@@ -1,7 +1,7 @@
 import "server-only";
 import { getServices } from "@/services";
 import type { Session } from "@/services/types";
-import type { Broadcast, Certificate, Enrollment, ForumPost, ForumReply, ForumReport, Profile, Role, Testimonial } from "@/lib/types";
+import type { Broadcast, Certificate, Enrollment, ForumPost, ForumReport, Profile, Role, Testimonial } from "@/lib/types";
 import { isValidEmail, newId, normalizeEmail, nowIso } from "@/lib/utils";
 import { site } from "@/lib/config/site";
 import { grantEnrollment, revokeEnrollment } from "./fulfilment";
@@ -354,7 +354,6 @@ export async function removeAllPostsByUser(actor: Actor, userId: string): Promis
   return { ok: true, posts, replies };
 }
 
-export type { ForumReply };
 
 // ---------------------------------------------------------------------------
 // Testimonials
@@ -535,23 +534,23 @@ export async function addTeamMember(actor: Actor, input: AddTeamMemberInput): Pr
   if (existing && existing.id === actor.user_id) return { ok: false, error: "That's you. You can't change your own role." };
 
   const { profile, created } = await auth.ensureAccount({ email, name: input.name.trim(), sendSetPassword: !input.password });
-  if (input.password) await auth.adminSetPassword({ userId: profile.id, password: input.password });
 
-  const patch: Partial<Profile> = { updated_at: nowIso() };
-  if (profile.role !== input.role) patch.role = input.role;
-  if (created && input.name.trim() && profile.name !== input.name.trim()) patch.name = input.name.trim();
-  const updated = Object.keys(patch).length > 1 ? await db.from("profiles").update(profile.id, patch) : profile;
-
-  if (created) {
-    const { sendTemplate } = await import("@/lib/email/send");
-    await sendTemplate("welcome", email, { name: updated.name, learnUrl: `${site.url}/admin` });
+  if (!created) {
+    // Existing account: only the role changes (guarded), never their password or name.
+    const res = await changeUserRole(actor, profile.id, input.role);
+    if (!res.ok) return res;
+    await logAudit(actor.user_id, "team.member_added", "profile", profile.id, { role: input.role, previous_role: profile.role, via: "existing_account" });
+    return { ok: true, profile: res.profile, created: false };
   }
-  await logAudit(actor.user_id, created ? "team.member_created" : "team.member_added", "profile", profile.id, {
-    role: input.role,
-    previous_role: profile.role,
-    via: input.password ? "temporary_password" : "set_password_email",
-  });
-  return { ok: true, profile: updated, created };
+
+  if (input.password) await auth.adminSetPassword({ userId: profile.id, password: input.password });
+  const patch: Partial<Profile> = { role: input.role, updated_at: nowIso() };
+  if (input.name.trim() && profile.name !== input.name.trim()) patch.name = input.name.trim();
+  const updated = await db.from("profiles").update(profile.id, patch);
+  const { sendTemplate } = await import("@/lib/email/send");
+  await sendTemplate("welcome", email, { name: updated.name, learnUrl: `${site.url}/admin` });
+  await logAudit(actor.user_id, "team.member_created", "profile", profile.id, { role: input.role, via: input.password ? "temporary_password" : "set_password_email" });
+  return { ok: true, profile: updated, created: true };
 }
 
 export async function removeTeamMember(actor: Actor, targetId: string, mode: "demote" | "delete"): Promise<ActionResult> {

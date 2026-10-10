@@ -1,17 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { useActionState } from "react";
 import { TriangleAlert } from "lucide-react";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
-import { toast } from "@/components/ui/toaster";
 import { FormErrorSummary } from "@/components/auth/form-error-summary";
 import { SubmitButton } from "@/components/auth/submit-button";
-import { idleState } from "@/components/auth/types";
-import { messageOf, type AdminAction } from "./form-state";
+import type { AdminAction } from "./form-state";
+import { useAdminAction } from "./use-admin-action";
 
 export interface ConfirmActionDialogProps {
   action: AdminAction;
@@ -39,16 +37,14 @@ export interface ConfirmActionDialogProps {
 function ConfirmActionDialog({ action, fields, trigger, title, description, confirmWord, confirmLabel, cancelLabel = "Cancel", confirmVariant = "destructive", children, warning }: ConfirmActionDialogProps) {
   const [open, setOpen] = React.useState(false);
   const [typed, setTyped] = React.useState("");
-  const [state, formAction] = useActionState(action, idleState);
+  const [state, formAction] = useAdminAction(action, {
+    toastError: false,
+    onSuccess: () => {
+      setOpen(false);
+      setTyped("");
+    },
+  });
   const errors = state.errors ?? {};
-  React.useEffect(() => {
-    if (!state.stamp) return;
-    if (state.status === "error") return;
-    const message = messageOf(state);
-    if (message) toast.success(message);
-    setOpen(false);
-    setTyped("");
-  }, [state]);
   const ready = !confirmWord || typed.trim() === confirmWord;
   const id = React.useId();
   return (

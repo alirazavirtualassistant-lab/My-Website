@@ -14,7 +14,7 @@ import {
   Ticket,
   UserRound,
   Users,
-} from "lucide-react";
+ Receipt } from "lucide-react";
 
 export interface HeaderUser {
   name: string;
@@ -56,6 +56,7 @@ export const adminNav: NavItem[] = [
   { label: "Importer", href: "/admin/importer", icon: FolderInput },
   { label: "Products", href: "/admin/products", icon: Package, roles: ["admin"] },
   { label: "Coupons", href: "/admin/coupons", icon: Ticket, roles: ["admin"] },
+  { label: "Orders", href: "/admin/orders", icon: Receipt },
   { label: "Students", href: "/admin/students", icon: Users },
   { label: "Community", href: "/admin/community", icon: MessageSquare },
   { label: "Testimonials", href: "/admin/testimonials", icon: Quote },

@@ -12,11 +12,7 @@ const MESSAGES: Record<string, { kind: "success" | "info"; text: string }> = {
   "module-created": { kind: "success", text: "Module added." },
 };
 
-/**
- * Shows a one-off toast from `?toast=<key>` after a redirect, then removes the
- * param so refreshes do not repeat it. Renders nothing.
- */
-function SearchParamToast() {
+function Inner() {
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -31,6 +27,19 @@ function SearchParamToast() {
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [key, params, pathname, router]);
   return null;
+}
+
+/**
+ * Shows a one-off toast from `?toast=<key>` after a redirect, then removes the
+ * param so refreshes do not repeat it. Renders nothing. Wrapped in Suspense
+ * because `useSearchParams` needs a boundary.
+ */
+function SearchParamToast() {
+  return (
+    <React.Suspense fallback={null}>
+      <Inner />
+    </React.Suspense>
+  );
 }
 
 export { SearchParamToast };

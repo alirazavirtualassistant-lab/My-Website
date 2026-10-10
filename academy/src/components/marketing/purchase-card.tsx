@@ -14,6 +14,8 @@ import { Price, effectiveUnitPrice, paymentPlanLabel } from "./price";
 import { SubmitButton } from "./submit-button";
 
 export interface PurchaseCardProps extends Omit<React.ComponentProps<"aside">, "children"> {
+  /** Pre-filled coupon code (from a `?coupon=` auto-apply link). */
+  defaultCoupon?: string | null;
   course: Course;
   stats: CourseStats;
   product: Product | null;
@@ -39,7 +41,7 @@ function IncludeRow({ icon, children }: { icon: React.ReactNode; children: React
  * forms, coupon field, payment-plan and All-Access notes. Shows "Go to course"
  * for enrolled visitors.
  */
-function PurchaseCard({ course, stats, product, plan, allAccess, enrolled, resourceSummary, className, ...props }: PurchaseCardProps) {
+function PurchaseCard({ course, stats, product, plan, allAccess, enrolled, resourceSummary, defaultCoupon, className, ...props }: PurchaseCardProps) {
   const price = product ? effectiveUnitPrice(product) : null;
   const planLabel = paymentPlanLabel(plan, formatMoney);
   const cheapestAllAccess = allAccess.filter((p) => p.interval === "month")[0] ?? allAccess[0] ?? null;
@@ -70,7 +72,7 @@ function PurchaseCard({ course, stats, product, plan, allAccess, enrolled, resou
               <Label htmlFor="coupon" className="text-xs text-muted-foreground">
                 Coupon code <span className="font-normal">(optional)</span>
               </Label>
-              <Input id="coupon" name="coupon" autoComplete="off" placeholder="Have a code?" className="h-9 uppercase placeholder:normal-case" maxLength={40} />
+              <Input id="coupon" name="coupon" autoComplete="off" defaultValue={defaultCoupon ?? undefined} placeholder="Have a code?" className="h-9 uppercase placeholder:normal-case" maxLength={40} />
             </div>
             <SubmitButton size="lg" className="w-full" pendingText="Taking you to checkout…">
               {price.cents === 0 ? "Enrol for free" : "Buy now"}

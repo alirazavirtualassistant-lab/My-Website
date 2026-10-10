@@ -19,8 +19,8 @@ everyone (people and agents) working on the app in parallel.
   - `error.tsx` boundaries receive `{ error, retry }` (Next 16), not `reset`.
   - The root layout mounts `Toaster`, `CookieConsent`, `Analytics`, `DemoRibbon`
     once; route-group layouts only add headers/shells and `<main id="main">`.
-  - `src/app/_dev/**` is a private showcase (`/_dev/ui` via the `%5Fdev` alias);
-    delete both folders before launch.
+  - There is no UI showcase route; use `src/components/ui/render-smoke.test.ts`
+    to exercise every primitive.
   - Bundled docs: `node_modules/next/dist/docs/01-app/**` when unsure.
 - **Tailwind v4** via `@tailwindcss/turbopack` (no `tailwind.config.js`). Tokens are
   CSS variables in `src/app/globals.css`, exposed as Tailwind colors:

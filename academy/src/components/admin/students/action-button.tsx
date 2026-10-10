@@ -1,11 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { useActionState } from "react";
 import { Button, type ButtonProps } from "@/components/ui/button";
-import { toast } from "@/components/ui/toaster";
-import { idleState } from "@/components/auth/types";
-import { messageOf, type AdminAction } from "./form-state";
+import type { AdminAction } from "./form-state";
+import { useAdminAction } from "./use-admin-action";
 
 export interface ActionButtonProps extends Omit<ButtonProps, "type" | "formAction"> {
   action: AdminAction;
@@ -24,18 +22,7 @@ export interface ActionButtonProps extends Omit<ButtonProps, "type" | "formActio
  * is keyboard/screen-reader friendly without any extra wiring.
  */
 function ActionButton({ action, fields, pendingLabel, onDone, formClassName, children, ...buttonProps }: ActionButtonProps) {
-  const [state, formAction, pending] = useActionState(action, idleState);
-  const onDoneRef = React.useRef(onDone);
-  onDoneRef.current = onDone;
-  React.useEffect(() => {
-    if (!state.stamp) return;
-    const message = messageOf(state);
-    if (state.status === "error") toast.error(message ?? "Something went wrong.");
-    else {
-      if (message) toast.success(message);
-      onDoneRef.current?.();
-    }
-  }, [state]);
+  const [, formAction, pending] = useAdminAction(action, { onSuccess: () => onDone?.() });
   return (
     <form action={formAction} className={formClassName ?? "inline-flex"}>
       {Object.entries(fields).map(([name, value]) => (

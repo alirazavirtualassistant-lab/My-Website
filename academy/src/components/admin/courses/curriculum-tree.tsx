@@ -225,7 +225,7 @@ function CurriculumTree({ courseId, courseSlug, initialModules }: { courseId: st
 
 function ModuleRow({ module: m, index, count, courseId, courseSlug, allLessonCodes, dragging, onNudge, onNudgeLesson }: { module: TreeModuleView; index: number; count: number; courseId: string; courseSlug: string; allLessonCodes: string[]; dragging: boolean; onNudge: (delta: -1 | 1) => void; onNudgeLesson: (id: string, delta: -1 | 1) => void }) {
   const router = useRouter();
-  const [open, setOpen] = React.useState(false);
+  const [collapsed, setCollapsed] = React.useState(false);
   const [showSettings, setShowSettings] = React.useState(false);
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: `${MODULE_PREFIX}${m.id}` });
   const style: React.CSSProperties = { transform: CSS.Translate.toString(transform), transition };
@@ -287,8 +287,8 @@ function ModuleRow({ module: m, index, count, courseId, courseSlug, allLessonCod
               router.refresh();
             }}
           />
-          <Button type="button" variant="ghost" size="icon" className="size-8" aria-expanded={!open ? false : true} aria-controls={listId} aria-label={`${open ? "Expand" : "Collapse"} lessons in ${m.code}`} onClick={() => setOpen((v) => !v)}>
-            <ChevronDown className={cn("transition-transform", open && "-rotate-90")} />
+          <Button type="button" variant="ghost" size="icon" className="size-8" aria-expanded={!collapsed} aria-controls={listId} aria-label={`${collapsed ? "Expand" : "Collapse"} lessons in ${m.code}`} onClick={() => setCollapsed((v) => !v)}>
+            <ChevronDown className={cn("transition-transform", collapsed && "-rotate-90")} />
           </Button>
         </div>
       </div>
@@ -299,7 +299,7 @@ function ModuleRow({ module: m, index, count, courseId, courseSlug, allLessonCod
         </div>
       ) : null}
 
-      <div id={listId} hidden={open} className="border-t border-border">
+      <div id={listId} hidden={collapsed} className="border-t border-border">
         <SortableContext items={m.lessons.map((l) => `${LESSON_PREFIX}${l.id}`)} strategy={verticalListSortingStrategy}>
           {m.lessons.length === 0 ? (
             <p className="px-4 py-4 text-sm text-muted-foreground">No lessons yet. Drop one here or add a lesson below.</p>

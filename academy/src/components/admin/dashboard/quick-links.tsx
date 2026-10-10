@@ -17,9 +17,9 @@ interface QuickLink {
 function QuickLinks({ stats }: { stats: AdminDashboardStats }) {
   const links: QuickLink[] = [
     { href: "/admin/testimonials?status=pending", icon: <Quote />, label: "Pending testimonials", value: stats.pending_testimonials, hint: "Waiting for review", attention: stats.pending_testimonials > 0 },
-    { href: "/admin/community?reports=open", icon: <Flag />, label: "Open reports", value: stats.open_reports, hint: "Community posts flagged by members", attention: stats.open_reports > 0 },
-    { href: "/admin/students?orders=refunded", icon: <RotateCcw />, label: "Refunded orders", value: stats.refunds, hint: "Full or partial refunds, all time", attention: false },
-    { href: "/admin/students", icon: <ShoppingBag />, label: "Orders · 30 days", value: stats.orders_last30, hint: pluralize(stats.orders_last30, "paid order"), attention: false },
+    { href: "/admin/community?tab=reports", icon: <Flag />, label: "Open reports", value: stats.open_reports, hint: "Community posts flagged by members", attention: stats.open_reports > 0 },
+    { href: "/admin/orders?status=refunded", icon: <RotateCcw />, label: "Refunded orders", value: stats.refunds, hint: "Full or partial refunds, all time", attention: false },
+    { href: "/admin/orders", icon: <ShoppingBag />, label: "Orders · 30 days", value: stats.orders_last30, hint: pluralize(stats.orders_last30, "paid order"), attention: false },
   ];
   return (
     <section aria-labelledby="quick-links-title" className="card-soft p-5 sm:p-6">

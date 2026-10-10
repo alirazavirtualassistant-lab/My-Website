@@ -16,18 +16,12 @@ import { SubmitButton } from "@/components/auth/submit-button";
 import { idleState } from "@/components/auth/types";
 import type { Product, ProductType } from "@/lib/types";
 import { saveProductAction } from "@/app/admin/(panel)/products/actions";
+import { TYPE_LABELS } from "./product-types";
 
 export interface ProductFormProps {
   product: Product | null;
   courses: Array<{ id: string; title: string; status: string }>;
 }
-
-const TYPE_LABELS: Record<ProductType, string> = {
-  course: "Single course",
-  bundle: "Bundle of courses",
-  subscription: "Membership (recurring)",
-  payment_plan: "Payment plan (instalments)",
-};
 
 const dollars = (cents: number | null | undefined) => (cents === null || cents === undefined ? "" : (cents / 100).toFixed(2));
 
@@ -200,4 +194,4 @@ function ProductForm({ product, courses }: ProductFormProps) {
   );
 }
 
-export { ProductForm, TYPE_LABELS };
+export { ProductForm };

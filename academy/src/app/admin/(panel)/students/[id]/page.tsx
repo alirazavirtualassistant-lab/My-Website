@@ -13,7 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ActionButton } from "@/components/admin/students/action-button";
 import { ConfirmActionDialog } from "@/components/admin/students/confirm-action-dialog";
 import { EnrollForm } from "@/components/admin/students/enroll-form";
-import { RoleEditor, ROLE_LABELS } from "@/components/admin/students/role-editor";
+import { RoleEditor } from "@/components/admin/students/role-editor";
+import { ROLE_LABELS } from "@/components/admin/students/role-labels";
 import { getStudentDetail } from "../queries";
 import {
   deleteUserAction,

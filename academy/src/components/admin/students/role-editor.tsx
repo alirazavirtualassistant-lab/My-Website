@@ -1,30 +1,18 @@
 "use client";
 
 import * as React from "react";
-import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast } from "@/components/ui/toaster";
-import { idleState } from "@/components/auth/types";
 import type { Role } from "@/lib/types";
 import { changeRoleAction } from "@/app/admin/(panel)/students/actions";
-import { messageOf } from "./form-state";
-
-const ROLE_LABELS: Record<Role, string> = { learner: "Learner", assistant: "Assistant", admin: "Owner (admin)" };
+import { useAdminAction } from "./use-admin-action";
+import { ROLE_LABELS } from "./role-labels";
 
 /** Owner-only role picker. The server re-checks every rule (last owner, self-demotion). */
 function RoleEditor({ userId, role }: { userId: string; role: Role }) {
-  const [state, action, pending] = useActionState(changeRoleAction, idleState);
   const [value, setValue] = React.useState<Role>(role);
-  React.useEffect(() => {
-    if (!state.stamp) return;
-    const message = messageOf(state);
-    if (state.status === "error") {
-      toast.error(message ?? "Something went wrong.");
-      setValue(role);
-    } else if (message) toast.success(message);
-  }, [state, role]);
+  const [state, action, pending] = useAdminAction(changeRoleAction, { onError: () => setValue(role) });
   return (
     <form action={action} className="flex flex-wrap items-end gap-2">
       <input type="hidden" name="user_id" value={userId} />
@@ -58,4 +46,4 @@ function RoleEditor({ userId, role }: { userId: string; role: Role }) {
   );
 }
 
-export { RoleEditor, ROLE_LABELS };
+export { RoleEditor };

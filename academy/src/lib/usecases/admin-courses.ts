@@ -20,6 +20,7 @@ import { newId, nowIso, slugify } from "@/lib/utils";
 import { getCourseTree } from "./catalog";
 import { logAudit } from "./users";
 import { guessType, storeCourseFile, storePublicAsset, validateUpload } from "./uploads";
+import { SUMMARIES_HEADING } from "@/lib/importer/parse-package";
 import { normaliseCode, suggestLessonCode, suggestModuleCode } from "@/components/admin/courses/codes";
 
 export { normaliseCode, suggestLessonCode, suggestModuleCode };
@@ -132,7 +133,9 @@ export async function exportCoursePackage(courseId: string): Promise<CoursePacka
     for (const l of m.lessons) {
       lesson_count += 1;
       total_video_sec += l.duration_sec;
-      if (l.transcript.trim()) transcript_count += 1;
+      // Mirrors the importer: one per transcript file, plus one for an appended session-summaries script.
+      if (l.transcript_source_file || l.transcript.trim()) transcript_count += 1;
+      if (l.transcript.includes(SUMMARIES_HEADING)) transcript_count += 1;
       for (const r of l.resources) files.add(r.file_path);
       for (const s of l.action_steps) xp += s.xp;
     }
@@ -578,6 +581,7 @@ export async function reorderCurriculum(actorId: string, courseId: string, order
       const m = modules.find((x) => x.id === id)!;
       if (m.position !== i) await tx.from("modules").update(id, { position: i, updated_at: now });
     }
+    const mentioned = new Set(order.flatMap((o) => o.lesson_ids).filter((id) => lessonById.has(id)));
     const placed = new Set<string>();
     for (const o of order) {
       if (!moduleIds.has(o.module_id)) continue;
@@ -589,8 +593,8 @@ export async function reorderCurriculum(actorId: string, courseId: string, order
         if (l.module_id !== o.module_id || l.position !== pos) await tx.from("lessons").update(lid, { module_id: o.module_id, position: pos, updated_at: now });
         pos += 1;
       }
-      // Lessons of this module that the client did not mention keep their order after the placed ones.
-      for (const l of lessons.filter((x) => x.module_id === o.module_id && !placed.has(x.id))) {
+      // Lessons of this module the client did not mention anywhere keep their order after the placed ones.
+      for (const l of lessons.filter((x) => x.module_id === o.module_id && !mentioned.has(x.id))) {
         placed.add(l.id);
         if (l.position !== pos) await tx.from("lessons").update(l.id, { position: pos, updated_at: now });
         pos += 1;

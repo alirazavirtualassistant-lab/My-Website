@@ -38,7 +38,7 @@ const loadPreview = cache(async (slug: string, lessonParam: string) => {
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { slug, lesson } = await params;
   const data = await loadPreview(slug, lesson);
-  if (!data) return { title: "Preview not found", robots: { index: false } };
+  if (!data) notFound();
   const title = `${data.lesson.title} (free preview)`;
   const description = data.lesson.description || `A free preview lesson from ${data.course.title}.`;
   return {

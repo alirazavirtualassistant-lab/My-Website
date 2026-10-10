@@ -159,7 +159,7 @@ export function buildPublicUrl(key: string): string {
 
 async function statOrNull(file: string): Promise<{ size: number; isFile: boolean } | null> {
   try {
-    const st = await fs.stat(file);
+    const st = await fs.stat(/*turbopackIgnore: true*/ file);
     return { size: st.size, isFile: st.isFile() };
   } catch {
     return null;
@@ -169,7 +169,7 @@ async function statOrNull(file: string): Promise<{ size: number; isFile: boolean
 async function walk(dir: string, relPrefix: string, out: Map<string, number>): Promise<void> {
   let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }>;
   try {
-    entries = await fs.readdir(dir, { withFileTypes: true });
+    entries = await fs.readdir(/*turbopackIgnore: true*/ dir, { withFileTypes: true });
   } catch {
     return;
   }
@@ -217,10 +217,10 @@ export async function createMockStorage(_db: DataStore): Promise<StorageProvider
       assertBucket(input.bucket);
       const key = normalizeStoragePath(input.path);
       const full = resolveUnder(writeRoot(), input.bucket, key);
-      await fs.mkdir(path.dirname(full), { recursive: true });
+      await fs.mkdir(/*turbopackIgnore: true*/ path.dirname(full), { recursive: true });
       const body = Buffer.isBuffer(input.data) ? input.data : Buffer.from(input.data);
       const tmp = `${full}.${process.pid}.${Date.now()}.tmp`;
-      await fs.writeFile(tmp, body);
+      await fs.writeFile(/*turbopackIgnore: true*/ tmp, body);
       await fs.rename(tmp, full);
       return { path: key, size: body.byteLength };
     },
@@ -230,7 +230,7 @@ export async function createMockStorage(_db: DataStore): Promise<StorageProvider
       const key = normalizeStoragePath(input.path);
       const full = await locate(input.bucket, key);
       if (!full) return null;
-      const data = await fs.readFile(full);
+      const data = await fs.readFile(/*turbopackIgnore: true*/ full);
       return { data, contentType: contentTypeFor(key) };
     },
 
@@ -239,7 +239,7 @@ export async function createMockStorage(_db: DataStore): Promise<StorageProvider
       const key = normalizeStoragePath(input.path);
       const full = resolveUnder(writeRoot(), input.bucket, key);
       try {
-        await fs.unlink(full);
+        await fs.unlink(/*turbopackIgnore: true*/ full);
       } catch (err) {
         const code = (err as NodeJS.ErrnoException).code;
         if (code !== "ENOENT") throw err;

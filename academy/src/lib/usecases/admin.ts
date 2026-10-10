@@ -9,7 +9,8 @@ export interface AdminDashboardStats {
   mrr_cents: number;
   completion_by_module: Array<{ course_title: string; module_code: string; module_title: string; enrolled: number; completed: number; rate: number }>;
   top_lessons: Array<{ lesson_code: string; lesson_title: string; completions: number }>;
-  dropoff: Array<{ lesson_code: string; lesson_title: string; position: number; reached: number }>;
+  dropoff: Array<{ lesson_id: string; lesson_code: string; lesson_title: string; position: number; reached: number }>;
+  dropoff_course_title: string | null;
   refunds: number;
   orders_last30: number;
   pending_testimonials: number;
@@ -77,12 +78,19 @@ export async function getAdminDashboardStats(now = new Date()): Promise<AdminDas
     .sort((a, b) => b.completions - a.completions)
     .slice(0, 8);
 
-  const ordered = [...lessons].sort((a, b) => {
-    const ma = modules.find((m) => m.id === a.module_id)?.position ?? 0;
-    const mb = modules.find((m) => m.id === b.module_id)?.position ?? 0;
-    return ma - mb || a.position - b.position;
-  });
-  const dropoff = ordered.map((l, i) => ({ lesson_code: l.code, lesson_title: l.title, position: i, reached: progress.filter((p) => p.lesson_id === l.id).length }));
+  // Drop-off is per course: use the course with the most active enrollments (codes repeat across courses).
+  const enrollmentsByCourse = new Map<string, number>();
+  for (const e of activeEnrollments) enrollmentsByCourse.set(e.course_id, (enrollmentsByCourse.get(e.course_id) ?? 0) + 1);
+  const primaryCourseId = [...enrollmentsByCourse.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? courses[0]?.id ?? null;
+  const ordered = lessons
+    .filter((l) => l.course_id === primaryCourseId)
+    .sort((a, b) => {
+      const ma = modules.find((m) => m.id === a.module_id)?.position ?? 0;
+      const mb = modules.find((m) => m.id === b.module_id)?.position ?? 0;
+      return ma - mb || a.position - b.position;
+    });
+  const dropoff = ordered.map((l, i) => ({ lesson_id: l.id, lesson_code: l.code, lesson_title: l.title, position: i, reached: progress.filter((p) => p.lesson_id === l.id).length }));
+  const dropoff_course_title = courses.find((c) => c.id === primaryCourseId)?.title ?? null;
 
   return {
     revenue,
@@ -91,6 +99,7 @@ export async function getAdminDashboardStats(now = new Date()): Promise<AdminDas
     completion_by_module,
     top_lessons,
     dropoff,
+    dropoff_course_title,
     refunds: orders.filter((o) => o.status === "refunded" || o.status === "partially_refunded").length,
     orders_last30: paid.filter((o) => o.paid_at && daysBetween(new Date(o.paid_at), now) <= 30).length,
     pending_testimonials: testimonials,

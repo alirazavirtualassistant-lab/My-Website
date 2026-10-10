@@ -24,6 +24,11 @@ const nextConfig: NextConfig = {
     ],
   },
   serverExternalPackages: ["@react-pdf/renderer", "exceljs", "jszip"],
+  // Demo mode reads the bundled course package and legal placeholders from disk at
+  // runtime; include them in serverless bundles explicitly (fs access is otherwise untraced).
+  outputFileTracingIncludes: {
+    "/**": ["./content/courses/**", "./content/storage/**", "./src/content/**"],
+  },
   async headers() {
     return [
       {

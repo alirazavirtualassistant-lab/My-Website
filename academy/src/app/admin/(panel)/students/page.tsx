@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Download, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Receipt, Users } from "lucide-react";
 import { listStudents } from "@/lib/usecases/admin";
 import { formatDate } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
@@ -34,11 +34,18 @@ export default async function AdminStudentsPage({ searchParams }: { searchParams
         title="Students"
         description="Everyone with an account. Open a student to manage access, progress, orders and certificates."
         actions={
-          <Button asChild variant="outline">
-            <a href={exportHref} download>
-              <Download aria-hidden="true" /> Export CSV
-            </a>
-          </Button>
+          <>
+            <Button asChild variant="ghost">
+              <Link href="/admin/orders">
+                <Receipt aria-hidden="true" /> Orders
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <a href={exportHref} download>
+                <Download aria-hidden="true" /> Export CSV
+              </a>
+            </Button>
+          </>
         }
       />
 
