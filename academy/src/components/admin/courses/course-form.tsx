@@ -9,7 +9,7 @@ import { FormField, FormRow, FormStack } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Illustration, ILLUSTRATION_NAMES, isIllustrationName } from "@/components/shared/illustration";
+import { Illustration, ILLUSTRATION_NAMES } from "@/components/shared/illustration";
 import { createCourseAction, saveCourseAction } from "@/app/admin/(panel)/courses/actions";
 import { AdminCard, FormErrors, SaveButton, useSavedToast } from "./form-bits";
 import { idleAdminState } from "./form-state";

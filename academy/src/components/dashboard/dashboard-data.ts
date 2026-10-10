@@ -44,7 +44,7 @@ export function buildBadgeItems(
   earned: ReadonlyArray<{ key: string; awarded_at: string; course_id: string | null }>,
 ): BadgeItem[] {
   const earnedByKey = new Map(earned.map((e) => [e.key, e]));
-  const goalIndex = new Map(COURSE_GOALS.map((g, i) => [g.badge_key, i]));
+  const goalIndex = new Map<string, number>(COURSE_GOALS.map((g, i) => [g.badge_key, i]));
   return definitions
     .map((def) => {
       const hit = earnedByKey.get(def.key);

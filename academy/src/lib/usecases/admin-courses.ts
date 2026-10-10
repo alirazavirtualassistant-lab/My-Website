@@ -89,14 +89,14 @@ export async function getLessonForAdmin(lessonId: string): Promise<{ course: Cou
   const { db } = await getServices();
   const lesson = await db.from("lessons").get(lessonId);
   if (!lesson) return null;
-  const [course, module, resources, steps] = await Promise.all([
+  const [course, mod, resources, steps] = await Promise.all([
     db.from("courses").get(lesson.course_id),
     db.from("modules").get(lesson.module_id),
     db.from("lesson_resources").list({ where: { lesson_id: lessonId }, orderBy: ["position", "asc"] }),
     db.from("action_steps").list({ where: { lesson_id: lessonId }, orderBy: ["position", "asc"] }),
   ]);
-  if (!course || !module) return null;
-  return { course, module, lesson, resources, steps };
+  if (!course || !mod) return null;
+  return { course, module: mod, lesson, resources, steps };
 }
 
 export async function listQuizKeys(courseId: string): Promise<Array<{ key: string; title: string }>> {
@@ -422,13 +422,13 @@ export async function createModule(actorId: string, courseId: string, input: Mod
 
 export async function updateModule(actorId: string, moduleId: string, patch: Partial<ModuleInput>): Promise<Module> {
   const { db } = await getServices();
-  const module = await db.from("modules").get(moduleId);
-  if (!module) fail("That module no longer exists.");
+  const mod = await db.from("modules").get(moduleId);
+  if (!mod) fail("That module no longer exists.");
   const next: Partial<Module> = { ...patch };
   if (patch.code !== undefined) {
     const code = normaliseCode(patch.code);
     if (!code) fail("Please give the module a code.");
-    const siblings = await db.from("modules").list({ where: { course_id: module.course_id } });
+    const siblings = await db.from("modules").list({ where: { course_id: mod.course_id } });
     if (siblings.some((m) => m.id !== moduleId && m.code === code)) fail(`A module with the code ${code} already exists.`);
     next.code = code;
   }
@@ -436,25 +436,25 @@ export async function updateModule(actorId: string, moduleId: string, patch: Par
   if (patch.drip_days !== undefined) next.drip_days = Math.max(0, Math.round(patch.drip_days));
   if (patch.completion_xp !== undefined) next.completion_xp = Math.max(0, Math.round(patch.completion_xp));
   const row = await db.from("modules").update(moduleId, { ...next, updated_at: nowIso() });
-  await touchCourse(db, module.course_id);
+  await touchCourse(db, mod.course_id);
   await logAudit(actorId, "module.updated", "module", moduleId, { fields: Object.keys(patch) });
   return row;
 }
 
 export async function deleteModule(actorId: string, moduleId: string): Promise<void> {
   const { db } = await getServices();
-  const module = await db.from("modules").get(moduleId);
-  if (!module) fail("That module no longer exists.");
+  const mod = await db.from("modules").get(moduleId);
+  if (!mod) fail("That module no longer exists.");
   const lessons = await db.from("lessons").list({ where: { module_id: moduleId } });
   await db.transaction(async (tx) => {
     for (const l of lessons) await cascadeDeleteLesson(tx, l);
     await tx.from("lesson_resources").deleteWhere({ module_id: moduleId });
     await tx.from("forum_categories").updateWhere({ module_id: moduleId }, { module_id: null });
     await tx.from("modules").delete(moduleId);
-    await renumber(tx, "modules", { course_id: module.course_id });
+    await renumber(tx, "modules", { course_id: mod.course_id });
   });
-  await touchCourse(db, module.course_id);
-  await logAudit(actorId, "module.deleted", "module", moduleId, { course_id: module.course_id, code: module.code, lessons: lessons.length });
+  await touchCourse(db, mod.course_id);
+  await logAudit(actorId, "module.deleted", "module", moduleId, { course_id: mod.course_id, code: mod.code, lessons: lessons.length });
 }
 
 // ---------------------------------------------------------------------------
@@ -481,11 +481,11 @@ export interface LessonInput {
 
 export async function createLesson(actorId: string, moduleId: string, input: Pick<LessonInput, "title" | "code"> & Partial<LessonInput>): Promise<Lesson> {
   const { db } = await getServices();
-  const module = await db.from("modules").get(moduleId);
-  if (!module) fail("That module no longer exists.");
+  const mod = await db.from("modules").get(moduleId);
+  if (!mod) fail("That module no longer exists.");
   const code = normaliseCode(input.code);
   if (!code) fail("Please give the lesson a code, e.g. M1T7.");
-  const courseLessons = await db.from("lessons").list({ where: { course_id: module.course_id } });
+  const courseLessons = await db.from("lessons").list({ where: { course_id: mod.course_id } });
   if (courseLessons.some((l) => l.code === code)) fail(`A lesson with the code ${code} already exists in this course.`);
   if (!input.title.trim()) fail("Please give the lesson a title.");
   const siblings = courseLessons.filter((l) => l.module_id === moduleId);
@@ -493,7 +493,7 @@ export async function createLesson(actorId: string, moduleId: string, input: Pic
   const row = await db.from("lessons").insert({
     id: newId(),
     module_id: moduleId,
-    course_id: module.course_id,
+    course_id: mod.course_id,
     code,
     title: input.title.trim(),
     series: input.series ?? null,

@@ -23,18 +23,15 @@ export default async function LearnerLayout({ children }: { children: React.Reac
   const [me, count] = await Promise.all([getCurrentUser(), cartCount()]);
   const user = me ? { name: me.profile.name, avatar_url: me.profile.avatar_url, role: me.profile.role } : null;
 
-  let aside: React.ReactNode = null;
-  try {
-    const overview = await loadLearnerOverview(session.user_id, me?.profile.timezone ?? null);
-    aside = <LearnerAside level={overview.level} streak={overview.streak} />;
-  } catch (err) {
+  const overview = await loadLearnerOverview(session.user_id, me?.profile.timezone ?? null).catch((err: unknown) => {
     console.warn("[learner-layout] aside failed", err);
-  }
+    return null;
+  });
 
   return (
     <>
       <SiteHeader user={user} cartCount={count} ctaHref="/learn" ctaLabel="My Learning" />
-      <LearnerShell aside={aside}>{children}</LearnerShell>
+      <LearnerShell aside={overview ? <LearnerAside level={overview.level} streak={overview.streak} /> : null}>{children}</LearnerShell>
       <SiteFooter />
     </>
   );
