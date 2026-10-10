@@ -66,12 +66,12 @@ function sqlColumns(table: string): string[] {
   const re = new RegExp(`create table if not exists public\\.${table} \\(([\\s\\S]*?)\\n\\);`);
   const m = schemaSql.match(re);
   if (!m) return [];
+  // Column definitions start at exactly two spaces of indent; continuation
+  // lines (check/references/defaults) are indented further.
   return m[1]
     .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l && !l.startsWith("--") && !l.startsWith("constraint"))
-    .map((l) => l.match(/^"?(\w+)"?\s/)?.[1])
-    .filter((c): c is string => Boolean(c));
+    .map((l) => l.match(/^  "?(\w+)"?\s/)?.[1])
+    .filter((c): c is string => Boolean(c) && c !== "constraint");
 }
 
 describe("supabase migrations ↔ src/lib/types.ts", () => {
@@ -94,7 +94,7 @@ describe("supabase migrations ↔ src/lib/types.ts", () => {
 
   it("creates the four storage buckets named like the Bucket type", () => {
     for (const bucket of ["course-resources", "learner-uploads", "public-assets", "video-uploads"]) {
-      expect(storageSql).toContain(`('${bucket}', '${bucket}',`);
+      expect(storageSql).toMatch(new RegExp(`\\('${bucket}',\\s+'${bucket}',\\s+(true|false)\\)`));
     }
   });
 

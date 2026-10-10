@@ -784,7 +784,11 @@ async function main(): Promise<void> {
   printSummary(summary);
 }
 
-main().catch((err) => {
-  console.error(err instanceof Error ? err.message : String(err));
-  process.exit(1);
-});
+// Run only when executed directly (`tsx scripts/seed.ts`), not when the
+// BADGES / defaultProducts exports are imported by tests.
+if (process.argv[1] && /[\\/]seed\.(ts|js|mjs|cjs)$/.test(process.argv[1])) {
+  main().catch((err) => {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  });
+}
