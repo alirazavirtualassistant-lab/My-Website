@@ -14,7 +14,7 @@ export interface FormFieldProps {
   optionalText?: string;
   className?: string;
   /** A single form control. It receives id, aria-describedby, aria-invalid and aria-required. */
-  children: React.ReactElement<Record<string, unknown>>;
+  children: React.ReactElement;
 }
 
 /**
@@ -28,10 +28,11 @@ function FormField({ id, label, hideLabel, hint, error, required, optionalText =
   const hintId = hint ? `${id}-hint` : undefined;
   const errorId = error ? `${id}-error` : undefined;
   const describedBy = [errorId, hintId].filter(Boolean).join(" ") || undefined;
-  const control = React.cloneElement(children, {
+  const child = children as React.ReactElement<Record<string, unknown>>;
+  const control = React.cloneElement(child, {
     id,
-    "aria-describedby": [children.props["aria-describedby"], describedBy].filter(Boolean).join(" ") || undefined,
-    "aria-invalid": error ? true : children.props["aria-invalid"],
+    "aria-describedby": [child.props["aria-describedby"], describedBy].filter(Boolean).join(" ") || undefined,
+    "aria-invalid": error ? true : child.props["aria-invalid"],
     "aria-required": required || undefined,
   });
   return (

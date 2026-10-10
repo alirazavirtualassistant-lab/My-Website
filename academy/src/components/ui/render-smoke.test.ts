@@ -44,7 +44,7 @@ describe("server render smoke", () => {
   });
 
   it("wires FormField aria attributes", () => {
-    const html = render(h(FormField, { id: "email", label: "Email", hint: "h", error: "e", required: true }, h(Input, { type: "email" })));
+    const html = render(h(FormField, { id: "email", label: "Email", hint: "h", error: "e", required: true, children: h(Input, { type: "email" }) }));
     expect(html).toContain('for="email"');
     expect(html).toContain('aria-describedby="email-error email-hint"');
     expect(html).toContain('aria-invalid="true"');
@@ -56,7 +56,9 @@ describe("server render smoke", () => {
     expect(render(h(Progress, { value: 50 }))).toContain('role="progressbar"');
     expect(render(h(Checkbox, { defaultChecked: true }))).toContain('role="checkbox"');
     expect(render(h(Switch, {}))).toContain('role="switch"');
-    expect(render(h(Tabs, { defaultValue: "a" }, h(TabsList, null, h(TabsTrigger, { value: "a" }, "A")), h(TabsContent, { value: "a" }, "body")))).toContain("body");
+    expect(
+      render(h(Tabs, { defaultValue: "a", children: [h(TabsList, { key: "l" }, h(TabsTrigger, { value: "a" }, "A")), h(TabsContent, { key: "c", value: "a" }, "body")] })),
+    ).toContain("body");
     expect(
       render(
         h(Accordion, { type: "single", collapsible: true, defaultValue: "x" }, h(AccordionItem, { value: "x" }, h(AccordionTrigger, null, "Q"), h(AccordionContent, null, "A"))),
@@ -79,7 +81,7 @@ describe("server render smoke", () => {
   it("currency display converts and formats", () => {
     expect(render(h(CurrencyDisplay, { cents: 19700 }))).toContain("$197");
     expect(render(h(CurrencyDisplay, { cents: 0 }))).toContain("Free");
-    expect(render(h(DisplayCurrencyProvider, { initial: "GBP" }, h(CurrencyDisplay, { cents: 10000 })))).toContain("£79");
+    expect(render(h(DisplayCurrencyProvider, { initial: "GBP" as const, children: h(CurrencyDisplay, { cents: 10000 }) }))).toContain("£79");
     expect(convertCents(10000, "USD", "EUR")).toBe(9200);
     expect(convertCents(9200, "EUR", "USD")).toBe(10000);
   });
@@ -116,8 +118,8 @@ describe("server render smoke", () => {
     const footer = render(h(SiteFooter));
     expect(footer).toContain("Refund Policy");
     expect(footer).toContain(String(new Date().getFullYear()));
-    expect(render(h(LearnerShell, null, "content"))).toContain('id="main"');
-    const shell = render(h(AdminShell, { user: { name: "Assistant", avatar_url: null, role: "assistant" } }, "x"));
+    expect(render(h(LearnerShell, { children: "content" }))).toContain('id="main"');
+    const shell = render(h(AdminShell, { user: { name: "Assistant", avatar_url: null, role: "assistant" }, children: "x" }));
     expect(shell).toContain("Importer");
     expect(shell).not.toContain("/admin/settings");
   });
