@@ -17,6 +17,40 @@ import { PlayerStoreProvider, usePlayerStore } from "./player-store";
 import type { CurriculumData } from "./types";
 
 const COLLAPSE_KEY = "cyc-curriculum-collapsed";
+const COLLAPSE_EVENT = "cyc-curriculum-collapsed-change";
+
+function readCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(COLLAPSE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeCollapsed(next: boolean) {
+  try {
+    window.localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
+  } catch {
+    /* private mode */
+  }
+  window.dispatchEvent(new Event(COLLAPSE_EVENT));
+}
+
+function subscribeCollapsed(onChange: () => void) {
+  window.addEventListener(COLLAPSE_EVENT, onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(COLLAPSE_EVENT, onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
+/** Hydration-safe sidebar preference (server snapshot = expanded). */
+function useCollapsed(): [boolean, () => void] {
+  const collapsed = React.useSyncExternalStore(subscribeCollapsed, readCollapsed, () => false);
+  const toggle = React.useCallback(() => writeCollapsed(!readCollapsed()), []);
+  return [collapsed, toggle];
+}
 
 export interface LessonLayoutProps {
   curriculum: CurriculumData;
@@ -37,28 +71,8 @@ function LessonLayout({ curriculum, currentLessonId, initialCompletedIds, childr
 
 function Frame({ curriculum, currentLessonId, children }: { curriculum: CurriculumData; currentLessonId: string; children: React.ReactNode }) {
   const { percent } = usePlayerStore();
-  const [collapsed, setCollapsed] = React.useState(false);
+  const [collapsed, toggle] = useCollapsed();
   const [drawer, setDrawer] = React.useState(false);
-
-  React.useEffect(() => {
-    try {
-      setCollapsed(window.localStorage.getItem(COLLAPSE_KEY) === "1");
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  function toggle() {
-    setCollapsed((c) => {
-      const next = !c;
-      try {
-        window.localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  }
 
   return (
     <div className="flex flex-col gap-4">

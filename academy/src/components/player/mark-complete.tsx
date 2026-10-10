@@ -18,17 +18,16 @@ import { useAutoAdvance, usePlayerStore } from "./player-store";
 import type { CompletionResult } from "./types";
 
 /** One quiet toast summarising what a completion earned. No confetti. */
-export function toastCompletion(result: CompletionResult, opts: { title: string; router?: ReturnType<typeof useRouter> } ) {
+export function toastCompletion(result: CompletionResult, opts: { title: string; router: ReturnType<typeof useRouter> }) {
   const lines: string[] = [];
   if (result.xpAwarded > 0) lines.push(`+${result.xpAwarded} XP`);
   for (const b of result.newBadges) lines.push(`Badge earned: ${b.title}`);
   if (result.moduleCompleted) lines.push(`${result.moduleCompleted} complete`);
   if (result.certificateId) lines.push("Your certificate is ready");
+  const certificateHref = result.certificateId ? `/certificates/${result.certificateId}` : null;
   toast.success(opts.title, {
     description: lines.length ? lines.join(" · ") : undefined,
-    action: result.certificateId
-      ? { label: "View certificate", onClick: () => (opts.router ? opts.router.push(`/certificates/${result.certificateId}`) : window.location.assign(`/certificates/${result.certificateId}`)) }
-      : undefined,
+    action: certificateHref ? { label: "View certificate", onClick: () => opts.router.push(certificateHref) } : undefined,
   });
 }
 

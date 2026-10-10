@@ -4,11 +4,15 @@ import { ensureBootstrapped } from "@/lib/usecases/demo";
 import { getCurrentUser, requireAdmin } from "@/lib/auth/session";
 import { AdminShell } from "@/components/layout/admin-shell";
 
+export const dynamic = "force-dynamic";
+
 /**
- * Minimal admin panel layout (created by the ADMIN-2 work because it did not
- * exist yet; ADMIN-1 owns this file and is expected to replace it — keep
- * ensureBootstrapped + requireAdmin + AdminShell). Owner-only pages call
- * requireRole("admin") themselves on top of this gate.
+ * Admin panel chrome + role gate. Every admin page lives under this route
+ * group (URLs stay /admin/…); /admin/register sits outside it on purpose so
+ * the first-admin bootstrap stays reachable without a session.
+ *
+ * AdminShell filters the sidebar with `visibleFor(adminNav, role)`, so an
+ * assistant never sees Products, Coupons, Settings or Team.
  */
 export default async function AdminPanelLayout({ children }: { children: React.ReactNode }) {
   await ensureBootstrapped();
