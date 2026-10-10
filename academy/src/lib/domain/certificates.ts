@@ -110,8 +110,8 @@ export function linkedInAddToProfileUrl(input: LinkedInCertificateInput): string
   else p.set("organizationName", input.organizationName);
   p.set("issueYear", String(Math.floor(input.issueYear)));
   p.set("issueMonth", String(Math.min(12, Math.max(1, Math.floor(input.issueMonth)))));
-  if (input.expirationYear) p.set("expirationYear", String(Math.floor(input.expirationYear)));
-  if (input.expirationMonth) p.set("expirationMonth", String(Math.min(12, Math.max(1, Math.floor(input.expirationMonth)))));
+  if (input.expirationYear !== undefined) p.set("expirationYear", String(Math.floor(input.expirationYear)));
+  if (input.expirationMonth !== undefined) p.set("expirationMonth", String(Math.min(12, Math.max(1, Math.floor(input.expirationMonth)))));
   p.set("certUrl", input.certUrl);
   p.set("certId", input.certId);
   return url.toString();

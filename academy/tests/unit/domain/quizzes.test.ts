@@ -110,7 +110,7 @@ describe("scoreQuiz — Sensitivity Quiz (sum, top-level bands, yes = 3)", () =>
     expect(scoreQuiz(quiz, { ...allScales(0), q8: 3, q9: 3, q10: 2, q11: "no" }).band?.label).toBe("low likelihood of a food driver");
     expect(scoreQuiz(quiz, { ...allScales(0), q8: 3, q9: 3, q10: 2, q11: "yes" }).score).toBe(11);
     expect(scoreQuiz(quiz, { ...allScales(0), q8: 3, q9: 3, q10: 3, q11: "no" }).band?.label).toBe("keep the diary");
-    const max = scoreQuiz(quiz, { ...allScales(3), q11: true });
+    const max = scoreQuiz(quiz, { ...allScales(3), q11: 1 });
     expect(max.score).toBe(36);
     expect(max.band?.label).toBe("see your doctor");
   });
@@ -157,7 +157,8 @@ describe("scoreQuiz — Family Wellness Quiz (sections)", () => {
 
   it("marks sections without answers as missing and bands them null", () => {
     const r = scoreQuiz(quiz, { q1: 4, q2: 4, q3: 4, q4: 4, q5: 4 });
-    expect(r.section_scores).toEqual({ nutrition: 20 });
+    // every section in the definition is present; unanswered ones score 0
+    expect(r.section_scores).toEqual({ nutrition: 20, movement: 0, stress: 0, toxins: 0, connection: 0 });
     expect(r.section_bands.nutrition?.label).toBe("rooted");
     expect(r.section_bands.movement).toBeNull();
     expect(r.missing_required).toHaveLength(20);

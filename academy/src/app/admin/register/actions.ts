@@ -13,12 +13,7 @@ import { logAudit } from "@/lib/usecases/users";
 import { adminRegisterSchema, errorField, isHoneypotTripped, parseForm } from "@/components/auth/logic";
 import { errorState, formError, type FormState } from "@/components/auth/types";
 import { registerGuard, setupCodeMatches } from "./logic";
-
-export async function liveAdminExists(): Promise<boolean> {
-  const { db } = await getServices();
-  const admins = await db.from("profiles").list({ where: { role: "admin" } });
-  return admins.some((a) => !a.deleted_at);
-}
+import { liveAdminExists } from "./queries";
 
 export async function adminRegisterAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const parsed = parseForm(adminRegisterSchema, formData);

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { AuthCard } from "@/components/auth/auth-card";
 import { AdminRegisterForm } from "@/components/auth/admin-register-form";
 import { registerGuard } from "./logic";
-import { liveAdminExists } from "./actions";
+import { liveAdminExists } from "./queries";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Set up the first admin", robots: { index: false, follow: false } };
