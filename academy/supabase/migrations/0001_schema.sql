@@ -18,6 +18,9 @@
 -- Plain SQL only (no psql meta-commands). Targets Supabase Postgres 15+.
 -- ============================================================================
 
+-- Quiet the "already exists, skipping" notices when the file is re-applied.
+set client_min_messages to warning;
+
 -- ----------------------------------------------------------------------------
 -- Shared trigger: keep updated_at current on every UPDATE.
 -- ----------------------------------------------------------------------------
