@@ -1,9 +1,10 @@
 name: Academy CI
 
 on:
-  push:
-    paths: ["academy/**", ".github/workflows/academy-ci.yml"]
   pull_request:
+    paths: ["academy/**", ".github/workflows/academy-ci.yml"]
+  push:
+    branches: ["main"]
     paths: ["academy/**", ".github/workflows/academy-ci.yml"]
 
 jobs:
