@@ -7,8 +7,10 @@ test.describe("public pages", () => {
     await expect(page.getByRole("link", { name: /start your baby steps/i }).first()).toBeVisible();
     await expect(page.locator("main").getByRole("heading", { name: /Baby Steps: Your Health Journey Toward Conception/ }).first()).toBeVisible();
     await expect(page.locator("main").getByRole("heading", { name: /Foundations of Family Wellness/ }).first()).toBeVisible();
-    // No invented testimonials: the empty state shows instead.
-    await expect(page.getByText(/learner stories will appear here/i)).toBeVisible();
+    // Never invented testimonials: either approved learner stories (quoted) or the empty state.
+    const stories = page.locator('[data-slot="testimonials"]').first();
+    await expect(stories).toBeVisible();
+    await expect(stories.getByText(/learner stories will appear here/i).or(stories.locator("blockquote").first())).toBeVisible();
   });
 
   test("catalog lists Baby Steps and filters by topic", async ({ page }) => {
