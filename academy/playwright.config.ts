@@ -13,6 +13,8 @@ export default defineConfig({
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL,
+    actionTimeout: 20_000,
+    navigationTimeout: 45_000,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     // Use a pre-installed Chromium when provided (e.g. PW_CHROMIUM=/opt/pw-browsers/chromium)

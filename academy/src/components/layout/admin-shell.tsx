@@ -7,7 +7,7 @@ import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { AdminNavList, AdminMobileNav } from "./admin-nav";
 import { UserMenu } from "./user-menu";
-import { adminNav, visibleFor, type HeaderUser } from "./nav-config";
+import { type HeaderUser } from "./nav-config";
 
 export interface AdminShellProps {
   user: HeaderUser;
@@ -20,7 +20,6 @@ export interface AdminShellProps {
  * menu, and a mobile drawer. The role gate itself lives in the admin layout.
  */
 function AdminShell({ user, children, className }: AdminShellProps) {
-  const items = visibleFor(adminNav, user.role);
   return (
     <div data-slot="admin-shell" className={cn("flex min-h-screen w-full bg-cream", className)}>
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-border bg-card lg:flex">
@@ -36,7 +35,7 @@ function AdminShell({ user, children, className }: AdminShellProps) {
           ) : null}
         </div>
         <div className="flex-1 overflow-y-auto p-3">
-          <AdminNavList items={items} />
+          <AdminNavList role={user.role} />
         </div>
         <div className="border-t border-border p-4 text-xs text-muted-foreground">
           <p className="truncate font-semibold text-foreground">{user.name}</p>
@@ -46,7 +45,7 @@ function AdminShell({ user, children, className }: AdminShellProps) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-gold/50 bg-cream/85 px-4 backdrop-blur supports-[backdrop-filter]:bg-cream/75 sm:px-6">
-          <AdminMobileNav items={items} />
+          <AdminMobileNav role={user.role} />
           <Link href="/admin" className="inline-flex items-center gap-2 lg:hidden">
             <Logo variant="mark" height={28} />
             <span className="font-serif text-lg font-medium">Admin</span>

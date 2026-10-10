@@ -157,3 +157,68 @@ things are the way they are. Newest at the bottom of each section.
   prerendered).
 - Admin pages live under the `src/app/admin/(panel)` route group so that
   `/admin/register` (first-admin bootstrap) stays outside the role gate.
+
+## Learner experience
+
+- The free-preview lessons (M0 and M1T1 by default) are public pages with the
+  transcript and action steps but locked downloads; non-preview lessons are
+  never rendered publicly.
+- A locked lesson URL renders a "Module N opens on <date>" screen inside the
+  player (not a 404) so the curriculum and unlock dates stay visible.
+- Quizzes are routes (`/learn/<course>/<lesson>/quiz/<key>`) rather than
+  modals: keyboard-native, deep-linkable, and comfortable for 27 questions.
+- "Mark complete & continue" prefers the next lesson in order when it is
+  unlocked and falls back to the first unlocked incomplete lesson.
+- Sub-items of a step award XP individually; the step remainder awards when
+  all sub-items are done. Un-ticking a step removes its XP.
+- Notes are saved explicitly (Ctrl/⌘+Enter or the button) and can be exported
+  as Markdown per course. Anonymous forum posts hide the author's name from
+  members, never from moderators, and the UI says so.
+- The disclaimer gate is shown once, before the first lesson, and stored on
+  the profile.
+
+## Commerce
+
+- Quantity is always one per product at checkout (digital goods); a coupon that
+  cannot be applied blocks checkout with a clear message rather than silently
+  charging full price. The cart is cleared on the success page, which polls the
+  order status briefly to cover the webhook-vs-redirect race.
+- Gifts never enrol the buyer; the recipient redeems a token link on their own
+  account. A partner invite is a token link too; the partner's drip clock is
+  the owner's enrollment date so both see the same unlocks.
+- The mock checkout page posts to a mock webhook that runs the same fulfilment
+  code as Stripe; admin pages can also simulate refund and subscription events.
+
+## Admin
+
+- Admin pages live under the `(panel)` route group; `/admin/register` stays
+  outside the role gate for first-admin bootstrap. Assistants see everything
+  except Products, Coupons, Settings and Team.
+- Uploads (video, captions, thumbnails, audio, resources, importer packages)
+  go through route handlers, not Server Actions, to avoid the 1 MB action
+  body limit. In mock mode videos are stored locally and played with the
+  HTML5 player; in Mux mode the browser uploads directly to Mux.
+- Drip is expressed as days after enrollment (`drip_days` on modules,
+  optional per-lesson override). A fixed-calendar unlock date is not stored.
+- "Ban" is implemented as removing all of a member's posts; a true ban flag
+  would need a `banned_at` column (noted for a follow-up).
+- Deleting a lesson removes learner progress for it; deleting a course with
+  active enrollments requires an explicit force and is audited.
+- The admin drop-off chart is scoped to the course with the most active
+  enrollments so lesson codes stay unique.
+
+## Testing and hardening (found by the production e2e run)
+
+- Sign-out: Next.js re-serialises `cookies()` mutations made in a Route
+  Handler and drops `Max-Age=0`, leaving an empty `cyc_session=` cookie that
+  the edge proxy read as "signed in" (redirect loop between `/sign-in` and
+  `/learn`). The cleared cookie now also carries `Expires=epoch`, and the
+  proxy ignores empty cookie values.
+- Real 404s: `loading.tsx` files were removed from the root and marketing
+  segments so `notFound()` for unknown course/blog/preview slugs returns a
+  404 status instead of a streamed 200 shell. Learner, checkout and admin
+  segments keep their skeletons.
+- Playwright runs against `next start` (port 3100, throwaway `.data-e2e`)
+  with `actionTimeout`/`navigationTimeout` set so a missing element fails
+  fast instead of consuming the whole test timeout. `PW_CHROMIUM` points the
+  runner at a pre-installed browser in sandboxes without network access.

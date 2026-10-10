@@ -43,12 +43,22 @@ export async function signUp(page: Page, { name, email, password }: { name: stri
   await dismissCookieBanner(page);
 }
 
+/** The disclaimer dialog mounts after hydration, so give it a moment to appear. */
 export async function acceptDisclaimerIfShown(page: Page) {
   const btn = page.getByRole("button", { name: /i understand/i });
-  if (await btn.count()) {
+  const appeared = await btn.first().waitFor({ state: "visible", timeout: 4_000 }).then(() => true).catch(() => false);
+  if (appeared) {
     await btn.first().click();
     await expect(btn).toHaveCount(0, { timeout: 10_000 });
   }
+}
+
+/** Signs out through the browser so the cookie jar sees the cleared cookie. */
+export async function signOut(page: Page) {
+  await page.evaluate(async () => {
+    await fetch("/api/auth/sign-out", { method: "POST", redirect: "manual" });
+  });
+  await page.goto("/");
 }
 
 /** Reads the newest email in the demo mailbox and returns the first link matching `pattern`. */
@@ -57,12 +67,22 @@ export async function latestMailboxLink(page: Page, to: string, pattern: RegExp)
   const row = page.locator("ul li a").filter({ hasText: to }).first();
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.click();
+  await page.waitForURL(/\/dev\/mailbox\?id=/, { timeout: 15_000 });
   const frame = page.frameLocator("iframe");
   const links = frame.locator("a");
+  // The email body is rendered into an iframe; wait for it before counting links.
+  await expect(links.first()).toBeVisible({ timeout: 15_000 });
   const n = await links.count();
   for (let i = 0; i < n; i++) {
     const href = await links.nth(i).getAttribute("href");
-    if (href && pattern.test(href)) return href;
+    if (href && pattern.test(href)) {
+      // Emails link to the configured NEXT_PUBLIC_SITE_URL; point them at the server under test.
+      const base = new URL(page.url());
+      const target = new URL(href);
+      target.protocol = base.protocol;
+      target.host = base.host;
+      return target.toString();
+    }
   }
   throw new Error(`No link matching ${pattern} in the latest email to ${to}`);
 }

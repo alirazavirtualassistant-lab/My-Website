@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { DEMO, signIn, signUp, uniqueEmail, dismissCookieBanner } from "./helpers";
+import { DEMO, signIn, signUp, uniqueEmail, dismissCookieBanner, signOut, latestMailboxLink } from "./helpers";
 
 test.describe("commerce (mock payments)", () => {
   test("new learner buys Baby Steps through the test checkout and is enrolled", async ({ page }) => {
@@ -40,11 +40,12 @@ test.describe("commerce (mock payments)", () => {
     await percent.fill("20");
     await page.locator('form button[type="submit"]').first().click();
     await expect(page).toHaveURL(/\/admin\/coupons/, { timeout: 30_000 });
-    await page.request.post("/api/auth/sign-out", { maxRedirects: 0 });
+    await signOut(page);
 
     await page.goto("/courses/baby-steps?coupon=E2E20");
     await expect(page.locator('input[name="coupon"]').first()).toHaveValue("E2E20");
     await page.getByRole("button", { name: /add to cart/i }).first().click();
+    await expect(page.getByRole("link", { name: /cart, empty/i })).toHaveCount(0, { timeout: 20_000 });
     await page.goto("/cart");
     await page.fill('input[name="coupon"]', "E2E20");
     await page.locator('form:has(input[name="coupon"]) button[type="submit"]').first().click();
@@ -69,20 +70,10 @@ test.describe("commerce (mock payments)", () => {
     await expect(page.getByText(/gift/i).first()).toBeVisible({ timeout: 30_000 });
 
     // find the redeem link
-    await page.goto("/dev/mailbox");
-    const row = page.locator("ul li a").filter({ hasText: recipient }).first();
-    await expect(row).toBeVisible({ timeout: 15_000 });
-    await row.click();
-    const links = page.frameLocator("iframe").locator("a");
-    let redeem = "";
-    for (let i = 0; i < (await links.count()); i++) {
-      const href = (await links.nth(i).getAttribute("href")) ?? "";
-      if (/\/gift\//.test(href)) { redeem = href; break; }
-    }
-    expect(redeem).toMatch(/\/gift\//);
+    const redeem = await latestMailboxLink(page, recipient, /\/gift\//);
 
     // recipient signs up and redeems
-    await page.request.post("/api/auth/sign-out", { maxRedirects: 0 });
+    await signOut(page);
     await signUp(page, { name: "Gift Recipient", email: recipient, password: "Passw0rd!rcpt" });
     await page.goto(redeem);
     await page.getByRole("button", { name: /add it to my account|redeem/i }).first().click();
@@ -108,19 +99,9 @@ test.describe("commerce (mock payments)", () => {
     await page.locator('form:has(input[name="email"]) button[type="submit"]').first().click();
     await expect(page.getByText(/invit/i).first()).toBeVisible({ timeout: 15_000 });
 
-    await page.goto("/dev/mailbox");
-    const row = page.locator("ul li a").filter({ hasText: partner }).first();
-    await expect(row).toBeVisible({ timeout: 15_000 });
-    await row.click();
-    const links = page.frameLocator("iframe").locator("a");
-    let accept = "";
-    for (let i = 0; i < (await links.count()); i++) {
-      const href = (await links.nth(i).getAttribute("href")) ?? "";
-      if (/\/partner\//.test(href)) { accept = href; break; }
-    }
-    expect(accept).toMatch(/\/partner\//);
+    const accept = await latestMailboxLink(page, partner, /\/partner\//);
 
-    await page.request.post("/api/auth/sign-out", { maxRedirects: 0 });
+    await signOut(page);
     await signUp(page, { name: "Seat Partner", email: partner, password: "Passw0rd!prt" });
     await page.goto(accept);
     await page.getByRole("button", { name: /join as partner|accept/i }).first().click();

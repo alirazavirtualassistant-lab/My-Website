@@ -66,7 +66,12 @@ mode; these items make it real.
 ## Before go-live (engineering)
 
 - [ ] Set `DEMO_MODE=false`, real `AUTH_SECRET`, `ADMIN_SETUP_CODE`,
-      `CRON_SECRET`.
+      `CRON_SECRET`, and `NEXT_PUBLIC_SITE_URL` (emails and certificate QR
+      codes use it).
+- [ ] Brand fonts in the certificate PDF: drop `CormorantGaramond-Medium.ttf`,
+      `CormorantGaramond-MediumItalic.ttf`, `NunitoSans-Regular.ttf`,
+      `NunitoSans-Bold.ttf` into `public/fonts/` (the PDF falls back to
+      Times/Helvetica until then).
 - [ ] Register the first admin at `/admin/register` with the setup code, then
       delete the demo accounts (or never seed them: demo seeding only runs
       when `DEMO_MODE=true`).

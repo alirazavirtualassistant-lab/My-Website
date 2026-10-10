@@ -18,16 +18,16 @@ Community · Testimonials · Emails · Settings · Team.
 
 ## Upload a video to a lesson
 
-1. **Courses → Baby Steps → Curriculum**, open the module, click the lesson.
-2. In the **Video** card click **Upload video** and choose the MP4. The
-   expected file name is shown (for example `M1T1-Intro.mp4`); matching the
-   name is not required, it is just a reminder.
-3. Wait for "Ready". Add a thumbnail and (optionally) a captions `.vtt` file in
-   the same card. Learners will see the video instead of the "Video coming
-   soon" card immediately.
-4. **Bulk upload**: on the Curriculum page use **Upload videos in bulk** and
-   drop many files at once; files named like the sheet (`M2T4-Gut.mp4`) are
-   matched to their lessons automatically, the rest can be assigned by hand.
+1. **Courses → Baby Steps → Curriculum**, open the module, click the lesson
+   title to open the lesson editor.
+2. In the **Video** card choose the MP4 and upload. The planned file name is
+   shown (for example `M1T1-Intro.mp4`); matching it is not required.
+3. When the card shows the video as ready, add a thumbnail (Thumbnail card)
+   and optionally a captions `.vtt` file (Captions card). Learners see the
+   video instead of the "Video coming soon" card immediately.
+4. **Bulk upload**: on the Curriculum page open **Bulk video upload** and drop
+   many files at once; files named like the sheet (`M2T4-Gut.mp4`) are matched
+   to their lessons automatically, the rest can be assigned from a dropdown.
 
 ## Add an audio file (welcome audio, affirmations, meditation, session summaries)
 
@@ -63,15 +63,19 @@ one as **Featured** and add testimonials by hand (with permission).
 
 ## Look after a student
 
-**Students** lists everyone. Open a student to see enrollments, progress,
-XP and certificates. From there you can:
+**Students** lists everyone (search by name or email). Open a student to see
+enrollments, progress per course, XP, community activity, orders and
+certificates. From there you can:
 
-- **Enroll** them in a course for free (comp access) or **Unenroll**.
-- **Unlock all modules** for one learner (ignores the weekly drip).
-- **Resend receipt**, **Refund** (also removes access), **Reset password
-  link**.
-- **Delete the account** (removes their data; purchase records are kept).
-- **Export CSV** of all students from the list page.
+- **Enroll in course** for free (comp access), **Revoke** or **Re-activate**
+  an enrollment.
+- **Unlock all** for one learner (ignores the weekly drip) and **Restore drip**.
+- **Resend receipt**, **Refund** (also removes access), **Send password
+  reset**, **Remove all posts** (community).
+- Change the **role** (owner only) and **Delete user** (type the word to
+  confirm; purchase records are kept).
+- **Export CSV** of all students from the list page. **Orders** has its own
+  page with status filters.
 
 You will see *that* a learner completed quizzes, journals and uploads, never
 the content. That is by design.
@@ -93,9 +97,11 @@ emails are logged under **Emails → Log**.
 Option A — **Importer** (fastest if you have a package like the Baby Steps
 zip):
 
-1. **Importer → Upload package**. Drop the zip and the course sheet.
-2. Review the preview (modules, lessons, resources, XP totals, warnings).
-3. Click **Import**. The course is created as a **draft**.
+1. **Importer**. Choose the zip (and optionally a newer course sheet) and
+   upload.
+2. Review the preview: modules, lessons, resources, XP totals per module,
+   warnings, and a diff against the existing course if one has the same slug.
+3. Click **Import as draft** (new course) or **Update existing course**.
 
 Option B — **Courses → New course**: fill in title, subtitle, description,
 thumbnail, level, topics, then add modules and lessons one by one. Drag to

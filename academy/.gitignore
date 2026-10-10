@@ -42,6 +42,7 @@ next-env.d.ts
 
 # demo-mode data store and local uploads
 /.data/
+/.data-*/
 /test-results/
 /playwright-report/
 /content/generated-tmp/

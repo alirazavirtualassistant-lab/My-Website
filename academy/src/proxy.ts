@@ -14,9 +14,9 @@ const PUBLIC_UNDER_PROTECTED = ["/admin/register", "/admin/sign-in"];
 const AUTH_PAGES = ["/sign-in", "/sign-up"];
 
 function hasSessionCookie(req: NextRequest): boolean {
-  if (req.cookies.has(SESSION_COOKIE)) return true;
+  if (req.cookies.get(SESSION_COOKIE)?.value) return true;
   // Supabase SSR cookies: sb-<project-ref>-auth-token (possibly chunked .0, .1 …)
-  return req.cookies.getAll().some((c) => c.name.startsWith("sb-") && c.name.includes("-auth-token"));
+  return req.cookies.getAll().some((c) => c.name.startsWith("sb-") && c.name.includes("-auth-token") && c.value !== "");
 }
 
 export function proxy(req: NextRequest) {

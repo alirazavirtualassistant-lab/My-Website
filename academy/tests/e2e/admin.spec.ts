@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { DEMO, signIn, uniqueEmail } from "./helpers";
+import { DEMO, signIn, uniqueEmail, signOut } from "./helpers";
 
 test.describe("admin panel", () => {
   test.beforeEach(async ({ page }) => {
@@ -7,7 +7,7 @@ test.describe("admin panel", () => {
   });
 
   test("learners cannot open the admin panel", async ({ page }) => {
-    await page.request.post("/api/auth/sign-out", { maxRedirects: 0 });
+    await signOut(page);
     await signIn(page, DEMO.learner.email, DEMO.learner.password);
     await page.goto("/admin");
     await expect(page).toHaveURL(/\/learn\?denied=1|\/sign-in/);
@@ -53,14 +53,16 @@ test.describe("admin panel", () => {
     expect(await csv.text()).toContain("learner@demo.cradleyourcravings.com");
   });
 
-  test("testimonials: a learner submission appears as pending and can be approved", async ({ page }) => {
+  test("testimonials: a manual testimonial is added from the dialog and shows on the home page", async ({ page }) => {
     await page.goto("/admin/testimonials");
-    await page.getByRole("link", { name: /add testimonial/i }).first().click().catch(() => {});
-    if (!/\/admin\/testimonials\/new/.test(page.url())) await page.goto("/admin/testimonials/new");
-    await page.fill('input[name="author_name"]', "E2E Reviewer");
-    await page.fill('textarea[name="body"]', "A calm, well-sourced course. The baby steps made it doable.");
-    await page.locator('form button[type="submit"]').last().click();
-    await expect(page).toHaveURL(/\/admin\/testimonials/, { timeout: 30_000 });
+    await page.getByRole("button", { name: /add testimonial/i }).first().click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await dialog.locator('input[name="author_name"]').fill("E2E Reviewer");
+    await dialog.locator('textarea[name="body"]').fill("A calm, well-sourced course. The baby steps made it doable.");
+    await dialog.getByRole("button", { name: /add testimonial/i }).click();
+    await expect(dialog).toBeHidden({ timeout: 30_000 });
+    await page.goto("/admin/testimonials?status=approved");
     await expect(page.getByText("E2E Reviewer").first()).toBeVisible();
     await page.goto("/");
     await expect(page.getByText(/baby steps made it doable/).first()).toBeVisible();
@@ -70,7 +72,9 @@ test.describe("admin panel", () => {
     const email = uniqueEmail("assistant");
     await page.goto("/admin/team");
     const add = page.getByRole("link", { name: /add team member/i }).first();
-    if (await add.count()) await add.click();
+    const nameField = page.locator('input[name="name"]').first();
+    await expect(add.or(nameField)).toBeVisible({ timeout: 20_000 });
+    if (await add.isVisible()) await add.click();
     await page.fill('input[name="name"]', "E2E Assistant");
     await page.fill('input[name="email"]', email);
     const role = page.locator('select[name="role"]').first();
@@ -79,7 +83,7 @@ test.describe("admin panel", () => {
     if (await pw.count()) await pw.fill("Assist!e2e1");
     await page.locator('form:has(input[name="email"]) button[type="submit"]').first().click();
     await expect(page.getByText("E2E Assistant").first()).toBeVisible({ timeout: 30_000 });
-    await page.request.post("/api/auth/sign-out", { maxRedirects: 0 });
+    await signOut(page);
     await signIn(page, email, "Assist!e2e1");
     await page.goto("/admin");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
@@ -95,12 +99,14 @@ test.describe("admin panel", () => {
   });
 
   test("importer: the bundled package can be previewed and re-imported without duplicating lessons", async ({ page }) => {
+    test.setTimeout(240_000);
     await page.goto("/admin/importer");
     await page.getByRole("button", { name: /re-import the bundled|bundled/i }).first().click();
     await expect(page).toHaveURL(/\/admin\/importer\//, { timeout: 60_000 });
     await expect(page.getByText(/59/).first()).toBeVisible();
     await expect(page.getByText(/4,?085/).first()).toBeVisible();
     await page.getByRole("button", { name: /update existing course/i }).first().click();
+    await page.getByRole("dialog").getByRole("button", { name: /^update course$/i }).click();
     await expect(page).toHaveURL(/\/admin\/courses\/.*curriculum/, { timeout: 120_000 });
     await page.goto("/learn/baby-steps").catch(() => {});
     await page.goto("/courses/baby-steps");

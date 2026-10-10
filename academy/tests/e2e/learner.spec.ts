@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { DEMO, signIn, acceptDisclaimerIfShown } from "./helpers";
+import { DEMO, signIn, acceptDisclaimerIfShown, signOut } from "./helpers";
 
 test.describe("dashboard, community and certificates", () => {
   test("My Learning shows continue hero, XP, level, streak, unlocks and badges", async ({ page }) => {
@@ -59,10 +59,14 @@ test.describe("dashboard, community and certificates", () => {
     await page.goto("/admin/students?q=learner%40demo");
     await page.getByRole("link", { name: /Demo Learner/ }).first().click();
     await expect(page).toHaveURL(/\/admin\/students\//);
-    const unlock = page.getByRole("button", { name: /unlock all/i }).first();
-    if (await unlock.count()) await unlock.click();
-    await expect(page.getByText(/restore drip|all modules unlocked|unlocked/i).first()).toBeVisible({ timeout: 15_000 });
-    await page.request.post("/api/auth/sign-out", { maxRedirects: 0 });
+    // The enrollment table streams in after the shell; wait for the control before acting.
+    const unlock = page.getByRole("button", { name: /^(unlock all|all unlocked)$/i }).first();
+    await expect(unlock).toBeVisible({ timeout: 20_000 });
+    if (/unlock all/i.test((await unlock.textContent()) ?? "")) {
+      await unlock.click();
+      await expect(page.getByRole("button", { name: /^all unlocked$/i }).first()).toBeVisible({ timeout: 20_000 });
+    }
+    await signOut(page);
 
     // 2) learner completes every required lesson (M0–M7)
     await signIn(page, DEMO.learner.email, DEMO.learner.password);
@@ -90,7 +94,7 @@ test.describe("dashboard, community and certificates", () => {
     const verifyLink = page.getByRole("link", { name: /verify/i }).first();
     const verifyHref = (await verifyLink.getAttribute("href")) ?? "";
     if (verifyHref) {
-      await page.request.post("/api/auth/sign-out", { maxRedirects: 0 });
+      await signOut(page);
       await page.goto(verifyHref);
       await expect(page.getByText(/Demo Learner/).first()).toBeVisible();
       await expect(page.getByText(/verified|valid/i).first()).toBeVisible();

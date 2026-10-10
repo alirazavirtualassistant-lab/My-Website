@@ -9,10 +9,16 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Logo } from "@/components/shared/logo";
 import { isActivePath } from "./nav-link";
-import type { NavItem } from "./nav-config";
+import type { Role } from "@/lib/types";
+import { adminNav, visibleFor } from "./nav-config";
 
-function AdminNavList({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => void }) {
+/**
+ * Client-side nav. It takes the role (serializable) and resolves the nav items
+ * itself, because icon components cannot cross the server → client boundary.
+ */
+function AdminNavList({ role, onNavigate }: { role: Role; onNavigate?: () => void }) {
   const pathname = usePathname();
+  const items = visibleFor(adminNav, role);
   return (
     <nav aria-label="Admin" className="flex flex-col gap-0.5">
       {items.map(({ label, href, icon: Icon, exact }) => {
@@ -38,7 +44,7 @@ function AdminNavList({ items, onNavigate }: { items: NavItem[]; onNavigate?: ()
 }
 
 /** Mobile drawer for the admin sidebar. */
-function AdminMobileNav({ items }: { items: NavItem[] }) {
+function AdminMobileNav({ role }: { role: Role }) {
   const [open, setOpen] = React.useState(false);
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -58,7 +64,7 @@ function AdminMobileNav({ items }: { items: NavItem[] }) {
           <SheetDescription className="sr-only">Admin navigation</SheetDescription>
         </SheetHeader>
         <div className="px-3">
-          <AdminNavList items={items} onNavigate={() => setOpen(false)} />
+          <AdminNavList role={role} onNavigate={() => setOpen(false)} />
         </div>
         <div className="mt-auto border-t border-border p-4">
           <SheetClose asChild>

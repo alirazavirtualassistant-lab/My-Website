@@ -39,12 +39,40 @@ accounts (`DEMO_MODE=true`):
 | Learner   | `learner@demo.cradleyourcravings.com`   | `BabySteps!demo1` |
 | Partner   | `partner@demo.cradleyourcravings.com`   | `Partner!demo1`   |
 
-The demo learner is already enrolled in Baby Steps with some progress. The
-mock checkout at `/checkout` lets you "pay" with a test button; emails that
-would have been sent appear at `/dev/mailbox` and under Admin → Emails.
+The demo learner is already enrolled in Baby Steps (enrolled 10 days ago, so
+Module 2 is open and Module 3 opens in 4 days) with some progress; the demo
+partner holds the learner's partner seat. The mock checkout lets you "pay"
+with a test button (`/checkout` → `/checkout/mock/<session>`); every email the
+app would have sent appears at `/dev/mailbox` (with working links) and under
+Admin → Emails.
 
 Demo-mode data is stored in `.data/store.json` (git-ignored). Delete it to
 reset, or use Admin → Settings → "Reset demo data".
+
+### Try the whole learner journey in demo mode
+
+1. Browse `/courses/baby-steps`, open a free preview (`/courses/baby-steps/preview/m1t1`).
+2. Sign up, confirm the email from `/dev/mailbox`.
+3. "Buy now" → checkout → test "Pay" → you land on the success page and are
+   enrolled (the enrollment is created by the mock webhook, exactly like Stripe).
+4. `/learn/baby-steps/m0` → accept the disclaimer, read the transcript, tick
+   action steps (XP), take the Wellness Quiz, add notes, "Mark complete".
+5. `/learn/baby-steps/couple` → invite a partner; accept the link from the mailbox.
+6. `/community/baby-steps` → post from a lesson's "Share in Forum" step.
+7. Admin → Students → open the learner → "Unlock all" to skip the drip, finish
+   Modules 0–7, and the certificate appears under `/certificates` (PDF + public
+   `/verify/<code>` page).
+
+### Try the admin journey
+
+Sign in as the admin and open `/admin`: dashboard analytics, Courses →
+Baby Steps → Curriculum (drag to reorder, upload a video, edit a lesson),
+Importer (re-import the bundled package and preview the diff), Products
+(placeholder prices), Coupons (auto-apply links), Students (enroll, unlock,
+refund, delete), Orders, Community moderation, Testimonials, Emails
+(log + broadcasts), Settings (legal pages, disclaimer, reset demo data) and
+Team (add an assistant). The first admin on a fresh deployment is created at
+`/admin/register` with `ADMIN_SETUP_CODE`.
 
 ## Scripts
 
@@ -153,6 +181,23 @@ service contracts and the rules used while building.
 
 - Unit (Vitest): drip logic, XP totals, pricing/coupons, quiz scoring,
   importer against the real package, webhook idempotency, adapters.
-- E2E (Playwright, demo mode): public pages, sign-up, mock checkout,
-  player, completing a lesson, certificate, admin basics. Run
-  `npm run build && npm run test:e2e`.
+- E2E (Playwright, demo mode, six suites): public pages, auth, player,
+  commerce (buy, coupon link, gift, partner seat), learner (dashboard,
+  community, certificate issued after completing Modules 0–7, PDF + verify
+  page) and admin (CMS, products, students, testimonials, team, importer).
+  Run `npm run build && npm run test:e2e`; the config starts `next start` on
+  port 3100 with a throwaway `.data-e2e` store. Set `PW_CHROMIUM=/path/to/chrome`
+  to use a pre-installed browser instead of `npx playwright install`.
+
+## Notes on behaviour
+
+- Unknown course/lesson/blog slugs render the branded not-found page with a
+  real HTTP 404. Marketing routes deliberately have no `loading.tsx`: a
+  loading boundary above a page makes Next stream the shell before
+  `notFound()` runs, which turns the status into a soft 200. Signed-in areas
+  keep their skeletons (they are `noindex` anyway).
+- Signing out clears the session cookie with both `Max-Age=0` and an epoch
+  `Expires`; the proxy treats an empty cookie as signed out. Without this a
+  stale empty cookie caused a `/sign-in` ↔ `/learn` redirect loop.
+- "Mark complete & continue" moves to the next lesson in order when it is
+  unlocked, otherwise to the first unlocked lesson you have not finished.

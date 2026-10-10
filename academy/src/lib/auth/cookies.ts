@@ -25,6 +25,7 @@ export interface SessionCookieOptions {
   secure: boolean;
   path: "/";
   maxAge?: number;
+  expires?: Date;
 }
 
 /**
@@ -43,7 +44,12 @@ export function sessionCookieOptions(input: { remember: boolean; secure: boolean
   return base;
 }
 
-/** Attributes used to clear the session cookie (same scope, maxAge 0). */
+/**
+ * Attributes used to clear the session cookie (same scope, expired). Both
+ * `maxAge: 0` and `expires: epoch` are set: when a Route Handler mutates
+ * `cookies()` Next re-serialises the cookie and drops a zero Max-Age, which
+ * would leave an empty-but-present cookie behind (and a sign-in redirect loop).
+ */
 export function clearedSessionCookieOptions(secure: boolean): SessionCookieOptions {
-  return { httpOnly: true, sameSite: "lax", secure, path: "/", maxAge: 0 };
+  return { httpOnly: true, sameSite: "lax", secure, path: "/", maxAge: 0, expires: new Date(0) };
 }
