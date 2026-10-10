@@ -496,8 +496,8 @@ export async function createLesson(actorId: string, moduleId: string, input: Pic
     created_at: now,
     updated_at: now,
   });
-  await touchCourse(db, module.course_id);
-  await logAudit(actorId, "lesson.created", "lesson", row.id, { course_id: module.course_id, module_id: moduleId, code });
+  await touchCourse(db, mod.course_id);
+  await logAudit(actorId, "lesson.created", "lesson", row.id, { course_id: mod.course_id, module_id: moduleId, code });
   return row;
 }
 

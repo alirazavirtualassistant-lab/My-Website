@@ -234,6 +234,20 @@ export async function completeActionStep(
   });
 }
 
+/** Unticks a single sub-item: removes its XP and the step's remainder, and re-opens the step. */
+export async function uncompleteSubItem(userId: string, stepId: string, subItemKey: string) {
+  const { db } = await getServices();
+  await db.transaction(async (tx) => {
+    const row = await tx.from("action_step_completions").findOne({ user_id: userId, step_id: stepId });
+    if (!row) return;
+    const remaining = row.sub_items_done.filter((k) => k !== subItemKey);
+    await tx.from("action_step_completions").update(row.id, { sub_items_done: remaining, completed_at: null });
+    const ledger = tx.from("xp_ledger");
+    const entries = await ledger.list({ where: { user_id: userId, reason: ["action_step", "sub_item"] } });
+    for (const e of entries) if (e.ref_id === stepId || e.ref_id === `${stepId}:${subItemKey}`) await ledger.delete(e.id);
+  });
+}
+
 /** Removes a completion (and its XP) when the learner unticks a step. */
 export async function uncompleteActionStep(userId: string, stepId: string) {
   const { db } = await getServices();
